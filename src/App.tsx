@@ -1,3 +1,4 @@
+import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
 import { Hero } from './components/Hero'
@@ -11,7 +12,9 @@ import { TrialCtaSection } from './components/TrialCtaSection'
 
 export default function App() {
   return (
-    <LanguageProvider>
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user">
+      <LanguageProvider>
       <div className="flex min-h-screen min-w-0 flex-col bg-white text-[#1a1a1a]">
         <Navbar />
         <main className="flex min-w-0 flex-1 flex-col">
@@ -25,6 +28,8 @@ export default function App() {
           <SiteFooter />
         </main>
       </div>
-    </LanguageProvider>
+      </LanguageProvider>
+      </MotionConfig>
+    </LazyMotion>
   )
 }

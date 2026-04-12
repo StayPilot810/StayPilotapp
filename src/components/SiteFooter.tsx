@@ -1,5 +1,6 @@
 import { Calendar } from 'lucide-react'
 import { useLanguage } from '../hooks/useLanguage'
+import { Reveal } from './motion'
 
 const brandIconBg = '#3B82F6'
 const footerBg = '#0B1120'
@@ -27,7 +28,7 @@ export function SiteFooter() {
       }}
       aria-labelledby="footer-brand"
     >
-      <div className="mx-auto w-full max-w-[1200px] px-5 sm:px-6 lg:px-8">
+      <Reveal className="mx-auto w-full max-w-[1200px] px-5 sm:px-6 lg:px-8" y={14}>
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))] lg:gap-14">
           <div className="sm:col-span-2 lg:col-span-1">
             <div id="footer-brand" className="inline-flex items-center gap-2.5">
@@ -102,7 +103,7 @@ export function SiteFooter() {
             <span className={legalText}>{t.footerTerms}</span>
           </div>
         </div>
-      </div>
+      </Reveal>
     </footer>
   )
 }

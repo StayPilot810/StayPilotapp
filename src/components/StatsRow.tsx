@@ -1,12 +1,15 @@
+import { motion, useReducedMotion } from 'framer-motion'
 import { BarChart3, Clock, Zap } from 'lucide-react'
 import { BookingCalendarOverview } from './BookingCalendarOverview'
 import { useLanguage } from '../hooks/useLanguage'
+import { easePremium, Reveal, StaggerReveal, staggerItem } from './motion'
 
 const blueIcon = '#4f86f7'
 const greenIcon = '#22c55e'
 
 export function StatsRow() {
   const { t } = useLanguage()
+  const reduceMotion = useReducedMotion()
 
   const items = [
     {
@@ -35,10 +38,20 @@ export function StatsRow() {
   return (
     <section className="bg-[#f4f4f5] py-11 sm:py-14 lg:py-16">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3 md:gap-6">
+        <StaggerReveal className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3 md:gap-6">
           {items.map(({ icon: Icon, value, label, iconBg, iconColor }) => (
-            <div
+            <motion.div
               key={value}
+              variants={staggerItem(reduceMotion, 16)}
+              whileHover={
+                reduceMotion
+                  ? undefined
+                  : {
+                      y: -4,
+                      boxShadow: '0 16px 40px -14px rgba(15, 23, 42, 0.12)',
+                      transition: { type: 'tween', duration: 0.28, ease: easePremium },
+                    }
+              }
               className="flex flex-col items-center rounded-2xl border border-gray-100/80 bg-white px-6 py-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)] sm:py-10"
             >
               <div
@@ -52,11 +65,11 @@ export function StatsRow() {
               <p className="mt-2 max-w-[240px] text-[15px] font-medium leading-snug text-[#71717a] sm:text-base">
                 {label}
               </p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </StaggerReveal>
 
-        <div className="mx-auto mt-9 max-w-[42rem] text-center sm:mt-11 lg:mt-14">
+        <Reveal className="mx-auto mt-9 max-w-[42rem] text-center sm:mt-11 lg:mt-14" y={20}>
           <h2 className="text-[1.65rem] font-bold leading-[1.2] tracking-[-0.02em] text-[#1a1a1a] sm:text-[1.85rem] lg:text-[2.15rem]">
             {t.statsSectionTitleBefore}{' '}
             <span style={{ color: blueIcon }}>{t.statsSectionTitleAccent}</span>
@@ -64,9 +77,11 @@ export function StatsRow() {
           <p className="mt-4 text-[16px] font-normal leading-relaxed text-[#71717a] sm:mt-5 sm:text-[17px]">
             {t.statsSectionSubtitle}
           </p>
-        </div>
+        </Reveal>
 
-        <BookingCalendarOverview />
+        <Reveal className="mt-8 sm:mt-10" y={24} delay={0.06}>
+          <BookingCalendarOverview />
+        </Reveal>
       </div>
     </section>
   )

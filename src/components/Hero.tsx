@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion'
 import { useMemo } from 'react'
 import {
   CartesianGrid,
@@ -11,6 +12,7 @@ import {
 import { Calendar } from 'lucide-react'
 import { heroTranslations } from '../i18n/hero'
 import { useLanguage } from '../hooks/useLanguage'
+import { MotionAnchor, Reveal, StaggerReveal, staggerItem } from './motion'
 
 const primary = '#4f86f7'
 const green = '#22c55e'
@@ -123,6 +125,7 @@ function IntegrationBadges() {
 
 export function Hero() {
   const { t, locale } = useLanguage()
+  const reduceMotion = useReducedMotion()
   const loc = locale === 'en' ? 'en-GB' : locale === 'de' ? 'de-DE' : locale === 'it' ? 'it-IT' : locale === 'es' ? 'es-ES' : 'fr-FR'
 
   const chartData = useMemo((): ChartRow[] => {
@@ -138,7 +141,7 @@ export function Hero() {
     <section className="bg-white">
       <div className="mx-auto grid max-w-[1200px] items-start gap-12 px-5 pb-20 pt-12 sm:px-6 sm:pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-x-14 lg:gap-y-0 lg:px-8 lg:pt-16">
         {/* Colonne gauche */}
-        <div className="mx-auto max-w-[560px] text-center lg:mx-0 lg:text-left">
+        <Reveal className="mx-auto max-w-[560px] text-center lg:mx-0 lg:text-left" y={22}>
           <h1 className="text-[2.5rem] font-bold leading-[1.15] tracking-[-0.02em] text-[#1a1a1a] sm:text-[2.85rem] lg:text-[3.15rem]">
             {t.headlineLine1}{' '}
             <span className="text-[#4f86f7]">{t.headlineAccent}</span>
@@ -147,29 +150,42 @@ export function Hero() {
             {t.subheadline}
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
-            <a
+            <MotionAnchor
               href="#"
-              className="inline-flex items-center justify-center rounded-[10px] px-8 py-[14px] text-[16px] font-semibold text-white shadow-[0_8px_24px_rgba(79,134,247,0.35)] transition hover:brightness-95"
+              className="inline-flex items-center justify-center rounded-[10px] px-8 py-[14px] text-[16px] font-semibold text-white shadow-[0_8px_24px_rgba(79,134,247,0.35)] transition-[filter] duration-200 hover:brightness-95"
               style={{ backgroundColor: primary }}
             >
               {t.ctaStart}
-            </a>
-            <a
+            </MotionAnchor>
+            <MotionAnchor
               href="#"
-              className="inline-flex items-center justify-center rounded-[10px] border border-[#e5e7eb] bg-white px-8 py-[14px] text-[16px] font-semibold text-[#1a1a1a] transition hover:border-[#d1d5db]"
+              variant="subtle"
+              className="inline-flex items-center justify-center rounded-[10px] border border-[#e5e7eb] bg-white px-8 py-[14px] text-[16px] font-semibold text-[#1a1a1a] transition-colors duration-200 hover:border-[#d1d5db]"
             >
               {t.ctaDemo}
-            </a>
+            </MotionAnchor>
           </div>
           <p className="mt-12 text-[13px] font-medium text-[#9ca3af]">{t.platforms}</p>
           <div className="mt-4 flex justify-center lg:justify-start">
             <IntegrationBadges />
           </div>
-        </div>
+        </Reveal>
 
         {/* Colonne droite — cartes */}
-        <div className="flex w-full flex-col gap-6">
-          <div className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]">
+        <StaggerReveal className="flex w-full flex-col gap-6">
+          <motion.div
+            variants={staggerItem(reduceMotion, 14)}
+            whileHover={
+              reduceMotion
+                ? undefined
+                : {
+                    y: -4,
+                    boxShadow: '0 20px 40px -12px rgba(15, 23, 42, 0.12)',
+                    transition: { type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+                  }
+            }
+            className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]"
+          >
             <p className="text-[13px] font-medium text-[#9ca3af]">{t.revenueTitle}</p>
             <p className="mt-1 text-[2.25rem] font-bold tracking-tight text-[#1a1a1a]">
               {formatEuros(2180, loc)}
@@ -215,9 +231,21 @@ export function Hero() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]">
+          <motion.div
+            variants={staggerItem(reduceMotion, 14)}
+            whileHover={
+              reduceMotion
+                ? undefined
+                : {
+                    y: -4,
+                    boxShadow: '0 20px 40px -12px rgba(15, 23, 42, 0.12)',
+                    transition: { type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+                  }
+            }
+            className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]"
+          >
             <p className="text-[13px] font-medium text-[#9ca3af]">{t.occupancyTitle}</p>
             <p className="mt-1 text-[2.25rem] font-bold tracking-tight text-[#1a1a1a]">76%</p>
             <p className="mt-0.5 text-[13px] font-semibold" style={{ color: green }}>
@@ -260,8 +288,8 @@ export function Hero() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </StaggerReveal>
       </div>
     </section>
   )

@@ -1,5 +1,7 @@
+import { motion, useReducedMotion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import { useLanguage } from '../hooks/useLanguage'
+import { easePremium, MotionAnchor, Reveal, StaggerReveal, staggerItem } from './motion'
 
 const primary = '#4a86f7'
 const green = '#16a34a'
@@ -31,17 +33,7 @@ function FeatureRow({
   )
 }
 
-function PlanCard({
-  variant,
-  badge,
-  name,
-  range,
-  price,
-  priceSuffix,
-  trial,
-  features,
-  cta,
-}: {
+type PlanInnerProps = {
   variant: PlanVariant
   badge?: string
   name: string
@@ -51,18 +43,23 @@ function PlanCard({
   trial: string
   features: string[]
   cta: string
-}) {
+}
+
+function PlanCardInner({
+  variant,
+  badge,
+  name,
+  range,
+  price,
+  priceSuffix,
+  trial,
+  features,
+  cta,
+}: PlanInnerProps) {
   const isFeatured = variant === 'featured'
 
   return (
-    <div
-      className={`relative flex h-full flex-col rounded-2xl border p-5 sm:p-5 ${
-        isFeatured
-          ? 'z-[1] border-transparent shadow-[0_12px_40px_rgba(74,134,247,0.35)]'
-          : 'border-gray-200/90 bg-[#ffffff] shadow-[0_1px_3px_rgba(0,0,0,0.05)]'
-      }`}
-      style={isFeatured ? { backgroundColor: primary } : undefined}
-    >
+    <>
       {badge ? (
         <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
           {badge}
@@ -92,9 +89,9 @@ function PlanCard({
         ))}
       </ul>
       <div className="mt-6">
-        <a
+        <MotionAnchor
           href="#"
-          className={`flex w-full items-center justify-center rounded-full py-3 text-[14px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+          className={`flex w-full items-center justify-center rounded-full py-3 text-[14px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
             isFeatured
               ? 'bg-[#ffffff] focus-visible:ring-white/50'
               : 'border border-[#1a1a1a] bg-[#ffffff] text-[#1a1a1a] hover:bg-gray-50 focus-visible:ring-[#4a86f7]/40'
@@ -102,14 +99,49 @@ function PlanCard({
           style={isFeatured ? { color: primary } : undefined}
         >
           {cta}
-        </a>
+        </MotionAnchor>
       </div>
-    </div>
+    </>
   )
 }
 
 export function PricingSection() {
   const { t } = useLanguage()
+  const reduceMotion = useReducedMotion()
+
+  const plans: PlanInnerProps[] = [
+    {
+      variant: 'light',
+      name: t.starterName,
+      range: t.starterRange,
+      price: t.starterPrice,
+      priceSuffix: t.starterPriceSuffix,
+      trial: t.planTrial,
+      features: [...t.starterFeatures],
+      cta: t.planCta,
+    },
+    {
+      variant: 'featured',
+      badge: t.popularBadge,
+      name: t.proName,
+      range: t.proRange,
+      price: t.proPrice,
+      priceSuffix: t.proPriceSuffix,
+      trial: t.planTrial,
+      features: [...t.proFeatures],
+      cta: t.planCta,
+    },
+    {
+      variant: 'light',
+      name: t.scaleName,
+      range: t.scaleRange,
+      price: t.scalePrice,
+      priceSuffix: t.scalePriceSuffix,
+      trial: t.planTrial,
+      features: [...t.scaleFeatures],
+      cta: t.planCta,
+    },
+  ]
 
   return (
     <section
@@ -118,49 +150,56 @@ export function PricingSection() {
       aria-labelledby="pricing-heading"
     >
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 lg:px-8">
-        <header className="mx-auto max-w-2xl text-center">
-          <h2
-            id="pricing-heading"
-            className="text-2xl font-bold tracking-tight text-[#1a1a1a] sm:text-3xl lg:text-[1.85rem]"
-          >
-            {t.pricingTitle}
-          </h2>
-          <p className="mt-2 text-[15px] leading-relaxed text-[#71717a] sm:text-base">{t.pricingSubtitle}</p>
-        </header>
+        <Reveal className="mx-auto max-w-2xl text-center" y={18}>
+          <header>
+            <h2
+              id="pricing-heading"
+              className="text-2xl font-bold tracking-tight text-[#1a1a1a] sm:text-3xl lg:text-[1.85rem]"
+            >
+              {t.pricingTitle}
+            </h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-[#71717a] sm:text-base">{t.pricingSubtitle}</p>
+          </header>
+        </Reveal>
 
-        <div className="mt-8 grid gap-4 sm:mt-9 lg:mt-10 lg:grid-cols-3 lg:items-stretch lg:gap-5">
-          <PlanCard
-            variant="light"
-            name={t.starterName}
-            range={t.starterRange}
-            price={t.starterPrice}
-            priceSuffix={t.starterPriceSuffix}
-            trial={t.planTrial}
-            features={[...t.starterFeatures]}
-            cta={t.planCta}
-          />
-          <PlanCard
-            variant="featured"
-            badge={t.popularBadge}
-            name={t.proName}
-            range={t.proRange}
-            price={t.proPrice}
-            priceSuffix={t.proPriceSuffix}
-            trial={t.planTrial}
-            features={[...t.proFeatures]}
-            cta={t.planCta}
-          />
-          <PlanCard
-            variant="light"
-            name={t.scaleName}
-            range={t.scaleRange}
-            price={t.scalePrice}
-            priceSuffix={t.scalePriceSuffix}
-            trial={t.planTrial}
-            features={[...t.scaleFeatures]}
-            cta={t.planCta}
-          />
-        </div>
+        <StaggerReveal className="mt-8 grid gap-4 sm:mt-9 lg:mt-10 lg:grid-cols-3 lg:items-stretch lg:gap-5">
+          {plans.map((plan) => {
+            const isFeatured = plan.variant === 'featured'
+            const hover =
+              reduceMotion || isFeatured
+                ? undefined
+                : {
+                    y: -6,
+                    scale: 1.01,
+                    boxShadow: '0 24px 50px -18px rgba(15, 23, 42, 0.16)',
+                    transition: { type: 'tween' as const, duration: 0.28, ease: easePremium },
+                  }
+            const hoverFeatured =
+              reduceMotion || !isFeatured
+                ? undefined
+                : {
+                    y: -4,
+                    boxShadow: '0 28px 56px -16px rgba(74, 134, 247, 0.45)',
+                    transition: { type: 'tween' as const, duration: 0.28, ease: easePremium },
+                  }
+
+            return (
+              <motion.div
+                key={plan.name}
+                variants={staggerItem(reduceMotion, 22)}
+                whileHover={isFeatured ? hoverFeatured : hover}
+                className={`relative flex h-full flex-col rounded-2xl border p-5 sm:p-5 ${
+                  isFeatured
+                    ? 'z-[1] border-transparent shadow-[0_12px_40px_rgba(74,134,247,0.35)]'
+                    : 'border-gray-200/90 bg-[#ffffff] shadow-[0_1px_3px_rgba(0,0,0,0.05)]'
+                }`}
+                style={isFeatured ? { backgroundColor: primary } : undefined}
+              >
+                <PlanCardInner {...plan} />
+              </motion.div>
+            )
+          })}
+        </StaggerReveal>
       </div>
     </section>
   )
