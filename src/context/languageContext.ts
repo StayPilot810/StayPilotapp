@@ -4,6 +4,7 @@ import type { HeroCopy } from '../i18n/hero'
 import type { Locale, NavbarCopy } from '../i18n/navbar'
 import type { BookingCalendarCopy } from '../i18n/bookingCalendar'
 import type { FaqCopy } from '../i18n/faq'
+import type { FooterCopy } from '../i18n/footer'
 import type { PricingPlansCopy } from '../i18n/pricingPlans'
 import type { ReviewsCopy } from '../i18n/reviews'
 import type { StatsRowCopy } from '../i18n/statsRow'
@@ -17,7 +18,8 @@ export type AppCopy = NavbarCopy &
   ReviewsCopy &
   TrialPricingCopy &
   PricingPlansCopy &
-  FaqCopy
+  FaqCopy &
+  FooterCopy
 
 export type LanguageContextValue = {
   locale: Locale

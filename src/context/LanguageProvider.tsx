@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { bookingCalendarTranslations } from '../i18n/bookingCalendar'
 import { faqTranslations } from '../i18n/faq'
+import { footerTranslations } from '../i18n/footer'
 import { featureCardsTranslations } from '../i18n/featureCards'
 import { heroTranslations } from '../i18n/hero'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
@@ -36,6 +37,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         ...trialAndPricingTranslations[locale],
         ...pricingPlansTranslations[locale],
         ...faqTranslations[locale],
+        ...footerTranslations[locale],
       },
     }),
     [locale, setLocale],

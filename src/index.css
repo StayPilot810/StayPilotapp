@@ -5,9 +5,19 @@ html {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Barre de défilement toujours visible : on voit que la page continue sous la FAQ */
+  overflow-y: scroll;
 }
 
 body {
   margin: 0;
   background: #fff;
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+#root {
+  min-height: 100%;
+  display: block;
+  overflow: visible;
 }

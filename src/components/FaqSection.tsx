@@ -3,13 +3,13 @@ import { useId, useState } from 'react'
 import { FAQ_INITIAL_COUNT } from '../i18n/faq'
 import { useLanguage } from '../hooks/useLanguage'
 
-/** Captures Figma : fond #F3F4F6, cartes blanches, bandeau question ouverte #F3F4F6, chevrons + lien #4A86F7 */
-const bgSection = '#F3F4F6'
+/** Fond blanc comme la maquette Figma (cartes FAQ bord gris) */
+const bgSection = '#FFFFFF'
 const borderCard = '#E5E7EB'
 const textTitle = '#111827'
 const textBody = '#4B5563'
-const linkBlue = '#4A86F7'
-const chevronColor = '#4A86F7'
+/** Bleu aligné sur la maquette (#3B82F6) */
+const accentBlue = '#3B82F6'
 
 export function FaqSection() {
   const { t } = useLanguage()
@@ -23,11 +23,11 @@ export function FaqSection() {
   return (
     <section
       id="faq"
-      className="scroll-mt-[72px] border-t py-9 sm:py-10 lg:py-11"
+      className="scroll-mt-[72px] border-t pt-10 sm:pt-11 lg:pt-12"
       style={{ backgroundColor: bgSection, borderColor: borderCard }}
       aria-labelledby="faq-heading"
     >
-      <div className="mx-auto max-w-[720px] px-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[720px] px-5 pb-4 sm:px-6 sm:pb-5 lg:px-8 lg:pb-6">
         <header className="text-center">
           <h2
             id="faq-heading"
@@ -56,13 +56,13 @@ export function FaqSection() {
               >
                 <summary
                   id={btnId}
-                  className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-[15px] font-bold transition-colors marker:content-none group-open:bg-[#F3F4F6] [&::-webkit-details-marker]:hidden"
+                  className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-[15px] font-bold transition-colors marker:content-none group-open:bg-[#F9FAFB] [&::-webkit-details-marker]:hidden"
                   style={{ color: textTitle }}
                 >
                   {item.question}
                   <ChevronDown
                     className="h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180"
-                    style={{ color: chevronColor }}
+                    style={{ color: accentBlue }}
                     strokeWidth={2}
                     aria-hidden
                   />
@@ -86,8 +86,8 @@ export function FaqSection() {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-[14px] font-medium transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 rounded-sm"
-              style={{ color: linkBlue }}
+              className="inline-flex items-center gap-1.5 text-[14px] font-medium transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6]/35 focus-visible:ring-offset-2 rounded-sm"
+              style={{ color: accentBlue }}
               aria-expanded={showAll}
             >
               {showAll ? t.faqSeeLess : t.faqSeeMore}
