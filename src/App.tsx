@@ -12,9 +12,9 @@ import { TrialCtaSection } from './components/TrialCtaSection'
 export default function App() {
   return (
     <LanguageProvider>
-      <div className="min-w-0 bg-white text-[#1a1a1a]">
+      <div className="flex min-h-screen min-w-0 flex-col bg-white text-[#1a1a1a]">
         <Navbar />
-        <main className="min-w-0">
+        <main className="flex min-w-0 flex-1 flex-col">
           <Hero />
           <FeatureCards />
           <StatsRow />
@@ -22,8 +22,8 @@ export default function App() {
           <TrialCtaSection />
           <PricingSection />
           <FaqSection />
+          <SiteFooter />
         </main>
-        <SiteFooter />
       </div>
     </LanguageProvider>
   )

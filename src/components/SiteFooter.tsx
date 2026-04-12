@@ -17,8 +17,9 @@ export function SiteFooter() {
 
   return (
     <footer
+      id="pied-de-page"
       role="contentinfo"
-      className="relative z-10 w-full min-w-0 border-t-[5px] border-solid py-10 sm:py-12 lg:py-14"
+      className="relative z-10 mt-auto w-full min-w-0 flex-shrink-0 border-t-[5px] border-solid border-t-[#3B82F6] bg-[#0B1120] py-10 text-[#f8fafc] sm:py-12 lg:py-14"
       style={{
         backgroundColor: footerBg,
         color: '#f8fafc',
