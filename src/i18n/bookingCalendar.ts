@@ -36,7 +36,7 @@ export type BookingCalendarCopy = {
 
 export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = {
   fr: {
-    calendarTitle: 'Calendrier des réservations',
+    calendarTitle: 'Réservations, revenus et occupation — vue live',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Ce mois',
@@ -69,7 +69,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'N° de réservation',
   },
   es: {
-    calendarTitle: 'Vista del calendario de reservas',
+    calendarTitle: 'Reservas en vivo — ingresos y ocupación centralizados',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Este mes',
@@ -102,7 +102,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'N.º de reserva',
   },
   en: {
-    calendarTitle: 'Booking calendar overview',
+    calendarTitle: 'Live bookings — revenue & occupancy in one view',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'This month',
@@ -135,7 +135,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'Reservation number',
   },
   de: {
-    calendarTitle: 'Überblick Buchungskalender',
+    calendarTitle: 'Live-Buchungen — Umsatz und Auslastung im Blick',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Dieser Monat',
@@ -168,7 +168,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'Buchungsnummer',
   },
   it: {
-    calendarTitle: 'Panoramica calendario prenotazioni',
+    calendarTitle: 'Prenotazioni live — ricavi e occupazione a colpo d’occhio',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Questo mese',

@@ -22,7 +22,7 @@ export type FooterCopy = {
 
 const fr: FooterCopy = {
   footerTagline:
-    'La plateforme de gestion de locations courte durée qui vous fait gagner du temps',
+    'Automatisez vos locations courte durée. Plus de revenus, moins de charge opérationnelle.',
   footerColProduct: 'Produit',
   footerColCompany: 'Entreprise',
   footerColSupport: 'Support',
@@ -42,7 +42,7 @@ const fr: FooterCopy = {
 }
 
 const en: FooterCopy = {
-  footerTagline: 'The short-term rental management platform that saves you time',
+  footerTagline: 'Automate short-term rentals. Grow revenue. Cut operational drag.',
   footerColProduct: 'Product',
   footerColCompany: 'Company',
   footerColSupport: 'Support',
@@ -62,7 +62,7 @@ const en: FooterCopy = {
 }
 
 const es: FooterCopy = {
-  footerTagline: 'La plataforma de gestión de alquileres de corta estancia que le ahorra tiempo',
+  footerTagline: 'Automatice alquileres turísticos. Más ingresos, menos carga operativa.',
   footerColProduct: 'Producto',
   footerColCompany: 'Empresa',
   footerColSupport: 'Soporte',
@@ -83,7 +83,7 @@ const es: FooterCopy = {
 
 const de: FooterCopy = {
   footerTagline:
-    'Die Plattform für Kurzzeitvermietung, die Ihnen Zeit spart',
+    'Kurzzeitvermietung automatisieren. Mehr Umsatz, weniger operative Last.',
   footerColProduct: 'Produkt',
   footerColCompany: 'Unternehmen',
   footerColSupport: 'Support',
@@ -104,7 +104,7 @@ const de: FooterCopy = {
 
 const it: FooterCopy = {
   footerTagline:
-    'La piattaforma per gestire gli affitti brevi e risparmiare tempo',
+    'Automatizzate gli affitti brevi. Più ricavi, meno carico operativo.',
   footerColProduct: 'Prodotto',
   footerColCompany: 'Azienda',
   footerColSupport: 'Supporto',

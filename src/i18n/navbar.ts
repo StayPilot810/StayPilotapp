@@ -21,6 +21,8 @@ export const LOCALE_FLAGS: Record<Locale, string> = {
 
 export type NavbarCopy = {
   brand: string
+  /** Lien vers la section « pourquoi nous » */
+  whyUs: string
   features: string
   reviews: string
   pricing: string
@@ -40,12 +42,13 @@ export type NavbarCopy = {
 export const translations: Record<Locale, NavbarCopy> = {
   fr: {
     brand: 'StayManager',
+    whyUs: 'Pourquoi nous',
     features: 'Fonctionnalités',
     reviews: 'Avis',
     pricing: 'Tarifs',
     faq: 'FAQ',
     support: 'Support',
-    bookCall: 'Réserver un appel',
+    bookCall: 'Parler à un expert',
     login: 'Se connecter',
     signup: 'Inscription',
     openMenu: 'Ouvrir le menu',
@@ -56,12 +59,13 @@ export const translations: Record<Locale, NavbarCopy> = {
   },
   es: {
     brand: 'StayManager',
+    whyUs: 'Por qué nosotros',
     features: 'Funcionalidades',
     reviews: 'Reseñas',
     pricing: 'Precios',
     faq: 'FAQ',
     support: 'Soporte',
-    bookCall: 'Reservar una llamada',
+    bookCall: 'Hablar con un experto',
     login: 'Iniciar sesión',
     signup: 'Registro',
     openMenu: 'Abrir el menú',
@@ -72,12 +76,13 @@ export const translations: Record<Locale, NavbarCopy> = {
   },
   en: {
     brand: 'StayManager',
+    whyUs: 'Why us',
     features: 'Features',
     reviews: 'Reviews',
     pricing: 'Pricing',
     faq: 'FAQ',
     support: 'Support',
-    bookCall: 'Book a call',
+    bookCall: 'Talk to sales',
     login: 'Log in',
     signup: 'Sign up',
     openMenu: 'Open menu',
@@ -88,12 +93,13 @@ export const translations: Record<Locale, NavbarCopy> = {
   },
   de: {
     brand: 'StayManager',
+    whyUs: 'Warum wir',
     features: 'Funktionen',
     reviews: 'Bewertungen',
     pricing: 'Preise',
     faq: 'FAQ',
     support: 'Support',
-    bookCall: 'Anruf buchen',
+    bookCall: 'Mit Expert:in sprechen',
     login: 'Anmelden',
     signup: 'Registrierung',
     openMenu: 'Menü öffnen',
@@ -104,12 +110,13 @@ export const translations: Record<Locale, NavbarCopy> = {
   },
   it: {
     brand: 'StayManager',
+    whyUs: 'Perché noi',
     features: 'Funzionalità',
     reviews: 'Recensioni',
     pricing: 'Prezzi',
     faq: 'FAQ',
     support: 'Supporto',
-    bookCall: 'Prenota una chiamata',
+    bookCall: 'Parla con un esperto',
     login: 'Accedi',
     signup: 'Iscrizione',
     openMenu: 'Apri il menu',

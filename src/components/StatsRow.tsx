@@ -1,11 +1,100 @@
-import { motion, useReducedMotion } from 'framer-motion'
-import { BarChart3, Clock, Zap } from 'lucide-react'
-import { BookingCalendarOverview } from './BookingCalendarOverview'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
+import { useRef } from 'react'
+import { Clock, Home, LineChart, TrendingUp, Zap } from 'lucide-react'
+import { useCountUp } from '../hooks/useCountUp'
 import { useLanguage } from '../hooks/useLanguage'
+import type { StatItemFormat } from '../i18n/statsRow'
 import { easePremium, Reveal, StaggerReveal, staggerItem } from './motion'
+import { BookingCalendarOverview } from './BookingCalendarOverview'
 
-const blueIcon = '#4f86f7'
-const greenIcon = '#22c55e'
+const blueIcon = '#2563eb'
+const greenIcon = '#059669'
+const blueSoft = '#dbeafe'
+const greenSoft = '#d1fae5'
+const violetIcon = '#7c3aed'
+const violetSoft = '#ede9fe'
+
+function formatAnimatedValue(n: number, format: StatItemFormat): string {
+  const r = Math.round(n)
+  if (format === 'hoursSaved') {
+    return `−${Math.abs(r)}h`
+  }
+  if (r > 0) return `+${r}%`
+  if (r < 0) return `−${Math.abs(r)}%`
+  return '0%'
+}
+
+type StatTone = 'blue' | 'green' | 'blueDeep' | 'violet'
+
+function toneClasses(tone: StatTone) {
+  switch (tone) {
+    case 'green':
+      return {
+        number: 'text-emerald-800',
+        iconBg: greenSoft,
+        ring: 'ring-emerald-600/20',
+        iconColor: greenIcon,
+      }
+    case 'blueDeep':
+      return {
+        number: 'text-blue-800',
+        iconBg: blueSoft,
+        ring: 'ring-blue-600/25',
+        iconColor: blueIcon,
+      }
+    case 'violet':
+      return {
+        number: 'text-violet-900',
+        iconBg: violetSoft,
+        ring: 'ring-violet-500/25',
+        iconColor: violetIcon,
+      }
+    default:
+      return {
+        number: 'text-blue-700',
+        iconBg: blueSoft,
+        ring: 'ring-blue-500/20',
+        iconColor: blueIcon,
+      }
+  }
+}
+
+function AnimatedStatValue({
+  target,
+  format,
+  fallback,
+  tone,
+}: {
+  target: number
+  format: StatItemFormat
+  fallback: string
+  tone: StatTone
+}) {
+  const ref = useRef<HTMLParagraphElement>(null)
+  const inView = useInView(ref, { once: true, amount: 0.45 })
+  const reduceMotion = useReducedMotion()
+  const countTarget = format === 'hoursSaved' ? Math.abs(target) : target
+  const animatedRaw = useCountUp(countTarget, inView, !!reduceMotion)
+  const display = reduceMotion ? fallback : formatAnimatedValue(animatedRaw, format)
+  const tc = toneClasses(tone)
+  const showLive = inView || reduceMotion
+
+  return (
+    <p
+      ref={ref}
+      className={`mt-4 text-[1.65rem] font-bold tabular-nums tracking-tight sm:mt-5 sm:text-[2rem] lg:text-[1.85rem] xl:text-[2.1rem] ${tc.number}`}
+      aria-label={fallback}
+    >
+      {showLive ? (
+        display
+      ) : (
+        <span className="invisible" aria-hidden>
+          {fallback}
+        </span>
+      )}
+    </p>
+  )
+}
 
 export function StatsRow() {
   const { t } = useLanguage()
@@ -13,73 +102,96 @@ export function StatsRow() {
 
   const items = [
     {
-      icon: Clock,
-      value: t.stat1Value,
+      icon: TrendingUp,
+      target: t.stat1Target,
+      format: t.stat1Format,
+      fallback: t.stat1Value,
       label: t.stat1Label,
-      iconBg: 'bg-[#e8f0fe]',
-      iconColor: blueIcon,
+      tone: 'blue' as const,
+    },
+    {
+      icon: Home,
+      target: t.stat2Target,
+      format: t.stat2Format,
+      fallback: t.stat2Value,
+      label: t.stat2Label,
+      tone: 'green' as const,
+    },
+    {
+      icon: Clock,
+      target: t.stat3Target,
+      format: t.stat3Format,
+      fallback: t.stat3Value,
+      label: t.stat3Label,
+      tone: 'blueDeep' as const,
     },
     {
       icon: Zap,
-      value: t.stat2Value,
-      label: t.stat2Label,
-      iconBg: 'bg-[#e8f8ef]',
-      iconColor: greenIcon,
+      target: t.stat4Target,
+      format: t.stat4Format,
+      fallback: t.stat4Value,
+      label: t.stat4Label,
+      tone: 'violet' as const,
     },
     {
-      icon: BarChart3,
-      value: t.stat3Value,
-      label: t.stat3Label,
-      iconBg: 'bg-[#e8f0fe]',
-      iconColor: blueIcon,
+      icon: LineChart,
+      target: t.stat5Target,
+      format: t.stat5Format,
+      fallback: t.stat5Value,
+      label: t.stat5Label,
+      tone: 'blue' as const,
     },
   ] as const
 
   return (
-    <section className="bg-[#f4f4f5] py-11 sm:py-14 lg:py-16">
-      <div className="mx-auto max-w-[1200px] px-5 sm:px-6 lg:px-8">
-        <StaggerReveal className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3 md:gap-6">
-          {items.map(({ icon: Icon, value, label, iconBg, iconColor }) => (
-            <motion.div
-              key={value}
-              variants={staggerItem(reduceMotion, 16)}
-              whileHover={
-                reduceMotion
-                  ? undefined
-                  : {
-                      y: -4,
-                      boxShadow: '0 16px 40px -14px rgba(15, 23, 42, 0.12)',
-                      transition: { type: 'tween', duration: 0.28, ease: easePremium },
-                    }
-              }
-              className="flex flex-col items-center rounded-2xl border border-gray-100/80 bg-white px-6 py-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)] sm:py-10"
-            >
-              <div
-                className={`flex h-12 w-12 items-center justify-center rounded-xl ${iconBg} sm:h-14 sm:w-14`}
+    <section className="border-b border-zinc-200/40 bg-pm-band py-12 sm:py-16 lg:py-20">
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <StaggerReveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5 xl:gap-4">
+          {items.map(({ icon: Icon, target, format, fallback, label, tone }) => {
+            const tc = toneClasses(tone)
+            return (
+              <motion.div
+                key={fallback + label}
+                variants={staggerItem(reduceMotion, 16)}
+                whileHover={
+                  reduceMotion
+                    ? undefined
+                    : {
+                        y: -6,
+                        scale: 1.02,
+                        boxShadow:
+                          '0 24px 48px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
+                        transition: { type: 'tween', duration: 0.3, ease: easePremium },
+                      }
+                }
+                className="flex flex-col items-center rounded-2xl border border-zinc-300/70 bg-white px-4 py-7 text-center shadow-pm-md sm:px-5 sm:py-9 sm:shadow-pm-lg"
               >
-                <Icon className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={2} style={{ color: iconColor }} />
-              </div>
-              <p className="mt-5 text-[2rem] font-bold tracking-tight text-[#1a1a1a] sm:mt-6 sm:text-[2.25rem]">
-                {value}
-              </p>
-              <p className="mt-2 max-w-[240px] text-[15px] font-medium leading-snug text-[#71717a] sm:text-base">
-                {label}
-              </p>
-            </motion.div>
-          ))}
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-pm-sm ring-2 sm:h-14 sm:w-14 ${tc.ring}`}
+                  style={{ backgroundColor: tc.iconBg }}
+                >
+                  <Icon className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={2.25} style={{ color: tc.iconColor }} />
+                </div>
+                <AnimatedStatValue target={target} format={format} fallback={fallback} tone={tone} />
+                <p className="mt-2 max-w-[220px] text-[13px] font-semibold leading-snug text-zinc-800 sm:max-w-[240px] sm:text-sm">
+                  {label}
+                </p>
+              </motion.div>
+            )
+          })}
         </StaggerReveal>
 
-        <Reveal className="mx-auto mt-9 max-w-[42rem] text-center sm:mt-11 lg:mt-14" y={20}>
-          <h2 className="text-[1.65rem] font-bold leading-[1.2] tracking-[-0.02em] text-[#1a1a1a] sm:text-[1.85rem] lg:text-[2.15rem]">
+        <Reveal className="mx-auto mt-10 max-w-[40rem] text-center sm:mt-14 lg:mt-16" y={20}>
+          <h2 className="text-[1.4rem] font-bold leading-[1.2] tracking-[-0.03em] text-zinc-900 sm:text-[1.85rem] lg:text-[2.125rem]">
             {t.statsSectionTitleBefore}{' '}
-            <span style={{ color: blueIcon }}>{t.statsSectionTitleAccent}</span>
+            <span className="text-blue-600">{t.statsSectionTitleAccent}</span>
           </h2>
-          <p className="mt-4 text-[16px] font-normal leading-relaxed text-[#71717a] sm:mt-5 sm:text-[17px]">
+          <p className="mt-4 text-[15px] font-normal leading-relaxed text-zinc-700 sm:mt-5 sm:text-[17px]">
             {t.statsSectionSubtitle}
           </p>
         </Reveal>
 
-        <Reveal className="mt-8 sm:mt-10" y={24} delay={0.06}>
+        <Reveal className="mt-10 sm:mt-12" y={24} delay={0.06}>
           <BookingCalendarOverview />
         </Reveal>
       </div>

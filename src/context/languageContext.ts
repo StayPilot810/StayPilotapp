@@ -8,11 +8,13 @@ import type { FooterCopy } from '../i18n/footer'
 import type { PricingPlansCopy } from '../i18n/pricingPlans'
 import type { ReviewsCopy } from '../i18n/reviews'
 import type { StatsRowCopy } from '../i18n/statsRow'
+import type { WhyStayManagerCopy } from '../i18n/whyStayManager'
 import type { TrialPricingCopy } from '../i18n/trialAndPricing'
 
 export type AppCopy = NavbarCopy &
   HeroCopy &
   FeatureCardsCopy &
+  WhyStayManagerCopy &
   StatsRowCopy &
   BookingCalendarCopy &
   ReviewsCopy &

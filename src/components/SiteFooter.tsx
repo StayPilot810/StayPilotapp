@@ -20,7 +20,7 @@ export function SiteFooter() {
     <footer
       id="pied-de-page"
       role="contentinfo"
-      className="relative z-10 mt-auto w-full min-w-0 flex-shrink-0 border-t-[5px] border-solid border-t-[#3B82F6] bg-[#0B1120] py-10 text-[#f8fafc] sm:py-12 lg:py-14"
+      className="relative z-10 mt-auto w-full min-w-0 flex-shrink-0 border-t-[3px] border-solid border-t-[#3B82F6] bg-[#0B1120] pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))] pt-12 text-[#f8fafc] sm:pb-[calc(3rem+env(safe-area-inset-bottom,0px))] sm:pt-14 lg:pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pt-16"
       style={{
         backgroundColor: footerBg,
         color: '#f8fafc',
@@ -28,12 +28,12 @@ export function SiteFooter() {
       }}
       aria-labelledby="footer-brand"
     >
-      <Reveal className="mx-auto w-full max-w-[1200px] px-5 sm:px-6 lg:px-8" y={14}>
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))] lg:gap-14">
+      <Reveal className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8" y={14}>
+        <div className="grid gap-8 sm:grid-cols-2 sm:gap-10 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))] lg:gap-14">
           <div className="sm:col-span-2 lg:col-span-1">
             <div id="footer-brand" className="inline-flex items-center gap-2.5">
               <span
-                className="flex h-10 w-10 items-center justify-center rounded-[10px] sm:h-11 sm:w-11"
+                className="flex h-10 w-10 items-center justify-center rounded-xl sm:h-11 sm:w-11"
                 style={{ backgroundColor: brandIconBg }}
                 aria-hidden
               >

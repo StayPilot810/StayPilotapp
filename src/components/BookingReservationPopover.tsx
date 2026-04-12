@@ -81,7 +81,7 @@ export function BookingReservationPopover({
 
   const node = (
     <div
-      className="pointer-events-auto fixed z-[200] w-[min(calc(100vw-1rem),320px)] max-w-[320px] -translate-y-full rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_12px_40px_rgba(0,0,0,0.12)]"
+      className="pointer-events-auto fixed z-[200] w-[min(calc(100vw-1rem),320px)] max-w-[320px] -translate-y-full rounded-2xl border border-zinc-200/70 bg-white p-4 shadow-pm-xl"
       style={{ left, top }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

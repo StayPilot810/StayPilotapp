@@ -1,5 +1,16 @@
 @import 'tailwindcss';
 
+/* Surfaces & ombres type Stripe / Linear (SaaS premium) */
+@layer base {
+  :root {
+    --pm-app: #f3f4f6;
+    --pm-band: #e8eaef;
+    --pm-elevated: #ffffff;
+    --pm-border: rgba(15, 23, 42, 0.08);
+    --pm-border-subtle: rgba(15, 23, 42, 0.06);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;
@@ -11,15 +22,100 @@ html {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Évite le zoom / reflow de texte intempestif sur iOS */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   /* Barre de défilement toujours visible : on voit que la page continue sous la FAQ */
   overflow-y: scroll;
 }
 
 body {
   margin: 0;
-  background: #fff;
+  background: var(--pm-app);
   overflow-x: clip;
   overflow-y: auto;
+  /* Encoche / home indicator : marge de lecture sans casser le plein écran */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+@layer utilities {
+  /* Hairline + lift — cartes, panneaux */
+  .shadow-pm-xs {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px var(--pm-border-subtle);
+  }
+  .shadow-pm-sm {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 8px -2px rgba(15, 23, 42, 0.06),
+      0 0 0 1px var(--pm-border-subtle);
+  }
+  .shadow-pm-md {
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 12px 16px -4px rgba(15, 23, 42, 0.07),
+      0 0 0 1px var(--pm-border-subtle);
+  }
+  .shadow-pm-lg {
+    box-shadow: 0 8px 10px -4px rgba(15, 23, 42, 0.06), 0 20px 28px -6px rgba(15, 23, 42, 0.09),
+      0 0 0 1px var(--pm-border-subtle);
+  }
+  .shadow-pm-xl {
+    box-shadow: 0 16px 24px -6px rgba(15, 23, 42, 0.08), 0 32px 48px -12px rgba(15, 23, 42, 0.12),
+      0 0 0 1px var(--pm-border-subtle);
+  }
+  .shadow-pm-nav {
+    box-shadow: 0 0 0 1px var(--pm-border-subtle), 0 4px 20px -4px rgba(15, 23, 42, 0.08);
+  }
+  .shadow-pm-cta {
+    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2), 0 8px 24px -4px rgba(59, 130, 246, 0.35);
+  }
+  .shadow-pm-cta-lg {
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15), 0 14px 36px -6px rgba(59, 130, 246, 0.38);
+  }
+  .shadow-pm-featured {
+    box-shadow: 0 12px 32px -8px rgba(59, 130, 246, 0.45), 0 0 0 1px rgba(59, 130, 246, 0.12);
+  }
+  .shadow-pm-inner {
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05), inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  }
+
+  .reviews-marquee-mask {
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+
+  @keyframes reviews-marquee-x {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .reviews-marquee-track {
+    display: flex;
+    width: max-content;
+    animation-name: reviews-marquee-x;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  .reviews-marquee-group:hover .reviews-marquee-track {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reviews-marquee-track {
+      animation: none !important;
+    }
+  }
+  .border-pm {
+    border-color: var(--pm-border);
+  }
+  .bg-pm-app {
+    background-color: var(--pm-app);
+  }
+  .bg-pm-band {
+    background-color: var(--pm-band);
+  }
 }
 
 #root {

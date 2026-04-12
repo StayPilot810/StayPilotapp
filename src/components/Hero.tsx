@@ -50,10 +50,10 @@ function RevenueTooltip({
   const month = label != null ? String(label) : row.m
   return (
     <div
-      className="rounded-[10px] border border-[#e5e7eb] bg-white px-3.5 py-2.5 text-[13px] shadow-[0_10px_25px_rgba(15,23,42,0.08)]"
+      className="rounded-xl border border-zinc-200/80 bg-white px-3.5 py-2.5 text-[13px] shadow-pm-lg"
       style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
     >
-      <p className="mb-1.5 font-semibold text-[#1a1a1a]">
+      <p className="mb-1.5 font-semibold text-zinc-900">
         {monthLabel}: {month}
       </p>
       <p className="font-semibold" style={{ color: primary }}>
@@ -85,10 +85,10 @@ function OccupancyTooltip({
   const rateLine = `${valueLabel} : ${row.occupancy}%`
   return (
     <div
-      className="rounded-[10px] border border-[#e5e7eb] bg-white px-3.5 py-2.5 text-[13px] shadow-[0_10px_25px_rgba(15,23,42,0.08)]"
+      className="rounded-xl border border-zinc-200/80 bg-white px-3.5 py-2.5 text-[13px] shadow-pm-lg"
       style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
     >
-      <p className="mb-1.5 font-semibold text-[#1a1a1a]">{monthLine}</p>
+      <p className="mb-1.5 font-semibold text-zinc-900">{monthLine}</p>
       <p className="font-semibold" style={{ color: green }}>
         {rateLine}
       </p>
@@ -106,18 +106,18 @@ function AirbnbBelo() {
 
 function IntegrationBadges() {
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#ff5a5f] shadow-sm">
+    <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-start sm:gap-4">
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a5f] shadow-pm-xs sm:h-10 sm:w-10">
           <AirbnbBelo />
         </div>
-        <span className="text-[15px] font-bold text-[#1a1a1a]">Airbnb</span>
+        <span className="text-sm font-bold text-zinc-900 sm:text-[15px]">Airbnb</span>
       </div>
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#003580] shadow-sm">
-          <Calendar className="h-5 w-5 text-white" strokeWidth={2} aria-hidden />
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#003580] shadow-pm-xs sm:h-10 sm:w-10">
+          <Calendar className="h-[18px] w-[18px] text-white sm:h-5 sm:w-5" strokeWidth={2} aria-hidden />
         </div>
-        <span className="text-[15px] font-bold text-[#1a1a1a]">Booking.com</span>
+        <span className="text-sm font-bold text-zinc-900 sm:text-[15px]">Booking.com</span>
       </div>
     </div>
   )
@@ -138,21 +138,21 @@ export function Hero() {
   }, [locale])
 
   return (
-    <section className="bg-white">
-      <div className="mx-auto grid max-w-[1200px] items-start gap-12 px-5 pb-20 pt-12 sm:px-6 sm:pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-x-14 lg:gap-y-0 lg:px-8 lg:pt-16">
+    <section className="relative border-b border-zinc-200/50 bg-white bg-[radial-gradient(ellipse_100%_60%_at_50%_-30%,rgba(79,134,247,0.09),transparent_55%)]">
+      <div className="mx-auto grid max-w-[1200px] items-start gap-8 px-4 pb-16 pt-10 sm:gap-10 sm:px-6 sm:pb-20 sm:pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-x-16 lg:gap-y-0 lg:px-8 lg:pb-24 lg:pt-20">
         {/* Colonne gauche */}
         <Reveal className="mx-auto max-w-[560px] text-center lg:mx-0 lg:text-left" y={22}>
-          <h1 className="text-[2.5rem] font-bold leading-[1.15] tracking-[-0.02em] text-[#1a1a1a] sm:text-[2.85rem] lg:text-[3.15rem]">
+          <h1 className="text-[1.875rem] font-bold leading-[1.16] tracking-[-0.03em] text-zinc-900 min-[400px]:text-[2.125rem] sm:text-[2.75rem] sm:leading-[1.12] lg:text-[3.25rem]">
             {t.headlineLine1}{' '}
             <span className="text-[#4f86f7]">{t.headlineAccent}</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-[480px] text-[17px] leading-[1.55] text-[#4b5563] lg:mx-0">
+          <p className="mx-auto mt-5 max-w-[32rem] text-base leading-relaxed text-zinc-600 sm:mt-6 sm:text-[17px] lg:mx-0">
             {t.subheadline}
           </p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
+          <div className="mx-auto mt-8 flex w-full max-w-[22rem] flex-col gap-3 sm:mt-9 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-4 lg:mx-0 lg:justify-start">
             <MotionAnchor
               href="#"
-              className="inline-flex items-center justify-center rounded-[10px] px-8 py-[14px] text-[16px] font-semibold text-white shadow-[0_8px_24px_rgba(79,134,247,0.35)] transition-[filter] duration-200 hover:brightness-95"
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] sm:w-auto sm:min-h-0 sm:px-8 sm:py-[14px] sm:text-[16px] lg:shadow-pm-cta-lg"
               style={{ backgroundColor: primary }}
             >
               {t.ctaStart}
@@ -160,40 +160,45 @@ export function Hero() {
             <MotionAnchor
               href="#"
               variant="subtle"
-              className="inline-flex items-center justify-center rounded-[10px] border border-[#e5e7eb] bg-white px-8 py-[14px] text-[16px] font-semibold text-[#1a1a1a] transition-colors duration-200 hover:border-[#d1d5db]"
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-zinc-200/90 bg-white px-6 py-3.5 text-[15px] font-semibold text-zinc-900 shadow-pm-xs transition-colors duration-200 hover:border-zinc-300 hover:bg-zinc-50/80 sm:w-auto sm:min-h-0 sm:px-8 sm:py-[14px] sm:text-[16px]"
             >
               {t.ctaDemo}
             </MotionAnchor>
           </div>
-          <p className="mt-12 text-[13px] font-medium text-[#9ca3af]">{t.platforms}</p>
-          <div className="mt-4 flex justify-center lg:justify-start">
+          <p className="mt-10 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:mt-12 sm:text-[11px]">
+            {t.platforms}
+          </p>
+          <div className="mt-3 flex justify-center sm:mt-4 lg:justify-start">
             <IntegrationBadges />
           </div>
         </Reveal>
 
         {/* Colonne droite — cartes */}
-        <StaggerReveal className="flex w-full flex-col gap-6">
+        <StaggerReveal className="flex w-full flex-col gap-5 sm:gap-6">
           <motion.div
             variants={staggerItem(reduceMotion, 14)}
             whileHover={
               reduceMotion
                 ? undefined
                 : {
-                    y: -4,
-                    boxShadow: '0 20px 40px -12px rgba(15, 23, 42, 0.12)',
+                    y: -3,
+                    boxShadow:
+                      '0 22px 44px -12px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.05)',
                     transition: { type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] },
                   }
             }
-            className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]"
+            className="rounded-2xl border border-zinc-200/70 bg-white p-5 shadow-pm-sm sm:p-6 sm:shadow-pm-md"
           >
-            <p className="text-[13px] font-medium text-[#9ca3af]">{t.revenueTitle}</p>
-            <p className="mt-1 text-[2.25rem] font-bold tracking-tight text-[#1a1a1a]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:text-[11px]">
+              {t.revenueTitle}
+            </p>
+            <p className="mt-1.5 text-[1.875rem] font-bold tracking-tight text-zinc-900 sm:text-[2.25rem]">
               {formatEuros(2180, loc)}
             </p>
-            <p className="mt-0.5 text-[13px] font-semibold" style={{ color: green }}>
+            <p className="mt-0.5 text-xs font-semibold sm:text-[13px]" style={{ color: green }}>
               {t.revenueTrend}
             </p>
-            <div className="mt-4 h-[200px] w-full">
+            <div className="mt-3 h-[168px] w-full sm:mt-4 sm:h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e5e7eb" />
@@ -239,19 +244,22 @@ export function Hero() {
               reduceMotion
                 ? undefined
                 : {
-                    y: -4,
-                    boxShadow: '0 20px 40px -12px rgba(15, 23, 42, 0.12)',
+                    y: -3,
+                    boxShadow:
+                      '0 22px 44px -12px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.05)',
                     transition: { type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] },
                   }
             }
-            className="rounded-2xl border border-gray-100/80 bg-white p-6 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]"
+            className="rounded-2xl border border-zinc-200/70 bg-white p-5 shadow-pm-sm sm:p-6 sm:shadow-pm-md"
           >
-            <p className="text-[13px] font-medium text-[#9ca3af]">{t.occupancyTitle}</p>
-            <p className="mt-1 text-[2.25rem] font-bold tracking-tight text-[#1a1a1a]">76%</p>
-            <p className="mt-0.5 text-[13px] font-semibold" style={{ color: green }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:text-[11px]">
+              {t.occupancyTitle}
+            </p>
+            <p className="mt-1.5 text-[1.875rem] font-bold tracking-tight text-zinc-900 sm:text-[2.25rem]">76%</p>
+            <p className="mt-0.5 text-xs font-semibold sm:text-[13px]" style={{ color: green }}>
               {t.occupancyTrend}
             </p>
-            <div className="mt-4 h-[200px] w-full">
+            <div className="mt-3 h-[168px] w-full sm:mt-4 sm:h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e5e7eb" />

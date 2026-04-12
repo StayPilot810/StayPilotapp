@@ -29,9 +29,12 @@ export function FeatureCards() {
   ] as const
 
   return (
-    <section className="bg-white pb-20 pt-4 sm:pt-6 lg:pb-24">
+    <section
+      id="fonctionnalites"
+      className="scroll-mt-[64px] border-b border-zinc-200/40 bg-pm-app pb-16 pt-4 sm:scroll-mt-[72px] sm:pb-24 sm:pt-8 lg:pb-28"
+    >
       <h2 className="sr-only">{t.featuresHeading}</h2>
-      <StaggerReveal className="mx-auto grid max-w-[1200px] grid-cols-1 gap-5 px-5 sm:gap-6 sm:px-6 md:grid-cols-3 lg:gap-8 lg:px-8">
+      <StaggerReveal className="mx-auto grid max-w-[1200px] grid-cols-1 gap-5 px-4 sm:gap-7 sm:px-6 md:grid-cols-3 lg:gap-8 lg:px-8">
         {cards.map((card) => (
           <motion.article
             key={card.image}
@@ -40,13 +43,14 @@ export function FeatureCards() {
               reduceMotion
                 ? undefined
                 : {
-                    y: -6,
-                    scale: 1.012,
-                    boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.18)',
+                    y: -5,
+                    scale: 1.008,
+                    boxShadow:
+                      '0 28px 56px -14px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.06)',
                     transition: { type: 'tween', duration: 0.3, ease: easePremium },
                   }
             }
-            className="group relative aspect-[3/4] max-h-[480px] min-h-[280px] overflow-hidden rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04] sm:max-h-none sm:min-h-[360px]"
+            className="group relative aspect-[3/4] max-h-[420px] min-h-[260px] overflow-hidden rounded-2xl shadow-pm-md ring-1 ring-black/[0.05] sm:max-h-none sm:min-h-[360px] sm:shadow-pm-lg"
           >
             <img
               src={card.image}
@@ -59,9 +63,9 @@ export function FeatureCards() {
               className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.12)_42%,rgba(0,0,0,0.02)_65%,transparent_100%)]"
               aria-hidden
             />
-            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+            <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
               <h3
-                className="text-[1.15rem] font-bold leading-snug text-white sm:text-xl"
+                className="text-[1.05rem] font-bold leading-snug text-white sm:text-xl"
                 style={{
                   textShadow: '0 1px 2px rgba(0,0,0,0.35), 0 2px 16px rgba(0,0,0,0.25)',
                 }}
@@ -69,7 +73,7 @@ export function FeatureCards() {
                 {card.title}
               </h3>
               <p
-                className="mt-1.5 text-[14px] font-medium leading-relaxed text-white sm:text-[15px]"
+                className="mt-1.5 text-[13px] font-medium leading-relaxed text-white sm:text-[15px]"
                 style={{
                   textShadow: '0 1px 2px rgba(0,0,0,0.35), 0 2px 12px rgba(0,0,0,0.2)',
                 }}

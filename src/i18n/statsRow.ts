@@ -1,12 +1,29 @@
 import type { Locale } from './navbar'
 
+/** `percent` : cible signée animée en ±N%. `hoursSaved` : 0→N, affiché en −Nh (temps récupéré). */
+export type StatItemFormat = 'percent' | 'hoursSaved'
+
 export type StatsRowCopy = {
+  stat1Target: number
+  stat1Format: StatItemFormat
+  stat2Target: number
+  stat2Format: StatItemFormat
+  stat3Target: number
+  stat3Format: StatItemFormat
+  stat4Target: number
+  stat4Format: StatItemFormat
+  stat5Target: number
+  stat5Format: StatItemFormat
   stat1Value: string
   stat1Label: string
   stat2Value: string
   stat2Label: string
   stat3Value: string
   stat3Label: string
+  stat4Value: string
+  stat4Label: string
+  stat5Value: string
+  stat5Label: string
   statsSectionTitleBefore: string
   statsSectionTitleAccent: string
   statsSectionSubtitle: string
@@ -14,63 +31,133 @@ export type StatsRowCopy = {
 
 export const statsRowTranslations: Record<Locale, StatsRowCopy> = {
   fr: {
-    stat1Value: '+30%',
-    stat1Label: 'de temps gagné',
-    stat2Value: '-50%',
-    stat2Label: 'de tâches manuelles',
-    stat3Value: '+100%',
-    stat3Label: 'de visibilité sur vos opérations',
-    statsSectionTitleBefore: 'Une vue complète de votre activité',
-    statsSectionTitleAccent: 'en temps réel',
+    stat1Target: 18,
+    stat1Format: 'percent',
+    stat2Target: 22,
+    stat2Format: 'percent',
+    stat3Target: 8,
+    stat3Format: 'hoursSaved',
+    stat4Target: 90,
+    stat4Format: 'percent',
+    stat5Target: -45,
+    stat5Format: 'percent',
+    stat1Value: '+18%',
+    stat1Label: 'de revenu moyen par nuitée (RevPAR)',
+    stat2Value: '+22%',
+    stat2Label: 'sur le taux d’occupation cible',
+    stat3Value: '−8h',
+    stat3Label: 'd’administration économisées par semaine',
+    stat4Value: '+90%',
+    stat4Label: 'des tâches récurrentes en automatisation',
+    stat5Value: '−45%',
+    stat5Label: 'd’écarts tarifaires vs la concurrence',
+    statsSectionTitleBefore: 'Des gains business',
+    statsSectionTitleAccent: 'visibles rapidement',
     statsSectionSubtitle:
-      'Visualisez vos performances et prenez les bonnes décisions',
+      'RevPAR, occupation, temps admin, automatisation et prix : les leviers qui font bouger votre marge — sans empiler les outils.',
   },
   es: {
-    stat1Value: '+30%',
-    stat1Label: 'de tiempo ahorrado',
-    stat2Value: '-50%',
-    stat2Label: 'de tareas manuales',
-    stat3Value: '+100%',
-    stat3Label: 'de visibilidad sobre sus operaciones',
-    statsSectionTitleBefore: 'Una visión completa de su actividad',
-    statsSectionTitleAccent: 'en tiempo real',
+    stat1Target: 18,
+    stat1Format: 'percent',
+    stat2Target: 22,
+    stat2Format: 'percent',
+    stat3Target: 8,
+    stat3Format: 'hoursSaved',
+    stat4Target: 90,
+    stat4Format: 'percent',
+    stat5Target: -45,
+    stat5Format: 'percent',
+    stat1Value: '+18%',
+    stat1Label: 'de ingreso medio por noche (RevPAR)',
+    stat2Value: '+22%',
+    stat2Label: 'en ocupación sobre su objetivo',
+    stat3Value: '−8h',
+    stat3Label: 'de administración ahorradas por semana',
+    stat4Value: '+90%',
+    stat4Label: 'de tareas repetitivas automatizadas',
+    stat5Value: '−45%',
+    stat5Label: 'de desviación de precio frente al mercado',
+    statsSectionTitleBefore: 'Resultados de negocio',
+    statsSectionTitleAccent: 'que se notan pronto',
     statsSectionSubtitle:
-      'Visualice su rendimiento y tome las decisiones adecuadas',
+      'RevPAR, ocupación, tiempo admin, automatización y tarifas: palancas que mueven su margen—sin acumular software.',
   },
   en: {
-    stat1Value: '+30%',
-    stat1Label: 'time saved',
-    stat2Value: '-50%',
-    stat2Label: 'manual tasks',
-    stat3Value: '+100%',
-    stat3Label: 'visibility on your operations',
-    statsSectionTitleBefore: 'A complete view of your activity',
-    statsSectionTitleAccent: 'in real time',
+    stat1Target: 18,
+    stat1Format: 'percent',
+    stat2Target: 22,
+    stat2Format: 'percent',
+    stat3Target: 8,
+    stat3Format: 'hoursSaved',
+    stat4Target: 90,
+    stat4Format: 'percent',
+    stat5Target: -45,
+    stat5Format: 'percent',
+    stat1Value: '+18%',
+    stat1Label: 'higher ADR / RevPAR',
+    stat2Value: '+22%',
+    stat2Label: 'lift on target occupancy',
+    stat3Value: '−8h',
+    stat3Label: 'admin time saved every week',
+    stat4Value: '+90%',
+    stat4Label: 'of recurring tasks on autopilot',
+    stat5Value: '−45%',
+    stat5Label: 'pricing gap vs the market',
+    statsSectionTitleBefore: 'Business outcomes',
+    statsSectionTitleAccent: 'you can actually feel',
     statsSectionSubtitle:
-      'See how you perform and make the right decisions',
+      'RevPAR, occupancy, admin time, automation, and pricing—the levers that move margin without a stack of tools.',
   },
   de: {
-    stat1Value: '+30%',
-    stat1Label: 'Zeitersparnis',
-    stat2Value: '-50%',
-    stat2Label: 'manuelle Aufgaben',
-    stat3Value: '+100%',
-    stat3Label: 'Transparenz Ihrer Abläufe',
-    statsSectionTitleBefore: 'Ein vollständiger Überblick über Ihre Aktivität',
-    statsSectionTitleAccent: 'in Echtzeit',
+    stat1Target: 18,
+    stat1Format: 'percent',
+    stat2Target: 22,
+    stat2Format: 'percent',
+    stat3Target: 8,
+    stat3Format: 'hoursSaved',
+    stat4Target: 90,
+    stat4Format: 'percent',
+    stat5Target: -45,
+    stat5Format: 'percent',
+    stat1Value: '+18%',
+    stat1Label: 'höherer RevPAR / Nachtumsatz',
+    stat2Value: '+22%',
+    stat2Label: 'bei der Zielauslastung',
+    stat3Value: '−8h',
+    stat3Label: 'weniger Admin pro Woche',
+    stat4Value: '+90%',
+    stat4Label: 'wiederkehrende Aufgaben automatisiert',
+    stat5Value: '−45%',
+    stat5Label: 'Preisabweichung vs. Markt',
+    statsSectionTitleBefore: 'Messbare Business-Erfolge',
+    statsSectionTitleAccent: 'statt nur Features',
     statsSectionSubtitle:
-      'Sehen Sie Ihre Leistung und treffen Sie die richtigen Entscheidungen',
+      'RevPAR, Auslastung, Admin-Zeit, Automatisierung und Pricing—Hebel für Ihre Marge, ohne Tool-Wildwuchs.',
   },
   it: {
-    stat1Value: '+30%',
-    stat1Label: 'di tempo risparmiato',
-    stat2Value: '-50%',
-    stat2Label: 'di attività manuali',
-    stat3Value: '+100%',
-    stat3Label: 'di visibilità sulle operazioni',
-    statsSectionTitleBefore: "Una visione completa dell'attività",
-    statsSectionTitleAccent: 'in tempo reale',
+    stat1Target: 18,
+    stat1Format: 'percent',
+    stat2Target: 22,
+    stat2Format: 'percent',
+    stat3Target: 8,
+    stat3Format: 'hoursSaved',
+    stat4Target: 90,
+    stat4Format: 'percent',
+    stat5Target: -45,
+    stat5Format: 'percent',
+    stat1Value: '+18%',
+    stat1Label: 'RevPAR / ricavo medio per notte',
+    stat2Value: '+22%',
+    stat2Label: 'sull’occupazione rispetto all’obiettivo',
+    stat3Value: '−8h',
+    stat3Label: 'di admin risparmiate a settimana',
+    stat4Value: '+90%',
+    stat4Label: 'attività ricorrenti in automazione',
+    stat5Value: '−45%',
+    stat5Label: 'scostamento prezzi vs mercato',
+    statsSectionTitleBefore: 'Risultati concreti',
+    statsSectionTitleAccent: 'sul vostro business',
     statsSectionSubtitle:
-      'Visualizza le performance e prendi le decisioni giuste',
+      'RevPAR, occupazione, tempo admin, automazione e prezzi: leve che muovono il margine—senza accumulare tool.',
   },
 }

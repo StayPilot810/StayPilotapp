@@ -8,14 +8,16 @@ import { easePremium, MotionAnchor } from './motion'
 const primary = '#4a86f7'
 
 const linkGray =
-  'text-[15px] font-medium text-[#666666] transition-colors duration-200 hover:text-[#1a1a1a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40 focus-visible:ring-offset-2 rounded-sm'
+  'text-[15px] font-medium text-zinc-600 transition-colors duration-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 rounded-lg'
 
 type LanguageMenuProps = {
   align?: 'left' | 'right'
   className?: string
+  /** Compact (desktop nav) — sans zone tactile 44px */
+  dense?: boolean
 }
 
-function LanguageMenu({ align = 'right', className = '' }: LanguageMenuProps) {
+function LanguageMenu({ align = 'right', className = '', dense = false }: LanguageMenuProps) {
   const { locale, setLocale, t } = useLanguage()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -43,12 +45,16 @@ function LanguageMenu({ align = 'right', className = '' }: LanguageMenuProps) {
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`${t.languagesTab}: ${LANGUAGE_MENU_LABELS[locale]}`}
-        className="flex items-center gap-2 rounded-lg py-1.5 pl-1 pr-1.5 text-left transition-colors duration-200 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40 focus-visible:ring-offset-2 sm:gap-2.5 sm:pr-2"
+        className={`flex items-center gap-2 rounded-xl text-left transition-colors duration-200 hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 ${
+          dense
+            ? 'gap-2.5 py-1.5 pl-1 pr-2'
+            : 'min-h-[44px] gap-2 py-2 pl-1.5 pr-2 sm:gap-2.5'
+        }`}
       >
-        <Globe className="h-[18px] w-[18px] shrink-0 text-[#666666]" strokeWidth={2} aria-hidden />
+        <Globe className="h-[18px] w-[18px] shrink-0 text-zinc-500" strokeWidth={2} aria-hidden />
         <div className="flex min-w-0 flex-col leading-tight">
           <span className="text-[11px] font-medium text-[#9ca3af] sm:text-[12px]">{t.languagesTab}</span>
-          <span className="text-[14px] font-semibold text-[#1a1a1a] sm:text-[15px]">
+          <span className="text-[14px] font-semibold text-zinc-900 sm:text-[15px]">
             {LANGUAGE_MENU_LABELS[locale]}
           </span>
         </div>
@@ -68,7 +74,7 @@ function LanguageMenu({ align = 'right', className = '' }: LanguageMenuProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.2, ease: easePremium }}
-            className={`absolute top-full z-50 mt-2 min-w-[200px] rounded-xl border border-gray-100 bg-white py-1.5 shadow-lg ${
+            className={`absolute top-full z-50 mt-2 min-w-[200px] rounded-xl border border-zinc-200/80 bg-white/95 py-1.5 shadow-pm-lg backdrop-blur-md ${
               align === 'right' ? 'right-0' : 'left-0'
             }`}
           >
@@ -80,8 +86,8 @@ function LanguageMenu({ align = 'right', className = '' }: LanguageMenuProps) {
                     setLocale(code)
                     setOpen(false)
                   }}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[14px] transition-colors duration-150 hover:bg-gray-50 ${
-                    code === locale ? 'font-semibold text-[#1a1a1a]' : 'font-medium text-[#666666]'
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[14px] transition-colors duration-150 hover:bg-zinc-50 ${
+                    code === locale ? 'font-semibold text-zinc-900' : 'font-medium text-zinc-600'
                   }`}
                 >
                   <span className="text-lg leading-none" aria-hidden>
@@ -104,18 +110,18 @@ function Logo() {
   return (
     <motion.a
       href="/"
-      className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40 focus-visible:ring-offset-2"
+      className="flex shrink-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2"
       whileHover={reduceMotion ? undefined : { scale: 1.01 }}
       whileTap={reduceMotion ? undefined : { scale: 0.99 }}
       transition={{ type: 'tween', duration: 0.2, ease: easePremium }}
     >
       <span
-        className="flex h-9 w-9 items-center justify-center rounded-[10px]"
+        className="flex h-9 w-9 items-center justify-center rounded-xl shadow-pm-sm"
         style={{ backgroundColor: primary }}
       >
         <Calendar className="h-[18px] w-[18px] text-white" strokeWidth={2.2} aria-hidden />
       </span>
-      <span className="text-[17px] font-bold tracking-tight text-[#1a1a1a]">{t.brand}</span>
+      <span className="text-[17px] font-bold tracking-tight text-zinc-900">{t.brand}</span>
     </motion.a>
   )
 }
@@ -128,7 +134,10 @@ function DesktopNavAndLang() {
       className="flex items-center gap-5 xl:gap-7"
       aria-label={t.navMainLabel}
     >
-      <a href="#" className={linkGray}>
+      <a href="#pourquoi-nous" className={linkGray}>
+        {t.whyUs}
+      </a>
+      <a href="#fonctionnalites" className={linkGray}>
         {t.features}
       </a>
       <a href="#avis" className={linkGray}>
@@ -146,13 +155,13 @@ function DesktopNavAndLang() {
       <MotionAnchor
         href="#"
         variant="subtle"
-        className="shrink-0 rounded-sm text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40 focus-visible:ring-offset-2"
+        className="shrink-0 rounded-lg text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2"
         style={{ color: primary }}
       >
         {t.bookCall}
       </MotionAnchor>
       <div className="flex shrink-0 items-center pl-1 xl:pl-2">
-        <LanguageMenu align="left" />
+        <LanguageMenu align="left" dense />
       </div>
     </nav>
   )
@@ -165,13 +174,13 @@ function DesktopAuthRight() {
     <div className="flex shrink-0 items-center justify-end gap-6">
       <a
         href="#"
-        className="rounded-sm text-[15px] font-medium text-[#1a1a1a] transition-colors duration-200 hover:text-[#4a86f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40 focus-visible:ring-offset-2 whitespace-nowrap"
+        className="rounded-lg text-[15px] font-medium text-zinc-800 transition-colors duration-200 hover:text-[#4a86f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 whitespace-nowrap"
       >
         {t.login}
       </a>
       <MotionAnchor
         href="#"
-        className="rounded-full px-5 py-2.5 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(74,134,247,0.35)] transition-[filter] duration-200 hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/50 focus-visible:ring-offset-2 whitespace-nowrap"
+        className="rounded-full px-5 py-2.5 text-[15px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/45 focus-visible:ring-offset-2 whitespace-nowrap"
         style={{ backgroundColor: primary }}
       >
         {t.signup}
@@ -195,8 +204,8 @@ export function Navbar() {
   const closeMobile = () => setMobileOpen(false)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-100/90 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.06),0_4px_12px_rgba(15,23,42,0.04)] backdrop-blur-md backdrop-saturate-150">
-      <div className="mx-auto h-[72px] max-w-[1200px] px-5 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 border-b border-zinc-200/60 bg-white/80 shadow-pm-nav backdrop-blur-xl backdrop-saturate-150">
+      <div className="mx-auto h-[64px] max-w-[1200px] px-4 sm:h-[72px] sm:px-6 lg:px-8">
         {/* Mobile & tablette */}
         <div className="flex h-full w-full items-center justify-between lg:hidden">
           <Logo />
@@ -204,13 +213,13 @@ export function Navbar() {
             <LanguageMenu align="right" />
             <a
               href="#"
-              className="hidden rounded-sm text-[14px] font-medium text-[#1a1a1a] transition-colors duration-200 hover:text-[#4a86f7] md:inline whitespace-nowrap"
+              className="hidden rounded-lg text-[14px] font-medium text-zinc-800 transition-colors duration-200 hover:text-[#4a86f7] md:inline whitespace-nowrap"
             >
               {t.login}
             </a>
             <MotionAnchor
               href="#"
-              className="rounded-full px-3 py-2 text-[13px] font-semibold text-white sm:px-4 sm:text-[14px] whitespace-nowrap"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2.5 text-[14px] font-semibold text-white shadow-pm-cta sm:px-5 sm:text-[15px] whitespace-nowrap"
               style={{ backgroundColor: primary }}
             >
               {t.signup}
@@ -221,7 +230,7 @@ export function Navbar() {
               aria-controls="mobile-menu"
               aria-label={mobileOpen ? t.closeMenu : t.openMenu}
               onClick={() => setMobileOpen((o) => !o)}
-              className="rounded-lg p-2 text-[#1a1a1a] hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/40"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-zinc-800 hover:bg-zinc-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35"
               whileTap={reduceMotion ? undefined : { scale: 0.94 }}
               transition={{ type: 'tween', duration: 0.15, ease: easePremium }}
             >
@@ -252,38 +261,41 @@ export function Navbar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.22, ease: easePremium }}
-            className="border-t border-gray-100 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.08)] lg:hidden"
+            className="border-t border-zinc-200/60 bg-white/95 shadow-pm-lg backdrop-blur-md lg:hidden"
           >
             <nav
-              className="mx-auto flex max-w-[1200px] flex-col gap-1 px-5 py-4 sm:px-6"
+              className="mx-auto flex max-w-[1200px] flex-col gap-0.5 px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 sm:gap-1 sm:px-6 sm:pb-4 sm:pt-4"
               aria-label={t.navMobileLabel}
             >
-              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3`}>
+              <a href="#pourquoi-nous" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+                {t.whyUs}
+              </a>
+              <a href="#fonctionnalites" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.features}
               </a>
-              <a href="#avis" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3`}>
+              <a href="#avis" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.reviews}
               </a>
-              <a href="#tarifs" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3`}>
+              <a href="#tarifs" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.pricing}
               </a>
-              <a href="#faq" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3`}>
+              <a href="#faq" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.faq}
               </a>
-              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3`}>
+              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.support}
               </a>
               <MotionAnchor
                 href="#"
                 variant="subtle"
                 onClick={closeMobile}
-                className="rounded-lg px-2 py-3 text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90"
+                className="rounded-lg px-3 py-3.5 text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90"
                 style={{ color: primary }}
               >
                 {t.bookCall}
               </MotionAnchor>
-              <div className="my-2 border-t border-gray-100" />
-              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-2 py-3 text-[#1a1a1a]`}>
+              <div className="my-2 border-t border-zinc-200/70" />
+              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5 text-zinc-900`}>
                 {t.login}
               </a>
             </nav>

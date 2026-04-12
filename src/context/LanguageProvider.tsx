@@ -7,6 +7,7 @@ import { heroTranslations } from '../i18n/hero'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
 import { reviewsTranslations } from '../i18n/reviews'
 import { statsRowTranslations } from '../i18n/statsRow'
+import { whyStayManagerTranslations } from '../i18n/whyStayManager'
 import { trialAndPricingTranslations } from '../i18n/trialAndPricing'
 import type { Locale } from '../i18n/navbar'
 import { translations } from '../i18n/navbar'
@@ -31,6 +32,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         ...translations[locale],
         ...heroTranslations[locale],
         ...featureCardsTranslations[locale],
+        ...whyStayManagerTranslations[locale],
         ...statsRowTranslations[locale],
         ...bookingCalendarTranslations[locale],
         ...reviewsTranslations[locale],

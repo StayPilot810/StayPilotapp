@@ -455,7 +455,7 @@ export function BookingCalendarOverview() {
     <div className="mt-8 w-full sm:mt-10 lg:mt-11">
       {modal ? (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#64748b]/25 px-4 py-8 backdrop-blur-[3px]"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-[#64748b]/25 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-8 backdrop-blur-[3px] sm:items-center sm:pb-8"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closeModal()
@@ -465,7 +465,7 @@ export function BookingCalendarOverview() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}
-            className="max-w-md rounded-2xl border border-gray-100 bg-white px-6 py-8 text-center shadow-xl sm:px-10"
+            className="max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto rounded-t-2xl border border-zinc-200/70 bg-white px-5 py-7 text-center shadow-pm-xl sm:rounded-2xl sm:px-10 sm:py-8"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <p
@@ -476,7 +476,7 @@ export function BookingCalendarOverview() {
             </p>
             <button
               type="button"
-              className="mt-6 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white sm:mt-8 sm:w-auto sm:min-w-[8rem]"
+              className="mt-6 min-h-[48px] w-full rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white shadow-pm-cta sm:mt-8 sm:min-h-0 sm:w-auto sm:min-w-[8rem] sm:py-3 sm:text-sm"
               style={{ backgroundColor: brandBlue }}
               onClick={closeModal}
             >
@@ -504,16 +504,16 @@ export function BookingCalendarOverview() {
         />
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-6">
+      <div className="overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-pm-md sm:shadow-pm-lg">
+        <div className="flex flex-col gap-3 border-b border-zinc-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-6">
           <div>
-            <h3 className="text-lg font-semibold tracking-tight text-[#1a1a1a] sm:text-xl">
+            <h3 className="text-base font-semibold tracking-tight text-zinc-900 sm:text-xl">
               {t.calendarTitle}
             </h3>
-            <p className="mt-1 text-sm font-medium text-[#71717a]">{monthYearLabel}</p>
+            <p className="mt-1 text-[13px] font-medium text-[#71717a] sm:text-sm">{monthYearLabel}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-4 sm:justify-end">
-            <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end sm:gap-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] sm:text-sm">
               <span className="flex items-center gap-2 text-[#3f3f46]">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: airbnbRed }} />
                 {t.legendAirbnb}
@@ -526,14 +526,14 @@ export function BookingCalendarOverview() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-3 border-b border-zinc-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex flex-wrap items-center gap-2">
             {periodTabs.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => onPeriodTabClick(id)}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`min-h-[44px] rounded-xl px-3.5 py-2.5 text-[13px] font-medium transition-colors sm:min-h-0 sm:px-3 sm:py-2 sm:text-sm ${
                   periodTab === id
                     ? 'text-white'
                     : 'text-[#71717a] hover:bg-gray-50 hover:text-[#1a1a1a]'
@@ -547,7 +547,7 @@ export function BookingCalendarOverview() {
               <button
                 type="button"
                 onClick={() => setCalendarOpen((o) => !o)}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex min-h-[44px] items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px] font-medium transition-colors sm:min-h-0 sm:px-3 sm:py-2 sm:text-sm ${
                   calendarOpen
                     ? 'border-[#4f86f7] bg-[#f5f8ff] text-[#1a1a1a] ring-2 ring-[#4f86f7]/25'
                     : 'border-transparent text-[#71717a] hover:bg-gray-50'
@@ -558,7 +558,7 @@ export function BookingCalendarOverview() {
               </button>
               {calendarOpen ? (
                 <div
-                  className="absolute left-0 top-full z-30 mt-2 w-[min(100vw-2.5rem,17.5rem)] rounded-xl border border-gray-200 bg-white p-3 shadow-lg sm:left-auto sm:right-0"
+                  className="absolute left-0 top-full z-30 mt-2 w-[min(100vw-2.5rem,17.5rem)] rounded-xl border border-zinc-200/80 bg-white p-3 shadow-pm-lg sm:left-auto sm:right-0"
                   role="dialog"
                   aria-label={t.customDates}
                 >
@@ -581,7 +581,7 @@ export function BookingCalendarOverview() {
                           key={day}
                           type="button"
                           onClick={onMiniCalendarDayClick}
-                          className="flex aspect-square items-center justify-center rounded-lg text-xs font-semibold text-[#3f3f46] transition-colors hover:bg-[#e8f0fe] hover:text-[#1a1a1a]"
+                          className="flex min-h-[44px] w-full items-center justify-center rounded-lg text-xs font-semibold text-[#3f3f46] transition-colors hover:bg-[#e8f0fe] hover:text-[#1a1a1a] sm:aspect-square sm:min-h-0"
                         >
                           {day}
                         </button>
@@ -594,7 +594,7 @@ export function BookingCalendarOverview() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
-              className="h-10 min-w-[11rem] cursor-pointer rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-[#1a1a1a] outline-none focus:border-[#4f86f7] focus:ring-2 focus:ring-[#4f86f7]/20"
+              className="h-11 min-h-[44px] min-w-0 max-w-full flex-1 cursor-pointer rounded-xl border border-zinc-200/80 bg-white px-3 text-[13px] font-medium text-zinc-900 shadow-pm-xs outline-none focus:border-[#4f86f7] focus:ring-2 focus:ring-[#4f86f7]/20 sm:h-10 sm:min-h-0 sm:min-w-[11rem] sm:max-w-none sm:flex-none sm:text-sm"
               aria-label={t.allApartments}
               value={apartmentFilter}
               onChange={(e) => onApartmentChange(e.target.value)}
@@ -608,7 +608,7 @@ export function BookingCalendarOverview() {
             </select>
             <button
               type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-[#52525b] transition-colors hover:bg-gray-50"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 text-zinc-600 shadow-pm-xs transition-colors hover:bg-zinc-50 sm:h-10 sm:w-10"
               aria-label={t.filterPropertiesAria}
             >
               <Filter className="h-4 w-4" strokeWidth={2} />
@@ -616,8 +616,8 @@ export function BookingCalendarOverview() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px] px-5 pb-2 pt-4 sm:px-6">
+        <div className="-mx-px overflow-x-auto overscroll-x-contain touch-pan-x">
+          <div className="min-w-[720px] px-4 pb-2 pt-3 sm:px-6 sm:pt-4">
             <div
               className="grid items-end gap-y-1"
               style={{
@@ -640,7 +640,7 @@ export function BookingCalendarOverview() {
                     {apartmentName(t.apartmentLabel, apt + 1)}
                   </div>
                   <div
-                    className="relative grid min-h-[3.5rem] items-center border-t border-gray-100 py-0.5"
+                    className="relative grid min-h-[3.5rem] items-center border-t border-zinc-100 py-0.5"
                     style={{
                       gridColumn: '2 / -1',
                       gridTemplateColumns: `repeat(${DAYS_IN_MONTH}, minmax(0, 1fr))`,
@@ -649,7 +649,7 @@ export function BookingCalendarOverview() {
                     {Array.from({ length: DAYS_IN_MONTH }, (_, i) => (
                       <div
                         key={i}
-                        className="h-full border-l border-gray-100 first:border-l-0"
+                        className="h-full border-l border-zinc-100 first:border-l-0"
                         aria-hidden
                       />
                     ))}
@@ -691,8 +691,8 @@ export function BookingCalendarOverview() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-gray-100 px-5 py-4 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6 sm:py-5">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[#3f3f46]">
+        <div className="flex flex-col gap-3 border-t border-zinc-100 px-4 py-4 text-[13px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6 sm:py-5 sm:text-sm">
+          <div className="flex flex-col gap-2 text-[#3f3f46] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
             <span className="inline-flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-[#71717a]" strokeWidth={2} />
               <span className="font-medium">{t.footerOccupancy}</span>
