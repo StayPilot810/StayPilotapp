@@ -264,6 +264,8 @@ const MOCK_BOOKINGS: CalendarReservationDetail[] = [
   },
 ]
 
+const DEMO_APARTMENT_ROW_COUNT = 1 + MOCK_BOOKINGS.reduce((max, b) => Math.max(max, b.apt), 0)
+
 type PeriodTab = 'this' | 'last' | 'next'
 type ModalKind = 'option' | 'action'
 
@@ -314,18 +316,28 @@ export function BookingCalendarOverview() {
       ]
     }
     return []
-  }, [t.apartmentLabel])
+  }, [])
 
-  const apartmentEntries = useMemo(
-    () => connectedApartments.map((apt, index) => ({ ...apt, index })),
-    [connectedApartments],
-  )
+  /** Assez de lignes pour afficher toute la grille demo (meme avec un seul canal connecte). */
+  const calendarRowEntries = useMemo(() => {
+    const count = Math.max(connectedApartments.length, DEMO_APARTMENT_ROW_COUNT)
+    return Array.from({ length: count }, (_, index) => {
+      const conn = connectedApartments[index]
+      if (conn) return { id: conn.id, name: conn.name, index }
+      return {
+        id: `demo-row-${index}`,
+        name: apartmentName(t.apartmentLabel, index + 1),
+        index,
+      }
+    })
+  }, [connectedApartments, t.apartmentLabel])
+
   const visibleApartmentEntries = useMemo(() => {
-    if (apartmentFilter === 'all') return apartmentEntries
-    return apartmentEntries.filter((apt) => String(apt.index + 1) === apartmentFilter)
-  }, [apartmentEntries, apartmentFilter])
-  const hasConnectedListings = apartmentEntries.length > 0
-  const apartmentCount = apartmentEntries.length
+    if (apartmentFilter === 'all') return calendarRowEntries
+    return calendarRowEntries.filter((apt) => String(apt.index + 1) === apartmentFilter)
+  }, [calendarRowEntries, apartmentFilter])
+  const hasConnectedListings = connectedApartments.length > 0
+  const apartmentCount = calendarRowEntries.length
   const availableBookings = useMemo(() => MOCK_BOOKINGS.filter((b) => b.apt < apartmentCount), [apartmentCount])
   const visibleBookings = useMemo(() => {
     const byApartment =
@@ -663,8 +675,8 @@ export function BookingCalendarOverview() {
               onChange={(e) => onApartmentChange(e.target.value)}
             >
               <option value="all">{t.allApartments}</option>
-              {connectedApartments.map((apt, i) => (
-                <option key={apt.id} value={String(i + 1)}>
+              {calendarRowEntries.map((apt) => (
+                <option key={apt.id} value={String(apt.index + 1)}>
                   {apt.name}
                 </option>
               ))}

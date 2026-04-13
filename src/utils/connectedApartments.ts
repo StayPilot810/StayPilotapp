@@ -12,7 +12,7 @@ const ACCESS_STORAGE_KEY = 'sm_reservation_access'
 const APARTMENT_NAME_KEY = 'sm_connected_apartment_names'
 
 function fallbackName(platform: ChannelKey) {
-  if (platform === 'airbnb') return 'Logement Airbnb'
+  if (platform === 'airbnb') return 'Appartement 1'
   if (platform === 'booking') return 'Logement Booking'
   return 'Logement Channel Manager'
 }
