@@ -8,13 +8,14 @@ export function TrialCtaSection() {
 
   return (
     <section
-      className="relative overflow-hidden border-t border-zinc-200/30 py-12 sm:py-16 lg:py-20"
+      id="essai-gratuit"
+      className="relative overflow-hidden border-t border-zinc-200/30 py-12 sm:py-16 lg:py-20 scroll-mt-[calc(64px+1rem)] sm:scroll-mt-[calc(72px+1rem)]"
       style={{
         background: 'linear-gradient(180deg, #e8ecff 0%, #eef1f8 42%, #f3f4f6 100%)',
       }}
       aria-labelledby="trial-cta-heading"
     >
-      <div className="relative mx-auto max-w-[720px] px-4 text-center sm:px-6">
+      <div className="relative mx-auto max-w-[980px] px-4 text-center sm:px-6">
         <Reveal y={20}>
           <h2
             id="trial-cta-heading"
@@ -22,7 +23,7 @@ export function TrialCtaSection() {
           >
             {t.ctaTitle}
           </h2>
-          <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-zinc-600 sm:text-base">
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-zinc-600 sm:text-base">
             {t.ctaSubtitle}
           </p>
           <div className="mt-6 sm:mt-7">

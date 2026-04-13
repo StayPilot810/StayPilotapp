@@ -2,7 +2,6 @@ import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
 import { Hero } from './components/Hero'
-import { WhyStayManager } from './components/WhyStayManager'
 import { Navbar } from './components/Navbar'
 import { FaqSection } from './components/FaqSection'
 import { SiteFooter } from './components/SiteFooter'
@@ -20,7 +19,6 @@ export default function App() {
         <Navbar />
         <main className="flex min-w-0 flex-1 flex-col">
           <Hero />
-          <WhyStayManager />
           <FeatureCards />
           <StatsRow />
           <ReviewsSection />

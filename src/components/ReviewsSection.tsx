@@ -1,13 +1,13 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Star } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReviewEntry } from '../i18n/reviews'
 import { useLanguage } from '../hooks/useLanguage'
 import { easePremium, Reveal } from './motion'
 
-const starFilled = '#f59e0b'
-const starEmpty = '#d6d3d1'
-const starGlow = 'drop-shadow(0 1px 2px rgba(245, 158, 11, 0.35))'
+const starFilled = '#4f86f7'
+const starEmpty = '#d4d4d8'
+const starGlow = 'drop-shadow(0 1px 2px rgba(79, 134, 247, 0.35))'
 
 type StarSize = 'md' | 'lg' | 'sm'
 
@@ -54,15 +54,15 @@ function FeaturedReviewCard({ review }: { review: ReviewEntry }) {
               y: -6,
               scale: 1.02,
               boxShadow:
-                '0 24px 48px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(245, 158, 11, 0.15)',
+                '0 24px 48px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(79, 134, 247, 0.2)',
               transition: { type: 'tween', duration: 0.32, ease: easePremium },
             }
       }
-      className="flex min-w-[min(88vw,300px)] shrink-0 flex-col rounded-2xl border border-zinc-200/80 bg-gradient-to-b from-white to-zinc-50/90 p-5 shadow-pm-md sm:min-w-[340px] sm:p-6"
+      className="flex h-full flex-col rounded-2xl border border-zinc-200/80 bg-gradient-to-b from-white via-white to-blue-50/30 p-5 shadow-pm-md sm:p-6"
     >
       <div className="flex items-center justify-between gap-3">
         <Stars rating={review.stars} size="lg" />
-        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 ring-1 ring-amber-200/80">
+        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 ring-1 ring-blue-200/80">
           {review.stars === 5 ? '5/5' : '4/5+'}
         </span>
       </div>
@@ -87,11 +87,11 @@ function CompactReviewCard({ review }: { review: ReviewEntry }) {
               y: -3,
               scale: 1.02,
               boxShadow:
-                '0 14px 28px -8px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(245, 158, 11, 0.12)',
+                '0 14px 28px -8px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(79, 134, 247, 0.16)',
               transition: { type: 'tween', duration: 0.26, ease: easePremium },
             }
       }
-      className="flex min-w-[min(78vw,260px)] shrink-0 flex-col rounded-xl border border-zinc-200/70 bg-white px-4 py-3.5 shadow-pm-sm sm:min-w-[280px]"
+      className="flex h-full flex-col rounded-xl border border-zinc-200/70 bg-gradient-to-b from-white to-zinc-50/60 px-4 py-3.5 shadow-pm-sm"
     >
       <Stars rating={review.stars} size="sm" />
       <p className="mt-2.5 text-[13px] font-semibold leading-snug text-zinc-900 sm:text-sm">{review.quote}</p>
@@ -104,44 +104,48 @@ function CompactReviewCard({ review }: { review: ReviewEntry }) {
   )
 }
 
-type MarqueeRowProps = {
-  children: ReactNode
-  durationSec: number
-  /** Masque le carrousel décoratif pour les lecteurs d’écran (contenu listé ailleurs). */
-  decorative?: boolean
-}
-
-function MarqueeRow({ children, durationSec, decorative }: MarqueeRowProps) {
-  return (
-    <div
-      className="reviews-marquee-group reviews-marquee-mask relative overflow-hidden py-1"
-      role={decorative ? 'presentation' : undefined}
-      aria-hidden={decorative ? true : undefined}
-    >
-      <div
-        className="reviews-marquee-track gap-4 sm:gap-5"
-        style={{ animationDuration: `${durationSec}s` }}
-      >
-        {children}
-        {children}
-      </div>
-    </div>
-  )
-}
-
 export function ReviewsSection() {
   const { t } = useLanguage()
+  const featured = t.featured.slice(0, 3)
+  const more = t.more.slice(0, 10)
+  const loopedMore = useMemo(() => [...more, ...more], [more])
+  const autoScrollRef = useRef<HTMLDivElement>(null)
+  const [manualPauseUntil, setManualPauseUntil] = useState(0)
 
-  const featuredLoop = useMemo(() => [...t.featured, ...t.featured], [t.featured])
-  const moreLoop = useMemo(() => [...t.more, ...t.more], [t.more])
+  useEffect(() => {
+    const node = autoScrollRef.current
+    if (!node) return
 
-  const featuredDuration = Math.max(32, t.featured.length * 2 * 11)
-  const moreDuration = Math.max(42, t.more.length * 2 * 2.8)
+    let raf = 0
+    let lastTs = 0
+    const pxPerSecond = 14
+
+    const tick = (ts: number) => {
+      if (!lastTs) lastTs = ts
+      const dt = (ts - lastTs) / 1000
+      lastTs = ts
+
+      const pauseActive = Date.now() < manualPauseUntil
+      if (!pauseActive) {
+        node.scrollTop += pxPerSecond * dt
+        const halfHeight = node.scrollHeight / 2
+        if (node.scrollTop >= halfHeight) node.scrollTop = 0
+      }
+      raf = requestAnimationFrame(tick)
+    }
+
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [manualPauseUntil, loopedMore.length])
+
+  const onManualScrollIntent = () => {
+    setManualPauseUntil(Date.now() + 2400)
+  }
 
   return (
     <section
       id="avis"
-      className="scroll-mt-[64px] border-t border-zinc-200/50 bg-white py-12 sm:scroll-mt-[72px] sm:py-16 lg:py-20"
+      className="scroll-mt-[64px] border-t border-zinc-200/50 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(79,134,247,0.08),transparent_70%)] py-12 sm:scroll-mt-[72px] sm:py-16 lg:py-20"
       aria-labelledby="reviews-heading"
     >
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
@@ -159,24 +163,28 @@ export function ReviewsSection() {
           </header>
         </Reveal>
 
-        <div className="relative mt-10 sm:mt-12">
-          <MarqueeRow durationSec={featuredDuration} decorative>
-            {featuredLoop.map((review, i) => (
+        <div className="relative mt-10 grid gap-4 rounded-2xl border border-zinc-200/70 bg-white/70 p-3 shadow-pm-sm sm:mt-12 sm:grid-cols-[minmax(0,1fr)_260px] sm:p-4 lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
+            {featured.map((review, i) => (
               <FeaturedReviewCard key={`feat-${review.name}-${i}`} review={review} />
             ))}
-          </MarqueeRow>
+          </div>
+          <aside className="rounded-xl border border-zinc-200/80 bg-white p-2.5 sm:p-3">
+            <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:text-[11px]">
+              {t.moreReviewsTitle}
+            </h3>
+            <div
+              ref={autoScrollRef}
+              onWheel={onManualScrollIntent}
+              onTouchMove={onManualScrollIntent}
+              className="h-[420px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]"
+            >
+              {loopedMore.map((review, i) => (
+                <CompactReviewCard key={`more-${review.name}-${i}`} review={review} />
+              ))}
+            </div>
+          </aside>
         </div>
-
-        <Reveal className="mt-12 sm:mt-14" y={14} delay={0.04}>
-          <h3 className="mb-4 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:mb-5 sm:text-xs">
-            {t.moreReviewsTitle}
-          </h3>
-          <MarqueeRow durationSec={moreDuration} decorative>
-            {moreLoop.map((review, i) => (
-              <CompactReviewCard key={`more-${review.name}-${i}`} review={review} />
-            ))}
-          </MarqueeRow>
-        </Reveal>
 
         <ul className="sr-only">
           {t.featured.map((review, i) => (

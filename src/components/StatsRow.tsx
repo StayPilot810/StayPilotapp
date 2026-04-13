@@ -144,7 +144,7 @@ export function StatsRow() {
   ] as const
 
   return (
-    <section className="border-b border-zinc-200/40 bg-pm-band py-12 sm:py-16 lg:py-20">
+    <section className="border-b border-zinc-200/40 bg-pm-band py-6 sm:py-8 lg:py-9">
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
         <StaggerReveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5 xl:gap-4">
           {items.map(({ icon: Icon, target, format, fallback, label, tone }) => {
@@ -181,7 +181,7 @@ export function StatsRow() {
           })}
         </StaggerReveal>
 
-        <Reveal className="mx-auto mt-10 max-w-[40rem] text-center sm:mt-14 lg:mt-16" y={20}>
+        <Reveal className="mx-auto mt-4 max-w-[40rem] text-center sm:mt-6 lg:mt-7" y={20}>
           <h2 className="text-[1.4rem] font-bold leading-[1.2] tracking-[-0.03em] text-zinc-900 sm:text-[1.85rem] lg:text-[2.125rem]">
             {t.statsSectionTitleBefore}{' '}
             <span className="text-blue-600">{t.statsSectionTitleAccent}</span>
@@ -191,7 +191,7 @@ export function StatsRow() {
           </p>
         </Reveal>
 
-        <Reveal className="mt-10 sm:mt-12" y={24} delay={0.06}>
+        <Reveal className="mt-5 sm:mt-6" y={24} delay={0.06}>
           <BookingCalendarOverview />
         </Reveal>
       </div>

@@ -8,16 +8,25 @@ import { easePremium, MotionAnchor } from './motion'
 const primary = '#4a86f7'
 
 const linkGray =
-  'text-[15px] font-medium text-zinc-600 transition-colors duration-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 rounded-lg'
+  'whitespace-nowrap text-[15px] font-medium text-zinc-600 transition-colors duration-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 rounded-lg'
+
+function NavDivider() {
+  return <span className="h-5 w-px shrink-0 bg-zinc-200" aria-hidden />
+}
+
+const linkBookCall =
+  'shrink-0 rounded-lg text-[14px] font-medium text-[#4a86f7] transition-colors duration-200 hover:text-[#3b78f0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 xl:text-[15px] whitespace-nowrap'
 
 type LanguageMenuProps = {
   align?: 'left' | 'right'
   className?: string
   /** Compact (desktop nav) — sans zone tactile 44px */
   dense?: boolean
+  /** Une ligne : globe + drapeau + nom de langue + chevron (maquette 1) */
+  variant?: 'default' | 'compact'
 }
 
-function LanguageMenu({ align = 'right', className = '', dense = false }: LanguageMenuProps) {
+function LanguageMenu({ align = 'right', className = '', dense = false, variant = 'default' }: LanguageMenuProps) {
   const { locale, setLocale, t } = useLanguage()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -37,6 +46,9 @@ function LanguageMenu({ align = 'right', className = '', dense = false }: Langua
     }
   }, [])
 
+  const chevronClass =
+    `h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? 'rotate-180' : ''}`
+
   return (
     <div className={`relative ${className}`} ref={rootRef}>
       <button
@@ -45,24 +57,37 @@ function LanguageMenu({ align = 'right', className = '', dense = false }: Langua
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`${t.languagesTab}: ${LANGUAGE_MENU_LABELS[locale]}`}
-        className={`flex items-center gap-2 rounded-xl text-left transition-colors duration-200 hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 ${
-          dense
-            ? 'gap-2.5 py-1.5 pl-1 pr-2'
-            : 'min-h-[44px] gap-2 py-2 pl-1.5 pr-2 sm:gap-2.5'
-        }`}
+        className={
+          variant === 'compact'
+            ? 'flex items-center gap-1.5 rounded-lg py-1.5 pl-1.5 pr-1.5 text-left transition-colors duration-200 hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2'
+            : `flex items-center gap-2 rounded-xl text-left transition-colors duration-200 hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 ${
+                dense
+                  ? 'gap-2.5 py-1.5 pl-1 pr-2'
+                  : 'min-h-[44px] gap-2 py-2 pl-1.5 pr-2 sm:gap-2.5'
+              }`
+        }
       >
-        <Globe className="h-[18px] w-[18px] shrink-0 text-zinc-500" strokeWidth={2} aria-hidden />
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className="text-[11px] font-medium text-[#9ca3af] sm:text-[12px]">{t.languagesTab}</span>
-          <span className="text-[14px] font-semibold text-zinc-900 sm:text-[15px]">
-            {LANGUAGE_MENU_LABELS[locale]}
-          </span>
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-[#9ca3af] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? 'rotate-180' : ''}`}
-          strokeWidth={2}
-          aria-hidden
-        />
+        <Globe className="h-[17px] w-[17px] shrink-0 text-zinc-500" strokeWidth={2} aria-hidden />
+        {variant === 'compact' ? (
+          <>
+            <span className="text-[14px] leading-none" aria-hidden>
+              {LOCALE_FLAGS[locale]}
+            </span>
+            <span className="text-[15px] font-medium tracking-tight text-zinc-900">
+              {LANGUAGE_MENU_LABELS[locale]}
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className="text-[11px] font-medium text-[#9ca3af] sm:text-[12px]">{t.languagesTab}</span>
+              <span className="text-[14px] font-semibold text-zinc-900 sm:text-[15px]">
+                {LANGUAGE_MENU_LABELS[locale]}
+              </span>
+            </div>
+          </>
+        )}
+        <ChevronDown className={chevronClass} strokeWidth={2} aria-hidden />
       </button>
 
       <AnimatePresence>
@@ -116,27 +141,24 @@ function Logo() {
       transition={{ type: 'tween', duration: 0.2, ease: easePremium }}
     >
       <span
-        className="flex h-9 w-9 items-center justify-center rounded-xl shadow-pm-sm"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-pm-sm"
         style={{ backgroundColor: primary }}
       >
         <Calendar className="h-[18px] w-[18px] text-white" strokeWidth={2.2} aria-hidden />
       </span>
-      <span className="text-[17px] font-bold tracking-tight text-zinc-900">{t.brand}</span>
+      <span className="text-[17px] font-bold leading-none tracking-tight text-zinc-900">{t.brand}</span>
     </motion.a>
   )
 }
 
-/** Liens + « Réserver un appel » + Langues (alignés au centre) */
-function DesktopNavAndLang() {
+/** Centre desktop : liens section uniquement */
+function DesktopNavCenter() {
   const { t } = useLanguage()
   return (
     <nav
-      className="flex items-center gap-5 xl:gap-7"
+      className="flex shrink-0 items-center justify-center gap-4 xl:gap-6 2xl:gap-7"
       aria-label={t.navMainLabel}
     >
-      <a href="#pourquoi-nous" className={linkGray}>
-        {t.whyUs}
-      </a>
       <a href="#fonctionnalites" className={linkGray}>
         {t.features}
       </a>
@@ -152,35 +174,30 @@ function DesktopNavAndLang() {
       <a href="#" className={linkGray}>
         {t.support}
       </a>
-      <MotionAnchor
-        href="#"
-        variant="subtle"
-        className="shrink-0 rounded-lg text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2"
-        style={{ color: primary }}
-      >
-        {t.bookCall}
-      </MotionAnchor>
-      <div className="flex shrink-0 items-center pl-1 xl:pl-2">
-        <LanguageMenu align="left" dense />
-      </div>
     </nav>
   )
 }
 
-/** Droite : Se connecter + Inscription, alignés à droite */
-function DesktopAuthRight() {
+/** Droite desktop : | Réserver → langue | Se connecter → CTA */
+function DesktopRightActions() {
   const { t } = useLanguage()
   return (
-    <div className="flex shrink-0 items-center justify-end gap-6">
+    <div className="flex shrink-0 items-center gap-3 xl:gap-4 2xl:gap-5">
+      <NavDivider />
+      <a href="#" className={linkBookCall}>
+        {t.bookCall}
+      </a>
+      <LanguageMenu align="right" variant="compact" className="shrink-0" />
+      <NavDivider />
       <a
         href="#"
-        className="rounded-lg text-[15px] font-medium text-zinc-800 transition-colors duration-200 hover:text-[#4a86f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 whitespace-nowrap"
+        className="rounded-lg text-[14px] font-medium text-zinc-900 transition-colors duration-200 hover:text-[#4a86f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 xl:text-[15px] whitespace-nowrap"
       >
         {t.login}
       </a>
       <MotionAnchor
         href="#"
-        className="rounded-full px-5 py-2.5 text-[15px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/45 focus-visible:ring-offset-2 whitespace-nowrap"
+        className="shrink-0 rounded-full px-4 py-2.5 text-[13px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/45 focus-visible:ring-offset-2 xl:px-5 xl:text-[15px] whitespace-nowrap"
         style={{ backgroundColor: primary }}
       >
         {t.signup}
@@ -204,7 +221,7 @@ export function Navbar() {
   const closeMobile = () => setMobileOpen(false)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200/60 bg-white/80 shadow-pm-nav backdrop-blur-xl backdrop-saturate-150">
+    <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white">
       <div className="mx-auto h-[64px] max-w-[1200px] px-4 sm:h-[72px] sm:px-6 lg:px-8">
         {/* Mobile & tablette */}
         <div className="flex h-full w-full items-center justify-between lg:hidden">
@@ -213,7 +230,7 @@ export function Navbar() {
             <LanguageMenu align="right" />
             <a
               href="#"
-              className="hidden rounded-lg text-[14px] font-medium text-zinc-800 transition-colors duration-200 hover:text-[#4a86f7] md:inline whitespace-nowrap"
+              className="hidden rounded-lg text-[14px] font-medium text-zinc-900 transition-colors duration-200 hover:text-[#4a86f7] md:inline whitespace-nowrap"
             >
               {t.login}
             </a>
@@ -239,16 +256,16 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Desktop : logo | centre (nav + langues) | auth alignée à droite */}
-        <div className="hidden h-full w-full items-center gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
-          <div className="flex min-w-0 items-center justify-start">
+        {/* Desktop : logo fixe | nav centrée dans l’espace restant | actions fixes (pas de chevauchement) */}
+        <div className="hidden h-full w-full min-w-0 items-center gap-3 lg:flex lg:gap-4 xl:gap-6">
+          <div className="shrink-0">
             <Logo />
           </div>
-          <div className="flex justify-center">
-            <DesktopNavAndLang />
+          <div className="flex min-w-0 max-w-full flex-1 items-center justify-center overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <DesktopNavCenter />
           </div>
-          <div className="flex min-w-0 justify-end">
-            <DesktopAuthRight />
+          <div className="shrink-0">
+            <DesktopRightActions />
           </div>
         </div>
       </div>

@@ -39,6 +39,7 @@ type PlanInnerProps = {
   popularBadge?: string
   name: string
   range: string
+  outcome: string
   price: string
   priceSuffix: string
   trial: string
@@ -52,6 +53,7 @@ function PlanCardInner({
   popularBadge,
   name,
   range,
+  outcome,
   price,
   priceSuffix,
   trial,
@@ -97,6 +99,9 @@ function PlanCardInner({
           ) : null}
         </div>
         <p className={`mt-1.5 text-sm ${isFeatured ? 'text-white/90' : 'text-zinc-600'}`}>{range}</p>
+        <p className={`mt-2 text-sm font-semibold leading-snug ${isFeatured ? 'text-white/95' : 'text-zinc-800'}`}>
+          {outcome}
+        </p>
       </div>
       <div className="mt-5">
         <p className={`flex flex-wrap items-baseline gap-x-1 ${isFeatured ? 'text-white' : 'text-zinc-900'}`}>
@@ -147,6 +152,7 @@ export function PricingSection() {
       variant: 'light',
       name: t.starterName,
       range: t.starterRange,
+      outcome: t.starterOutcome,
       price: t.starterPrice,
       priceSuffix: t.starterPriceSuffix,
       trial: t.planTrial,
@@ -159,6 +165,7 @@ export function PricingSection() {
       popularBadge: t.popularBadge,
       name: t.proName,
       range: t.proRange,
+      outcome: t.proOutcome,
       price: t.proPrice,
       priceSuffix: t.proPriceSuffix,
       trial: t.planTrial,
@@ -169,6 +176,7 @@ export function PricingSection() {
       variant: 'light',
       name: t.scaleName,
       range: t.scaleRange,
+      outcome: t.scaleOutcome,
       price: t.scalePrice,
       priceSuffix: t.scalePriceSuffix,
       trial: t.planTrial,
@@ -184,7 +192,7 @@ export function PricingSection() {
       aria-labelledby="pricing-heading"
     >
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-        <Reveal className="mx-auto max-w-2xl text-center" y={18}>
+        <Reveal className="mx-auto max-w-4xl text-center" y={18}>
           <header>
             <h2
               id="pricing-heading"
@@ -192,7 +200,7 @@ export function PricingSection() {
             >
               {t.pricingTitle}
             </h2>
-            <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-zinc-600 sm:text-base">
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-600 sm:text-base">
               {t.pricingSubtitle}
             </p>
           </header>

@@ -12,117 +12,121 @@ export type WhyStayManagerCopy = {
 }
 
 const fr: WhyStayManagerCopy = {
-  whySectionTitle: 'Conçu pour le résultat — pas pour la liste de fonctionnalités',
+  whySectionTitle: 'Hôte Airbnb : reprenez le contrôle de votre temps et de votre encaisse',
   whySectionSubtitle:
-    'Chaque module pousse un KPI : plus de nuits vendues, plus de marge, moins d’heures perdues.',
+    'Vous voulez scaler, voyager, dormir — pas passer vos soirées sur trois onglets. StayManager est le cockpit qui transforme vos annonces en cash récurrent, sans vous embaucher vous-même comme coordinateur.',
   whyBenefits: [
     {
-      title: 'Plus de CA sur chaque nuitée',
-      body: 'Pricing et calendrier alignés sur la demande : vous montez le RevPAR sans bricoler cinq tableurs.',
+      title: 'Jusqu’à +18 % de RevPAR quand vous jouez prix + calendrier serré',
+      body: 'Ce n’est pas « une appli de plus » : c’est + de nuits au bon tarif. Quand la demande monte, vous êtes déjà prêt — pas en train de rattraper le ménage.',
     },
     {
-      title: 'Calendrier plus plein, moins de friction',
-      body: 'Airbnb & Booking au même endroit : moins de trous, moins de surbooking, plus d’occupation utile.',
+      title: 'Airbnb + Booking : une seule vérité = zéro nuit offerte au client furieux',
+      body: 'Double résa et trous entre deux séjours coûtent plus cher qu’un abonnement. Un calendrier maître, c’est du cash préservé et des avis qui restent verts.',
     },
     {
-      title: 'Des heures récupérées chaque semaine',
-      body: 'Relances, statuts ménage, messages : l’automatisation enlève le répétitif — vous gardez la décision.',
+      title: '8 h / semaine à réinvestir dans votre liberté — ou dans l’achat de la prochaine clé',
+      body: 'Moins de relances, moins de copier-coller, moins de « tu as bien fini le ménage ? ». Vous pilotez ; vous ne courez plus après l’opérationnel.',
     },
     {
-      title: 'Ménage et turnover sans faille',
-      body: 'Chaque départ déclenche le bon flux : moins d’incidents, meilleures notes, moins de nuits perdues.',
+      title: 'Des départs nickel → des notes qui vous remplissent le mois suivant',
+      body: 'Chaque checkout déclenche le flux : photos, horaires, consignes. Moins d’incidents = plus de réservations futures au prix fort.',
     },
   ],
 }
 
 const en: WhyStayManagerCopy = {
-  whySectionTitle: 'Built for outcomes—not feature checklists',
-  whySectionSubtitle: 'Every module pushes a KPI: more booked nights, more margin, fewer wasted hours.',
+  whySectionTitle: 'Airbnb host: take back your time and your payout',
+  whySectionSubtitle:
+    'You want to scale, travel, sleep—not live in three browser tabs. StayManager is the cockpit that turns listings into recurring cash without hiring yourself as night coordinator.',
   whyBenefits: [
     {
-      title: 'More revenue per night',
-      body: 'Pricing and availability aligned to demand—raise RevPAR without juggling five spreadsheets.',
+      title: 'Up to +18% RevPAR when you tighten pricing + calendar discipline',
+      body: 'Not another app to babysit—more nights at the right ADR. When demand spikes you are ready, not scrambling cleaners.',
     },
     {
-      title: 'Higher occupancy, less chaos',
-      body: 'Airbnb & Booking in one place—fewer gaps, fewer double bookings, more useful occupancy.',
+      title: 'Airbnb + Booking: one truth—no comp nights for angry guests',
+      body: 'Double bookings and calendar gaps cost more than software. A master calendar protects cash and keeps reviews green.',
     },
     {
-      title: 'Hours back every week',
-      body: 'Follow-ups, cleaning status, messaging: automation removes the grind—you keep the decisions.',
+      title: '8 hours/week to reinvest in freedom—or your next unit',
+      body: 'Fewer follow-ups, less copy-paste, fewer “did cleaning finish?” pings. You command ops—you do not chase them.',
     },
     {
-      title: 'Turnover you can trust',
-      body: 'Each checkout triggers the right workflow—fewer incidents, better reviews, fewer lost nights.',
+      title: 'Clean handoffs → ratings that refill next month at peak rate',
+      body: 'Every checkout kicks the workflow: photos, timing, instructions. Fewer fires means more future bookings at full price.',
     },
   ],
 }
 
 const es: WhyStayManagerCopy = {
-  whySectionTitle: 'Pensado para el resultado—no para la lista de funciones',
-  whySectionSubtitle: 'Cada módulo empuja un KPI: más noches vendidas, más margen, menos horas perdidas.',
+  whySectionTitle: 'Anfitrión Airbnb: recupere su tiempo y su cobro',
+  whySectionSubtitle:
+    'Quiere escalar, viajar, dormir — no vivir en tres pestañas. StayManager es la cabina que convierte anuncios en cash recurrente sin contratarse usted como coordinador.',
   whyBenefits: [
     {
-      title: 'Más ingreso por noche',
-      body: 'Precios y calendario alineados a la demanda: sube el RevPAR sin cinco hojas de cálculo.',
+      title: 'Hasta +18 % RevPAR al afinar precio + calendario',
+      body: 'No es «otra app»: son más noches al ADR correcto. Cuando sube la demanda, usted está listo — no persiguiendo la limpieza.',
     },
     {
-      title: 'Más ocupación, menos fricción',
-      body: 'Airbnb y Booking en un solo sitio: menos huecos, menos overbooking, ocupación más útil.',
+      title: 'Airbnb + Booking: una verdad — cero noches gratis por enfado',
+      body: 'Doble reserva y huecos cuestan más que el software. Un calendario maestro protege el cash y las reseñas.',
     },
     {
-      title: 'Horas recuperadas cada semana',
-      body: 'Seguimientos, limpieza, mensajes: la automatización quita lo repetitivo—usted decide.',
+      title: '8 h / semana para libertad — o para la próxima llave',
+      body: 'Menos follow-ups, menos copiar-pegar, menos «¿terminó la limpieza?». Usted manda la operación — no la persigue.',
     },
     {
-      title: 'Limpieza y cambio de huésped sin fallos',
-      body: 'Cada salida dispara el flujo correcto: menos incidencias, mejores reseñas, menos noches perdidas.',
+      title: 'Salidas impecables → notas que llenan el mes siguiente a tarifa plena',
+      body: 'Cada salida dispara el flujo: fotos, horarios, instrucciones. Menos incendios = más reservas futuras al precio fuerte.',
     },
   ],
 }
 
 const de: WhyStayManagerCopy = {
-  whySectionTitle: 'Für Ergebnisse gebaut—nicht für Feature-Listen',
-  whySectionSubtitle: 'Jedes Modul treibt eine KPI: mehr gebuchte Nächte, mehr Marge, weniger verlorene Stunden.',
+  whySectionTitle: 'Airbnb-Gastgeber: holen Sie Zeit und Auszahlung zurück',
+  whySectionSubtitle:
+    'Sie wollen skalieren, reisen, schlafen — nicht in drei Tabs leben. StayManager ist das Cockpit, das Listings in wiederkehrenden Cashflow verwandelt — ohne sich selbst als Nacht-Koordinator einzustellen.',
   whyBenefits: [
     {
-      title: 'Mehr Umsatz pro Nacht',
-      body: 'Pricing und Verfügbarkeit an die Nachfrage gekoppelt—RevPAR steigen ohne Tabellen-Chaos.',
+      title: 'Bis zu +18 % RevPAR bei diszipliniertem Pricing + Kalender',
+      body: 'Keine weitere App zum Hüten — mehr Nächte zum richtigen ADR. Wenn Nachfrage springt, sind Sie bereit — nicht hinter der Reinigung her.',
     },
     {
-      title: 'Höhere Auslastung, weniger Reibung',
-      body: 'Airbnb & Booking an einem Ort—weniger Lücken, weniger Doppelbuchungen, sinnvollere Auslastung.',
+      title: 'Airbnb + Booking: eine Wahrheit — keine Gratisnächte für wütende Gäste',
+      body: 'Doppelbuchungen und Lücken kosten mehr als Software. Ein Master-Kalender schützt Cash und Bewertungen.',
     },
     {
-      title: 'Stunden zurück jede Woche',
-      body: 'Follow-ups, Reinigung, Nachrichten: Automatisierung nimmt Routine—Sie entscheiden.',
+      title: '8 Std./Woche für Freiheit — oder die nächste Immobilie',
+      body: 'Weniger Follow-ups, weniger Copy-Paste, weniger „Reinigung fertig?“. Sie steuern Ops — Sie jagen sie nicht.',
     },
     {
-      title: 'Wechsel ohne Pannen',
-      body: 'Jeder Check-out startet den richtigen Ablauf—weniger Vorfälle, bessere Bewertungen, weniger verlorene Nächte.',
+      title: 'Saubere Übergaben → Bewertungen, die den nächsten Monat zum Top-Preis füllen',
+      body: 'Jeder Check-out startet den Flow: Fotos, Zeiten, Anweisungen. Weniger Feuer = mehr Folgebuchungen zum vollen Preis.',
     },
   ],
 }
 
 const it: WhyStayManagerCopy = {
-  whySectionTitle: 'Pensato per i risultati—non per elenchi di funzioni',
-  whySectionSubtitle: 'Ogni modulo spinge un KPI: più notti vendute, più margine, meno ore perse.',
+  whySectionTitle: 'Host Airbnb: riprendete tempo e incassi',
+  whySectionSubtitle:
+    'Volete scalare, viaggiare, dormire — non vivere su tre tab. StayManager è la cabina che trasforma gli annunci in cash ricorrente senza assumervi come coordinatori notturni.',
   whyBenefits: [
     {
-      title: 'Più ricavo per notte',
-      body: 'Prezzi e calendario allineati alla domanda: RevPAR più alto senza cinque fogli di calcolo.',
+      title: 'Fino a +18 % RevPAR con prezzo + calendario serrati',
+      body: 'Non è «un’altra app»: sono più notti all’ADR giusto. Quando la domanda sale, siete pronti — non a rincorrere le pulizie.',
     },
     {
-      title: 'Più occupazione, meno attrito',
-      body: 'Airbnb e Booking in un unico posto: meno buchi, meno overbooking, occupazione più utile.',
+      title: 'Airbnb + Booking: una verità — zero notti omaggio agli ospiti furiosi',
+      body: 'Doppie prenotazioni e buchi costano più del software. Un calendario master protegge cash e recensioni.',
     },
     {
-      title: 'Ore recuperate ogni settimana',
-      body: 'Follow-up, pulizie, messaggi: l’automazione toglie il ripetitivo—restano le decisioni.',
+      title: '8 h / settimana per la libertà — o per la prossima chiave',
+      body: 'Meno follow-up, meno copia-incolla, meno «pulizie finite?». Comandate l’ops — non la rincorrete.',
     },
     {
-      title: 'Turnover senza errori',
-      body: 'Ogni check-out attiva il flusso giusto: meno incidenti, recensioni migliori, meno notti perse.',
+      title: 'Passaggi impeccabili → voti che riempiono il mese dopo a tariffa piena',
+      body: 'Ogni check-out avvia il flusso: foto, orari, istruzioni. Meno incendi = più prenotazioni future al prezzo pieno.',
     },
   ],
 }

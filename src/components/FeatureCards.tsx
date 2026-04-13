@@ -11,19 +11,16 @@ export function FeatureCards() {
     {
       image: FEATURE_CARD_IMAGES[0],
       title: t.featureCard1Title,
-      subtitle: t.featureCard1Subtitle,
       alt: t.featureCard1Title,
     },
     {
       image: FEATURE_CARD_IMAGES[1],
       title: t.featureCard2Title,
-      subtitle: t.featureCard2Subtitle,
       alt: t.featureCard2Title,
     },
     {
       image: FEATURE_CARD_IMAGES[2],
       title: t.featureCard3Title,
-      subtitle: t.featureCard3Subtitle,
       alt: t.featureCard3Title,
     },
   ] as const
@@ -72,14 +69,6 @@ export function FeatureCards() {
               >
                 {card.title}
               </h3>
-              <p
-                className="mt-1.5 text-[13px] font-medium leading-relaxed text-white sm:text-[15px]"
-                style={{
-                  textShadow: '0 1px 2px rgba(0,0,0,0.35), 0 2px 12px rgba(0,0,0,0.2)',
-                }}
-              >
-                {card.subtitle}
-              </p>
             </div>
           </motion.article>
         ))}

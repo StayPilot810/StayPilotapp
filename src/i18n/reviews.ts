@@ -25,21 +25,21 @@ const fr: ReviewsCopy = {
     {
       stars: 5,
       quote:
-        'Double réservation entre Booking et Airbnb sur un 45 m² : 420 € d’indemnisation et une note qui plonge. Avec une vérité unique sur le calendrier, en 4 mois notre occupation est passée de 68 % à 79 % — on estime 6 nuits gagnées par mois sur le parc.',
+        'Avant on a eu une double réservation Booking/Airbnb sur un 45 m², on a vraiment galéré. Depuis qu’on a un seul calendrier fiable, on dort mieux et on remplit plus régulièrement.',
       name: 'Nassim Benaïssa',
       role: 'Conciergerie – 28 logements (Lyon · Annecy)',
     },
     {
       stars: 5,
       quote:
-        'Je voulais un pilotage “investisseur”, pas du bricolage Excel. En un trimestre, le revenu moyen par logement est monté de 1 040 € à 1 220 € / mois grâce à des ajustements de prix plus réactifs — sans acheter un mètre carré de plus.',
+        'Je voulais arrêter le bricolage Excel. Maintenant on voit vite ce qui marche, on ajuste les prix plus facilement et le revenu par logement est clairement meilleur.',
       name: 'Éléonore Vasseur',
       role: 'Investisseuse – 9 studios (Bordeaux)',
     },
     {
       stars: 5,
       quote:
-        'Je loue notre second bien quand on n’y est pas : avant, 6 à 8 h / semaine sur l’admin et les messages. Après avoir structuré les turnovers, 22 nuits vendues sur 8 semaines contre 14 la saison précédente — et plus aucun raté sur les arrivées.',
+        'On loue notre second bien quand on n’est pas là. Avant c’était du stress chaque semaine, maintenant tout est plus carré et les arrivées se passent sans mauvaise surprise.',
       name: 'Marc Delmas',
       role: 'Particulier – T3 (Marseille)',
     },

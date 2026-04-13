@@ -36,7 +36,7 @@ export type BookingCalendarCopy = {
 
 export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = {
   fr: {
-    calendarTitle: 'Réservations, revenus et occupation — vue live',
+    calendarTitle: 'Vos résas & votre cash : la vue qui décide du prochain tarif',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Ce mois',
@@ -69,7 +69,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'N° de réservation',
   },
   es: {
-    calendarTitle: 'Reservas en vivo — ingresos y ocupación centralizados',
+    calendarTitle: 'Sus reservas y su cash: la vista para fijar el próximo precio',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Este mes',
@@ -102,7 +102,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'N.º de reserva',
   },
   en: {
-    calendarTitle: 'Live bookings — revenue & occupancy in one view',
+    calendarTitle: 'Your bookings & cash—the view that sets your next rate',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'This month',
@@ -135,7 +135,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'Reservation number',
   },
   de: {
-    calendarTitle: 'Live-Buchungen — Umsatz und Auslastung im Blick',
+    calendarTitle: 'Eine Wahrheit: Buchungen, Cash, Auslastung — live',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Dieser Monat',
@@ -168,7 +168,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     reservationNumberLabel: 'Buchungsnummer',
   },
   it: {
-    calendarTitle: 'Prenotazioni live — ricavi e occupazione a colpo d’occhio',
+    calendarTitle: 'Prenotazioni e cash: la vista per il prossimo prezzo',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Questo mese',

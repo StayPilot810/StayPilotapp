@@ -22,7 +22,7 @@ export type FooterCopy = {
 
 const fr: FooterCopy = {
   footerTagline:
-    'Automatisez vos locations courte durée. Plus de revenus, moins de charge opérationnelle.',
+    'StayManager : plus de nuits payées, plus de cash sur le compte — moins de soirées perdues sur Airbnb.',
   footerColProduct: 'Produit',
   footerColCompany: 'Entreprise',
   footerColSupport: 'Support',
@@ -42,7 +42,8 @@ const fr: FooterCopy = {
 }
 
 const en: FooterCopy = {
-  footerTagline: 'Automate short-term rentals. Grow revenue. Cut operational drag.',
+  footerTagline:
+    'StayManager: more paid nights, more cash in the bank—fewer nights lost refreshing Airbnb.',
   footerColProduct: 'Product',
   footerColCompany: 'Company',
   footerColSupport: 'Support',
@@ -62,7 +63,8 @@ const en: FooterCopy = {
 }
 
 const es: FooterCopy = {
-  footerTagline: 'Automatice alquileres turísticos. Más ingresos, menos carga operativa.',
+  footerTagline:
+    'StayManager: más noches pagadas, más cash en cuenta — menos noches perdidas en Airbnb.',
   footerColProduct: 'Producto',
   footerColCompany: 'Empresa',
   footerColSupport: 'Soporte',
@@ -83,7 +85,7 @@ const es: FooterCopy = {
 
 const de: FooterCopy = {
   footerTagline:
-    'Kurzzeitvermietung automatisieren. Mehr Umsatz, weniger operative Last.',
+    'StayManager: mehr bezahlte Nächte, mehr Cash auf dem Konto — weniger Abende mit Airbnb-Refresh.',
   footerColProduct: 'Produkt',
   footerColCompany: 'Unternehmen',
   footerColSupport: 'Support',
@@ -104,7 +106,7 @@ const de: FooterCopy = {
 
 const it: FooterCopy = {
   footerTagline:
-    'Automatizzate gli affitti brevi. Più ricavi, meno carico operativo.',
+    'StayManager: più notti pagate, più cash in conto — meno serate buttate su Airbnb.',
   footerColProduct: 'Prodotto',
   footerColCompany: 'Azienda',
   footerColSupport: 'Supporto',
