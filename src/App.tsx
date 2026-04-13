@@ -11,10 +11,20 @@ import { StatsRow } from './components/StatsRow'
 import { TrialCtaSection } from './components/TrialCtaSection'
 import { LoginPage } from './components/LoginPage'
 import { SignupPage } from './components/SignupPage'
+import { DashboardPage } from './components/DashboardPage'
+import { DashboardBlankPage } from './components/DashboardBlankPage'
+import { DashboardConnectPage } from './components/DashboardConnectPage'
+import { DashboardIntelPage } from './components/DashboardIntelPage'
 
 export default function App() {
   const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/connexion'
   const isSignupPage = typeof window !== 'undefined' && window.location.pathname === '/inscription'
+  const isDashboardPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard'
+  const isDashboardConnectPage =
+    typeof window !== 'undefined' && window.location.pathname === '/dashboard/connecter-logements'
+  const isDashboardIntelPage =
+    typeof window !== 'undefined' && window.location.pathname === '/dashboard/veille-informationnelle'
+  const isDashboardSubPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard/')
 
   return (
     <LazyMotion features={domAnimation}>
@@ -27,6 +37,14 @@ export default function App() {
             <LoginPage />
           ) : isSignupPage ? (
             <SignupPage />
+          ) : isDashboardPage ? (
+            <DashboardPage />
+          ) : isDashboardConnectPage ? (
+            <DashboardConnectPage />
+          ) : isDashboardIntelPage ? (
+            <DashboardIntelPage />
+          ) : isDashboardSubPage ? (
+            <DashboardBlankPage />
           ) : (
             <>
               <Hero />

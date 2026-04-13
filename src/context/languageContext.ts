@@ -10,6 +10,7 @@ import type { ReviewsCopy } from '../i18n/reviews'
 import type { StatsRowCopy } from '../i18n/statsRow'
 import type { WhyStayManagerCopy } from '../i18n/whyStayManager'
 import type { TrialPricingCopy } from '../i18n/trialAndPricing'
+import type { AuthDashboardCopy } from '../i18n/authDashboard'
 
 export type AppCopy = NavbarCopy &
   HeroCopy &
@@ -21,7 +22,8 @@ export type AppCopy = NavbarCopy &
   TrialPricingCopy &
   PricingPlansCopy &
   FaqCopy &
-  FooterCopy
+  FooterCopy &
+  AuthDashboardCopy
 
 export type LanguageContextValue = {
   locale: Locale

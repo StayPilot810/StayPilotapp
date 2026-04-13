@@ -9,6 +9,7 @@ import { reviewsTranslations } from '../i18n/reviews'
 import { statsRowTranslations } from '../i18n/statsRow'
 import { whyStayManagerTranslations } from '../i18n/whyStayManager'
 import { trialAndPricingTranslations } from '../i18n/trialAndPricing'
+import { authDashboardTranslations } from '../i18n/authDashboard'
 import type { Locale } from '../i18n/navbar'
 import { translations } from '../i18n/navbar'
 import { LanguageContext } from './languageContext'
@@ -40,6 +41,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         ...pricingPlansTranslations[locale],
         ...faqTranslations[locale],
         ...footerTranslations[locale],
+        ...authDashboardTranslations[locale],
       },
     }),
     [locale, setLocale],

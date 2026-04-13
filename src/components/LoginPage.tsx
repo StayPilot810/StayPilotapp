@@ -1,11 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { findAccountForLogin, getStoredAccounts } from '../lib/accounts'
+import { useLanguage } from '../hooks/useLanguage'
 
 const LS_REMEMBER = 'sm_remember_me'
 const LS_IDENTIFIER = 'sm_login_identifier'
 const LS_SESSION_ACTIVE = 'sm_session_active'
+const LS_CURRENT_PLAN = 'sm_current_plan'
 
 export function LoginPage() {
+  const { t } = useLanguage()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -42,7 +45,7 @@ export function LoginPage() {
     if (!account) {
       setConnected(false)
       setAutoConnected(false)
-      setLoginError("Identifiants invalides ou aucun compte n'existe encore.")
+      setLoginError(t.loginError)
       return
     }
     setLoginError('')
@@ -56,9 +59,11 @@ export function LoginPage() {
       localStorage.removeItem(LS_IDENTIFIER)
       localStorage.removeItem(LS_SESSION_ACTIVE)
     }
+    localStorage.setItem(LS_CURRENT_PLAN, account.plan || 'Pro')
 
     setConnected(true)
     setAutoConnected(false)
+    window.location.href = '/dashboard'
   }
 
   return (
@@ -87,31 +92,31 @@ export function LoginPage() {
             href="/"
             className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
           >
-            ← Retour au menu principal
+            {t.loginBack}
           </a>
-          <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-[2rem]">Accédez à votre espace StayManager</h1>
+          <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-[2rem]">{t.loginTitle}</h1>
           <p className="mt-2 text-center text-xs font-medium text-zinc-500">
             {accountsCount > 0
-              ? `${accountsCount} compte(s) détecté(s)`
-              : "Aucun compte détecté. Créez d'abord un compte via Inscription."}
+              ? `${accountsCount} ${t.loginAccountsDetectedSome}`
+              : t.loginAccountsDetectedNone}
           </p>
 
           {autoConnected ? (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
-              Connexion automatique activée. Vous êtes déjà connecté.
+              {t.loginAutoConnected}
             </div>
           ) : null}
 
           {connected ? (
             <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
-              Connecté. Vous pouvez continuer vers votre dashboard.
+              {t.loginConnected}
             </div>
           ) : null}
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-zinc-800" htmlFor="identifier">
-                Email / nom d&apos;utilisateur
+                {t.loginIdentifierLabel}
               </label>
               <input
                 id="identifier"
@@ -119,14 +124,14 @@ export function LoginPage() {
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                placeholder="Email / nom d'utilisateur"
+                placeholder={t.loginIdentifierPlaceholder}
                 autoComplete="username"
               />
             </div>
 
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-zinc-800" htmlFor="password">
-                Mot de passe
+                {t.loginPasswordLabel}
               </label>
               <input
                 id="password"
@@ -134,7 +139,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                placeholder="Votre mot de passe"
+                placeholder={t.loginPasswordPlaceholder}
                 autoComplete="current-password"
               />
             </div>
@@ -146,14 +151,14 @@ export function LoginPage() {
                 onChange={(e) => setRememberMe(e.target.checked)}
                 className="h-4 w-4 rounded border-zinc-300 text-[#4a86f7] focus:ring-[#4a86f7]/30"
               />
-              Rester connecté
+              {t.loginRemember}
             </label>
 
             <a
               href="#"
               className="block text-center text-sm font-semibold text-[#4a86f7] transition-colors hover:text-[#3c78ee]"
             >
-              Mot de passe oublié ?
+              {t.loginForgot}
             </a>
 
             <button
@@ -161,11 +166,22 @@ export function LoginPage() {
               disabled={!canSubmit}
               className="mx-auto inline-flex min-w-[220px] items-center justify-center rounded-2xl bg-[#4a86f7] px-6 py-3 text-sm font-semibold text-white shadow-pm-cta transition-[filter,opacity] hover:brightness-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Accéder à mon dashboard
+              {t.loginSubmit}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem(LS_SESSION_ACTIVE, 'true')
+                localStorage.setItem(LS_CURRENT_PLAN, 'Gratuit')
+                window.location.href = '/dashboard'
+              }}
+              className="mx-auto inline-flex min-w-[220px] items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              {t.loginFreeAccess}
             </button>
             {loginError ? <p className="text-center text-sm font-medium text-rose-600">{loginError}</p> : null}
             <p className="text-center text-xs font-medium text-zinc-500 sm:text-sm">
-              Accès sécurisé • Aucune donnée partagée
+              {t.loginTrust}
             </p>
           </form>
         </div>

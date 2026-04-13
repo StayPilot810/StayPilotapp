@@ -53,7 +53,7 @@ export function SignupPage() {
     if (!canSubmit) return
 
     if (accountExistsByEmailOrUsername(email, username)) {
-      setSubmitError("Un compte existe déjà avec cet email ou ce nom d'utilisateur.")
+      setSubmitError(t.signupDuplicateError)
       return
     }
 
@@ -71,7 +71,10 @@ export function SignupPage() {
     setAccountsCount(updatedAccounts.length)
     setAccountsPreview(updatedAccounts)
     setSubmitError('')
-    window.location.href = '/connexion'
+    localStorage.setItem('sm_login_identifier', username.trim())
+    localStorage.setItem('sm_session_active', 'true')
+    localStorage.setItem('sm_current_plan', plan)
+    window.location.href = '/dashboard'
   }
 
   function onResetTestData() {
@@ -104,18 +107,18 @@ export function SignupPage() {
             href="/"
             className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
           >
-            ← Retour au menu principal
+            {t.signupBack}
           </a>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-[2rem]">
-            Commencez à optimiser vos locations
+            {t.signupTitle}
           </h1>
           <p className="mt-1.5 text-sm font-medium text-zinc-600">
-            14 jours gratuits puis {selectedPlanPricing} selon le plan choisi
+            {t.signupTrialPrefix} {selectedPlanPricing} {t.signupTrialSuffix}
           </p>
           <p className="mt-1 text-xs font-medium text-zinc-500">
             {accountsCount > 0
-              ? `${accountsCount} compte(s) déjà créé(s) sur cette application`
-              : 'Aucun compte créé pour le moment'}
+              ? `${accountsCount} ${t.signupAccountsSome}`
+              : t.signupAccountsNone}
           </p>
 
           <form className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
@@ -124,92 +127,92 @@ export function SignupPage() {
               onChange={(e) => setPlan(e.target.value)}
               className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             >
-              <option value="Starter">Plan Starter</option>
-              <option value="Pro">Plan Pro</option>
-              <option value="Scale">Plan Scale</option>
+              <option value="Starter">{t.signupPlanStarter}</option>
+              <option value="Pro">{t.signupPlanPro}</option>
+              <option value="Scale">{t.signupPlanScale}</option>
             </select>
             <input
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Prénom"
+              placeholder={t.signupFirstName}
               className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              placeholder="Nom"
+              placeholder={t.signupLastName}
               className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Nom d'utilisateur"
+              placeholder={t.signupUsername}
               className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
+              placeholder={t.signupEmail}
               className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mot de passe"
+              placeholder={t.signupPassword}
               className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="text"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
-              placeholder="Société (facultatif)"
+              placeholder={t.signupCompanyOptional}
               className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="Numéro de téléphone"
+              placeholder={t.signupPhone}
               className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
 
             <div className="sm:col-span-2 mt-1 rounded-xl border border-zinc-200/90 bg-zinc-50/60 p-3.5">
-              <p className="text-sm font-semibold text-zinc-800">Carte bancaire (activation après 14 jours gratuits)</p>
+              <p className="text-sm font-semibold text-zinc-800">{t.signupCardTitle}</p>
               <p className="mt-1 text-xs text-zinc-600">
-                Votre carte est utilisée pour démarrer automatiquement l’abonnement à la fin de l’essai.
+                {t.signupCardSubtitle}
               </p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input
                   type="text"
                   value={cardHolder}
                   onChange={(e) => setCardHolder(e.target.value)}
-                  placeholder="Nom sur la carte"
+                  placeholder={t.signupCardHolder}
                   className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
                 <input
                   type="text"
                   value={cardNumber}
                   onChange={(e) => setCardNumber(e.target.value)}
-                  placeholder="Numéro de carte"
+                  placeholder={t.signupCardNumber}
                   className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
                 <input
                   type="text"
                   value={cardExpiry}
                   onChange={(e) => setCardExpiry(e.target.value)}
-                  placeholder="MM/AA"
+                  placeholder={t.signupCardExpiry}
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
                 <input
                   type="text"
                   value={cardCvc}
                   onChange={(e) => setCardCvc(e.target.value)}
-                  placeholder="CVC"
+                  placeholder={t.signupCardCvc}
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
               </div>
@@ -220,7 +223,7 @@ export function SignupPage() {
               disabled={!canSubmit}
               className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl bg-[#4a86f7] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_-10px_rgba(74,134,247,0.8)] transition-all hover:scale-[1.01] hover:brightness-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Créer mon compte
+              {t.signupSubmit}
             </button>
             {submitError ? (
               <p className="sm:col-span-2 text-sm font-medium text-rose-600">{submitError}</p>
@@ -228,24 +231,24 @@ export function SignupPage() {
           </form>
 
           <p className="mt-3 text-center text-xs font-medium text-zinc-500 sm:text-sm">
-            Déjà un compte ? <a href="/connexion" className="font-semibold text-[#4a86f7]">Se connecter</a>
+            {t.signupAlready} <a href="/connexion" className="font-semibold text-[#4a86f7]">{t.signupLoginLink}</a>
           </p>
 
           <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-zinc-800">Admin test — comptes créés</p>
+              <p className="text-sm font-semibold text-zinc-800">{t.signupAdminTitle}</p>
               <button
                 type="button"
                 onClick={onResetTestData}
                 className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-100"
               >
-                Reset page / données
+                {t.signupAdminReset}
               </button>
             </div>
             <p className="mt-1 text-xs text-zinc-600">
               {accountsPreview.length > 0
-                ? `${accountsPreview.length} compte(s) listé(s) pour vos tests`
-                : 'Aucun compte de test enregistré'}
+                ? `${accountsPreview.length} ${t.signupAdminCount}`
+                : t.signupAdminNone}
             </p>
             {accountsPreview.length > 0 ? (
               <ul className="mt-2 space-y-1 text-xs text-zinc-700">
@@ -260,60 +263,60 @@ export function SignupPage() {
         </div>
 
         <aside className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 sm:p-6">
-          <h2 className="text-lg font-bold tracking-tight text-zinc-900">Pourquoi les clients restent ?</h2>
-          <p className="mt-1 text-sm text-zinc-600">Des résultats concrets, rapidement visibles sur le terrain.</p>
+          <h2 className="text-lg font-bold tracking-tight text-zinc-900">{t.signupTrustTitle}</h2>
+          <p className="mt-1 text-sm text-zinc-600">{t.signupTrustSubtitle}</p>
 
           <div className="mt-4 space-y-3">
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <TrendingUp className="h-4 w-4 text-[#4a86f7]" />
-                +18% de revenus en moyenne sur les périodes clés
+                {t.signupTrustRevenue}
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <CircleCheck className="h-4 w-4 text-emerald-600" />
-                Moins d’erreurs de calendrier et de doubles réservations
+                {t.signupTrustCalendar}
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <CircleCheck className="h-4 w-4 text-emerald-600" />
-                Gestion des ménages avec checklists, photos et suivi par logement
+                {t.signupTrustCleaning}
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <CircleCheck className="h-4 w-4 text-emerald-600" />
-                Gestion des consommables et achats pour éviter les ruptures
+                {t.signupTrustSupplies}
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <CircleCheck className="h-4 w-4 text-emerald-600" />
-                Jusqu’à 8h gagnées par semaine sur l’administratif et les relances
+                {t.signupTrustHours}
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200/80 bg-white p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
                 <Users className="h-4 w-4 text-[#4a86f7]" />
-                +500 propriétaires utilisent déjà StayManager
+                {t.signupTrustUsers}
               </div>
             </div>
           </div>
 
           <div className="mt-4 rounded-xl border border-blue-200/70 bg-blue-50/70 p-3.5 text-sm text-blue-900">
-            “On a réduit les imprévus et gagné du temps chaque semaine. Enfin une vue claire sur notre rentabilité.”
+            {t.signupTrustQuote}
           </div>
         </aside>
         </div>
 
         <div className="mt-8 border-t border-zinc-200/70 pt-6 sm:mt-10 sm:pt-8">
           <h2 className="text-center text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
-            Choisissez votre plan
+            {t.signupPlansTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-zinc-600">
-            Sélectionnez l’offre la plus adaptée avant de créer votre compte.
+            {t.signupPlansSubtitle}
           </p>
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <article className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-pm-sm">
