@@ -1,36 +1,75 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
+import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import {
+  extractAddressFromIcalText,
+  extractCalendarNameFromIcalText,
+  fetchIcalBody,
+} from '../utils/icalAddress'
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
 const STORAGE_KEY = 'sm_connected_channels'
 const RESERVATION_ACCESS_KEY = 'sm_reservation_access'
+const APARTMENT_NAME_KEY = 'sm_connected_apartment_names'
+const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
+
+function notifyConnectionsUpdated() {
+  window.dispatchEvent(new Event(CONNECTIONS_UPDATED_EVENT))
+}
 
 export function DashboardConnectPage() {
   const { t } = useLanguage()
   const [accessInputs, setAccessInputs] = useState<
-    Record<'airbnb' | 'booking' | 'channelManager', { ical: string; api: string; accountId: string }>
+    Record<
+      'airbnb' | 'booking' | 'channelManager',
+      { ical: string; address: string; apiToken: string; accountId: string; nightlyRate: string; commissionRate: string }
+    >
   >(() => {
     const raw = localStorage.getItem(RESERVATION_ACCESS_KEY)
     if (!raw) {
       return {
-        airbnb: { ical: '', api: '', accountId: '' },
-        booking: { ical: '', api: '', accountId: '' },
-        channelManager: { ical: '', api: '', accountId: '' },
+        airbnb: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+        booking: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+        channelManager: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
       }
     }
     try {
-      const parsed = JSON.parse(raw) as Record<'airbnb' | 'booking' | 'channelManager', { ical: string; api: string; accountId: string }>
+      const parsed = JSON.parse(raw) as Record<
+        'airbnb' | 'booking' | 'channelManager',
+        { ical?: string; address?: string; apiToken?: string; accountId?: string; nightlyRate?: string; commissionRate?: string }
+      >
       return {
-        airbnb: parsed.airbnb ?? { ical: '', api: '', accountId: '' },
-        booking: parsed.booking ?? { ical: '', api: '', accountId: '' },
-        channelManager: parsed.channelManager ?? { ical: '', api: '', accountId: '' },
+        airbnb: {
+          ical: parsed.airbnb?.ical ?? '',
+          address: parsed.airbnb?.address ?? '',
+          apiToken: parsed.airbnb?.apiToken ?? '',
+          accountId: parsed.airbnb?.accountId ?? '',
+          nightlyRate: parsed.airbnb?.nightlyRate ?? '',
+          commissionRate: parsed.airbnb?.commissionRate ?? '',
+        },
+        booking: {
+          ical: parsed.booking?.ical ?? '',
+          address: parsed.booking?.address ?? '',
+          apiToken: parsed.booking?.apiToken ?? '',
+          accountId: parsed.booking?.accountId ?? '',
+          nightlyRate: parsed.booking?.nightlyRate ?? '',
+          commissionRate: parsed.booking?.commissionRate ?? '',
+        },
+        channelManager: {
+          ical: parsed.channelManager?.ical ?? '',
+          address: parsed.channelManager?.address ?? '',
+          apiToken: parsed.channelManager?.apiToken ?? '',
+          accountId: parsed.channelManager?.accountId ?? '',
+          nightlyRate: parsed.channelManager?.nightlyRate ?? '',
+          commissionRate: parsed.channelManager?.commissionRate ?? '',
+        },
       }
     } catch {
       return {
-        airbnb: { ical: '', api: '', accountId: '' },
-        booking: { ical: '', api: '', accountId: '' },
-        channelManager: { ical: '', api: '', accountId: '' },
+        airbnb: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+        booking: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+        channelManager: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
       }
     }
   })
@@ -57,7 +96,7 @@ export function DashboardConnectPage() {
   })
   const hasValidConnection = (platform: ChannelKey) => {
     const data = accessInputs[platform]
-    return data.ical.trim().length > 0 && data.api.trim().length > 0 && data.accountId.trim().length > 0
+    return data.ical.trim().length > 0
   }
 
   useEffect(() => {
@@ -68,39 +107,30 @@ export function DashboardConnectPage() {
     }
     setConnectedChannels(next)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    notifyConnectionsUpdated()
   }, [accessInputs])
 
-  const airbnbListings = connectedChannels.airbnb
-    ? [
-        { id: 'AB-1001', name: 'Rivoli 10 - Studio 1', address: '10 Rue de Rivoli, 75001 Paris' },
-        { id: 'AB-1003', name: 'Rivoli 10 - Studio 3', address: '10 Rue de Rivoli, 75001 Paris' },
-      ]
-    : []
-  const bookingListings = connectedChannels.booking
-    ? [{ id: 'BK-2002', name: 'Rivoli 10 - Studio 2', address: '10 Rue de Rivoli, 75001 Paris' }]
-    : []
+  const detectedListings = getConnectedApartmentsFromStorage()
+  const airbnbListings = detectedListings
+    .filter((item) => item.platform === 'airbnb')
+    .map((item, index) => ({ id: `AB-${index + 1}`, name: item.name, address: item.address }))
+  const bookingListings = detectedListings
+    .filter((item) => item.platform === 'booking')
+    .map((item, index) => ({ id: `BK-${index + 1}`, name: item.name, address: item.address }))
 
   const onSaveConnections = () => {
     const next = {
-      airbnb:
-        accessInputs.airbnb.ical.trim().length > 0 ||
-        accessInputs.airbnb.api.trim().length > 0 ||
-        accessInputs.airbnb.accountId.trim().length > 0,
-      booking:
-        accessInputs.booking.ical.trim().length > 0 ||
-        accessInputs.booking.api.trim().length > 0 ||
-        accessInputs.booking.accountId.trim().length > 0,
-      channelManager:
-        accessInputs.channelManager.ical.trim().length > 0 ||
-        accessInputs.channelManager.api.trim().length > 0 ||
-        accessInputs.channelManager.accountId.trim().length > 0,
+      airbnb: accessInputs.airbnb.ical.trim().length > 0,
+      booking: accessInputs.booking.ical.trim().length > 0,
+      channelManager: accessInputs.channelManager.ical.trim().length > 0,
     }
     setConnectedChannels(next)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(accessInputs))
+    notifyConnectionsUpdated()
   }
 
-  const onConnectOne = (platform: ChannelKey) => {
+  const onConnectOne = async (platform: ChannelKey) => {
     const isValid = hasValidConnection(platform)
 
     const nextConnected = {
@@ -114,6 +144,64 @@ export function DashboardConnectPage() {
     }))
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
     localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(accessInputs))
+
+    if (isValid) {
+      const body = await fetchIcalBody(accessInputs[platform].ical)
+      if (body) {
+        const name = extractCalendarNameFromIcalText(body)
+        if (name) {
+          const raw = localStorage.getItem(APARTMENT_NAME_KEY)
+          const prev = raw ? (JSON.parse(raw) as Partial<Record<ChannelKey, string>>) : {}
+          localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify({ ...prev, [platform]: name }))
+        }
+        const addr = extractAddressFromIcalText(body)
+        const prevAddr = accessInputs[platform].address.trim()
+        const shouldFillAddr = !prevAddr || prevAddr === 'Adresse'
+        if (addr && shouldFillAddr) {
+          setAccessInputs((prev) => {
+            const next = {
+              ...prev,
+              [platform]: { ...prev[platform], address: addr },
+            }
+            localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(next))
+            return next
+          })
+        }
+      }
+    }
+    notifyConnectionsUpdated()
+  }
+
+  const onDisconnectOne = (platform: ChannelKey) => {
+    const nextConnected = {
+      ...connectedChannels,
+      [platform]: false,
+    }
+    setConnectedChannels(nextConnected)
+    setConnectionFeedback((prev) => ({ ...prev, [platform]: 'idle' }))
+    setAccessInputs((prev) => ({
+      ...prev,
+      [platform]: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+    }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
+
+    const rawAccess = localStorage.getItem(RESERVATION_ACCESS_KEY)
+    const prevAccess = rawAccess
+      ? (JSON.parse(rawAccess) as Partial<Record<ChannelKey, { ical?: string; address?: string; apiToken?: string; accountId?: string; nightlyRate?: string; commissionRate?: string }>>)
+      : {}
+    localStorage.setItem(
+      RESERVATION_ACCESS_KEY,
+      JSON.stringify({
+        ...prevAccess,
+        [platform]: { ical: '', address: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+      }),
+    )
+
+    const rawNames = localStorage.getItem(APARTMENT_NAME_KEY)
+    const prevNames = rawNames ? (JSON.parse(rawNames) as Partial<Record<ChannelKey, string>>) : {}
+    delete prevNames[platform]
+    localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
+    notifyConnectionsUpdated()
   }
 
   return (
@@ -151,20 +239,34 @@ export function DashboardConnectPage() {
                   placeholder={t.dashboardPlaceholderIcal}
                   className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
-                <label className="mt-3 block text-xs font-semibold text-zinc-600">{t.dashboardApiLabel}</label>
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">{t.dashboardApiLabel}</label>
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">Adresse du logement</label>
                 <input
                   type="text"
-                  value={accessInputs[platform].api}
+                  value={accessInputs[platform].address}
                   onChange={(e) =>
                     setAccessInputs((prev) => ({
                       ...prev,
-                      [platform]: { ...prev[platform], api: e.target.value },
+                      [platform]: { ...prev[platform], address: e.target.value },
+                    }))
+                  }
+                  placeholder="Ex: 24 rue de la Paix, 75002 Paris"
+                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">{t.dashboardApiLabel}</label>
+                <input
+                  type="text"
+                  value={accessInputs[platform].apiToken}
+                  onChange={(e) =>
+                    setAccessInputs((prev) => ({
+                      ...prev,
+                      [platform]: { ...prev[platform], apiToken: e.target.value },
                     }))
                   }
                   placeholder={t.dashboardPlaceholderApi}
                   className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
-                <label className="mt-3 block text-xs font-semibold text-zinc-600">{t.dashboardAccountIdLabel}</label>
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">{t.dashboardAccountIdLabel}</label>
                 <input
                   type="text"
                   value={accessInputs[platform].accountId}
@@ -177,6 +279,35 @@ export function DashboardConnectPage() {
                   placeholder={t.dashboardPlaceholderAccountId}
                   className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                 />
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">Prix moyen par nuit (EUR)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={accessInputs[platform].nightlyRate}
+                  onChange={(e) =>
+                    setAccessInputs((prev) => ({
+                      ...prev,
+                      [platform]: { ...prev[platform], nightlyRate: e.target.value },
+                    }))
+                  }
+                  placeholder="120"
+                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <label className="mt-2 block text-xs font-semibold text-zinc-600">Commission plateforme (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={accessInputs[platform].commissionRate}
+                  onChange={(e) =>
+                    setAccessInputs((prev) => ({
+                      ...prev,
+                      [platform]: { ...prev[platform], commissionRate: e.target.value },
+                    }))
+                  }
+                  placeholder="15"
+                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
                 <button
                   type="button"
                   onClick={() => onConnectOne(platform)}
@@ -184,6 +315,15 @@ export function DashboardConnectPage() {
                 >
                   {t.dashboardConnectAction}
                 </button>
+                {connectedChannels[platform] ? (
+                  <button
+                    type="button"
+                    onClick={() => onDisconnectOne(platform)}
+                    className="ml-2 mt-3 inline-flex rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+                  >
+                    Supprimer le logement connecte
+                  </button>
+                ) : null}
                 {connectionFeedback[platform] === 'success' ? (
                   <p className="mt-2 text-xs font-semibold text-emerald-600">{t.dashboardConnectConnected}</p>
                 ) : connectionFeedback[platform] === 'error' ? (
@@ -195,6 +335,12 @@ export function DashboardConnectPage() {
         </div>
 
         <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 sm:text-sm">
+            <p className="font-semibold">Pour afficher les prix et revenus détaillés :</p>
+            <p className="mt-1">- Airbnb : renseigne le lien iCal + token API/app password (compte hôte).</p>
+            <p>- Booking : renseigne le lien iCal + API key + Hotel ID / Account ID.</p>
+            <p className="mt-1">Le iCal seul suffit pour l'occupation, pas pour les montants.</p>
+          </div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-zinc-900">{t.dashboardConnectChannelManager}</h2>
             <p className="text-xs font-medium text-zinc-400">{t.dashboardChannelOptionalNote}</p>
@@ -217,8 +363,8 @@ export function DashboardConnectPage() {
               <p className="mt-2 text-sm text-zinc-600">{t.dashboardChannelPlanLimit}</p>
             </details>
           ) : null}
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+          <div className="mt-3 grid grid-cols-1 gap-3">
+            <div>
               <label className="block text-xs font-semibold text-zinc-600">{t.dashboardIcalLabel}</label>
               <input
                 type="text"
@@ -234,36 +380,21 @@ export function DashboardConnectPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-zinc-600">{t.dashboardApiLabel}</label>
+              <label className="block text-xs font-semibold text-zinc-600">Adresse du logement</label>
               <input
                 type="text"
-                value={accessInputs.channelManager.api}
+                value={accessInputs.channelManager.address}
                 onChange={(e) =>
                   setAccessInputs((prev) => ({
                     ...prev,
-                    channelManager: { ...prev.channelManager, api: e.target.value },
+                    channelManager: { ...prev.channelManager, address: e.target.value },
                   }))
                 }
-                placeholder={t.dashboardPlaceholderApi}
+                placeholder="Ex: 15 avenue des Fleurs, 06000 Nice"
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-zinc-600">{t.dashboardAccountIdLabel}</label>
-              <input
-                type="text"
-                value={accessInputs.channelManager.accountId}
-                onChange={(e) =>
-                  setAccessInputs((prev) => ({
-                    ...prev,
-                    channelManager: { ...prev.channelManager, accountId: e.target.value },
-                  }))
-                }
-                placeholder={t.dashboardPlaceholderAccountId}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-              />
-            </div>
-            <div className="sm:col-span-2">
               <button
                 type="button"
                 onClick={() => onConnectOne('channelManager')}
@@ -271,6 +402,15 @@ export function DashboardConnectPage() {
               >
                 {t.dashboardConnectAction}
               </button>
+              {connectedChannels.channelManager ? (
+                <button
+                  type="button"
+                  onClick={() => onDisconnectOne('channelManager')}
+                  className="ml-2 inline-flex rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+                >
+                  Supprimer le logement connecte
+                </button>
+              ) : null}
               {connectionFeedback.channelManager === 'success' ? (
                 <p className="mt-2 text-xs font-semibold text-emerald-600">{t.dashboardConnectConnected}</p>
               ) : connectionFeedback.channelManager === 'error' ? (

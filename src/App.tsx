@@ -15,6 +15,12 @@ import { DashboardPage } from './components/DashboardPage'
 import { DashboardBlankPage } from './components/DashboardBlankPage'
 import { DashboardConnectPage } from './components/DashboardConnectPage'
 import { DashboardIntelPage } from './components/DashboardIntelPage'
+import { DashboardCalendarPage } from './components/DashboardCalendarPage'
+import { DashboardSuppliesPage } from './components/DashboardSuppliesPage'
+import { DashboardStatsPage } from './components/DashboardStatsPage'
+import { DashboardWhatsAppPage } from './components/DashboardWhatsAppPage'
+import { DashboardEarlyAccessPage } from './components/DashboardEarlyAccessPage'
+import { DashboardExpensesPage } from './components/DashboardExpensesPage'
 
 export default function App() {
   const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/connexion'
@@ -24,6 +30,12 @@ export default function App() {
     typeof window !== 'undefined' && window.location.pathname === '/dashboard/connecter-logements'
   const isDashboardIntelPage =
     typeof window !== 'undefined' && window.location.pathname === '/dashboard/veille-informationnelle'
+  const isDashboardCalendarPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/calendrier'
+  const isDashboardSuppliesPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/consommables'
+  const isDashboardStatsPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/statistiques'
+  const isDashboardWhatsAppPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/whatsapp'
+  const isDashboardEarlyAccessPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/acces-anticipe'
+  const isDashboardExpensesPage = typeof window !== 'undefined' && window.location.pathname === '/dashboard/tableau-charges'
   const isDashboardSubPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard/')
 
   return (
@@ -43,6 +55,18 @@ export default function App() {
             <DashboardConnectPage />
           ) : isDashboardIntelPage ? (
             <DashboardIntelPage />
+          ) : isDashboardCalendarPage ? (
+            <DashboardCalendarPage />
+          ) : isDashboardSuppliesPage ? (
+            <DashboardSuppliesPage />
+          ) : isDashboardStatsPage ? (
+            <DashboardStatsPage />
+          ) : isDashboardWhatsAppPage ? (
+            <DashboardWhatsAppPage />
+          ) : isDashboardEarlyAccessPage ? (
+            <DashboardEarlyAccessPage />
+          ) : isDashboardExpensesPage ? (
+            <DashboardExpensesPage />
           ) : isDashboardSubPage ? (
             <DashboardBlankPage />
           ) : (

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { CalendarDays, ChartColumn, Gem, MessageCircle, Package, Sparkles, Wallet } from 'lucide-react'
 import { getStoredAccounts } from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
+import { isTestModeEnabled, setTestModeEnabled } from '../utils/testMode'
 
 export function DashboardPage() {
   const { t } = useLanguage()
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
+  const [testModeEnabled, setTestModeState] = useState<boolean>(() => isTestModeEnabled())
 
   useEffect(() => {
     const localizePlanLabel = (plan: string) => {
@@ -85,6 +87,23 @@ export function DashboardPage() {
         </div>
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              const next = !testModeEnabled
+              setTestModeState(next)
+              setTestModeEnabled(next)
+            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+              testModeEnabled
+                ? 'border border-emerald-300 bg-emerald-50 text-emerald-700'
+                : 'border border-zinc-300 bg-white text-zinc-700'
+            }`}
+          >
+            {testModeEnabled ? 'Mode test actif (desactiver)' : 'Activer mode test (acces complet)'}
+          </button>
+        </div>
 
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">
           <div className="flex items-stretch justify-center gap-4">

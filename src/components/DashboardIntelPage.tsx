@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
+import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { enrichReservationAccessAddressesFromIcal } from '../utils/icalAddress'
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 
 type CityPoint = {
   id: string
@@ -8,66 +11,552 @@ type CityPoint = {
   address: string
   lat: number
   lng: number
-  x: number
-  y: number
+}
+
+type LocationContext = {
+  city: string
+  country: string
+  countryCode: string
+}
+
+type HolidayItem = {
+  date: string
+  localName: string
+  name: string
+}
+
+type GdeltArticle = {
+  seendate?: string
+  title?: string
+}
+
+type EarthquakeFeature = {
+  properties?: {
+    mag?: number
+    time?: number
+    place?: string
+  }
+}
+
+type TicketmasterResponse = {
+  _embedded?: {
+    events?: Array<{
+      name?: string
+      dates?: { start?: { localDate?: string } }
+      classifications?: Array<{ segment?: { name?: string } }>
+    }>
+  }
+}
+
+type SeatgeekResponse = {
+  events?: Array<{
+    title?: string
+    datetime_local?: string
+    type?: string
+  }>
+}
+
+type PredictHQResponse = {
+  results?: Array<{
+    title?: string
+    start?: string
+    category?: string
+  }>
+}
+
+type EventbriteResponse = {
+  events?: Array<{
+    name?: { text?: string }
+    start?: { local?: string; utc?: string }
+  }>
+}
+
+type BandsintownEvent = {
+  title?: string
+  datetime?: string
+}
+
+type SongkickResponse = {
+  resultsPage?: {
+    results?: {
+      event?: Array<{
+        displayName?: string
+        start?: { date?: string }
+        type?: string
+      }>
+    }
+  }
+}
+
+type MeetupResponse = {
+  events?: Array<{
+    name?: string
+    dateTime?: string
+  }>
+}
+
+type NewsApiResponse = {
+  articles?: Array<{
+    title?: string
+    publishedAt?: string
+  }>
+}
+
+type NytResponse = {
+  response?: {
+    docs?: Array<{
+      headline?: { main?: string }
+      pub_date?: string
+    }>
+  }
+}
+
+type PriceLabsResponse = {
+  data?: Array<{
+    date?: string
+    event_name?: string
+    event_type?: string
+    demand_index?: number
+  }>
+  events?: Array<{
+    date?: string
+    event_name?: string
+    event_type?: string
+    demand_index?: number
+  }>
+  results?: Array<{
+    date?: string
+    event_name?: string
+    event_type?: string
+    demand_index?: number
+  }>
+}
+
+type LiveSignalDay = {
+  concerts: number
+  sports: number
+  business: number
+  sources: string[]
+  concertLabels: string[]
+  sportsLabels: string[]
+  businessLabels: string[]
+}
+
+type DateRange = {
+  start: string
+  end: string
+  label: string
+}
+
+type NamedEventRange = {
+  start: string
+  end: string
+  label: string
+  city?: string
+}
+
+const OLYMPIC_SUMMER_YEARS = [2024, 2028, 2032]
+const COASTAL_MARKERS = [
+  'nice',
+  'cannes',
+  'marseille',
+  'bordeaux',
+  'biarritz',
+  'barcelona',
+  'ibiza',
+  'mallorca',
+  'miami',
+  'lisbon',
+  'porto',
+  'riviera',
+  'costa',
+  'beach',
+  'plage',
+  'mer',
+]
+const SKI_MARKERS = [
+  'chamonix',
+  'courchevel',
+  'megeve',
+  'val d isere',
+  'tignes',
+  'les arcs',
+  'avoriaz',
+  'zermatt',
+  'st moritz',
+  'verbier',
+  'andorra',
+  'alps',
+  'alpes',
+  'ski',
+  'montagne',
+]
+const MEGA_ARTISTS = ['jul', 'david guetta', 'taylor swift', 'coldplay', 'beyonce', 'drake']
+const MAJOR_SPORT_KEYWORDS = [
+  'f1',
+  'formula 1',
+  'grand prix',
+  'rugby',
+  'tennis',
+  'roland garros',
+  'wimbledon',
+  'football',
+  'soccer',
+  'american football',
+  'nfl',
+  'nba',
+  'basket',
+  'champions league',
+  'euro',
+  'world cup',
+  'olympic',
+]
+
+function emptyLiveSignalDay(): LiveSignalDay {
+  return {
+    concerts: 0,
+    sports: 0,
+    business: 0,
+    sources: [],
+    concertLabels: [],
+    sportsLabels: [],
+    businessLabels: [],
+  }
+}
+
+function normalizeIsoDate(value?: string): string | null {
+  if (!value) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+}
+
+function pickFirstString(...values: Array<unknown>): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function pickFirstNumber(...values: Array<unknown>): number | null {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const n = Number(value)
+      if (!Number.isNaN(n)) return n
+    }
+  }
+  return null
+}
+
+function includesAny(value: string, markers: string[]): boolean {
+  return markers.some((marker) => value.includes(marker))
+}
+
+function FlyToLocation({ target }: { target: [number, number] | null }) {
+  const map = useMap()
+  if (target) {
+    map.flyTo(target, 10, { duration: 1.2 })
+  }
+  return null
+}
+
+function MapResizer() {
+  const map = useMap()
+  useEffect(() => {
+    const resizeNow = () => map.invalidateSize()
+    const timer = window.setTimeout(resizeNow, 50)
+    window.addEventListener('resize', resizeNow)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('resize', resizeNow)
+    }
+  }, [map])
+  return null
 }
 
 export function DashboardIntelPage() {
+  const formatIsoDate = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const today = new Date()
+  const plus30Days = new Date(today)
+  plus30Days.setDate(plus30Days.getDate() + 29)
+
   const { t, locale } = useLanguage()
   const copy = {
     fr: {
       searchLabel: 'Recherche adresse / coordonnees GPS',
       searchPlaceholder: 'Ex: Paris ou 48.8566,2.3522',
+      searchAction: 'Rechercher',
       noResult: 'Aucun resultat pour cette recherche.',
-      clickHint: 'Cliquez sur une ville sur la carte pour voir les details.',
+      clickHint: "Voir les informations sur l'adresse recherchee ou une autre zone.",
       selectedCity: 'Ville selectionnee',
       coordinates: 'Coordonnees',
+      mapError: 'Impossible de trouver cette adresse.',
+      myListingsTitle: 'Mes logements',
+      myListingsSubtitle: 'Adresses actuellement suivies sur StayManager.',
+      myListingsTabConnected: 'Logements connectes',
+      myListingsTabSearch: 'Recherche',
+      myListingsSearchHint:
+        'Utilisez le champ en haut de la page pour rechercher une ville, une adresse ou des coordonnees GPS. Les resultats apparaissent sur la carte et dans le panneau sous la carte.',
+      myListingsAddressPending:
+        'Adresse non trouvee dans le calendrier iCal. Renseignez-la sur la page Connexion ou verifiez que le flux contient une ligne LOCATION.',
+      platformAirbnb: 'Airbnb',
+      platformBooking: 'Booking.com',
+      platformChannel: 'Channel Manager',
+      myListingsEmpty: 'Aucune adresse enregistree via Airbnb, Booking ou Channel Manager.',
+      calendarTitle: 'Calendrier previsionnel mois par mois',
+      calendarSubtitle: "Demande estimee selon l'adresse selectionnee.",
+      legendLow: 'Demande standard',
+      legendMedium: 'Demande en hausse',
+      legendHigh: 'Forte demande',
+      hoverHint: 'Survolez un jour colore pour voir l evenement.',
+      calendarNoLocation: 'Recherchez une adresse pour afficher le calendrier previsionnel.',
+      riskLow: 'Faible',
+      riskMedium: 'Moyen',
+      riskHigh: 'Fort',
     },
     en: {
       searchLabel: 'Address / GPS coordinates search',
       searchPlaceholder: 'Ex: Paris or 48.8566,2.3522',
+      searchAction: 'Search',
       noResult: 'No result for this search.',
-      clickHint: 'Click a city on the map to see details.',
+      clickHint: 'View information for the searched address or another area.',
       selectedCity: 'Selected city',
       coordinates: 'Coordinates',
+      mapError: 'Unable to find this address.',
+      myListingsTitle: 'My listings',
+      myListingsSubtitle: 'Addresses currently tracked in StayManager.',
+      myListingsTabConnected: 'Connected listings',
+      myListingsTabSearch: 'Search',
+      myListingsSearchHint:
+        'Use the search field at the top to find a city, an address, or GPS coordinates. Results appear on the map and in the panel below.',
+      myListingsAddressPending:
+        'No address found in the iCal feed. Add it on the Connect page or ensure the calendar includes a LOCATION field.',
+      platformAirbnb: 'Airbnb',
+      platformBooking: 'Booking.com',
+      platformChannel: 'Channel Manager',
+      myListingsEmpty: 'No address saved via Airbnb, Booking or Channel Manager.',
+      calendarTitle: 'Monthly forecast calendar',
+      calendarSubtitle: 'Estimated demand based on the selected address.',
+      legendLow: 'Standard demand',
+      legendMedium: 'Demand rising',
+      legendHigh: 'High demand',
+      hoverHint: 'Hover a colored day to see the event.',
+      calendarNoLocation: 'Search an address to display the forecast calendar.',
+      riskLow: 'Low',
+      riskMedium: 'Medium',
+      riskHigh: 'High',
     },
     es: {
       searchLabel: 'Busqueda direccion / coordenadas GPS',
       searchPlaceholder: 'Ej: Paris o 48.8566,2.3522',
+      searchAction: 'Buscar',
       noResult: 'Sin resultados para esta busqueda.',
-      clickHint: 'Haz clic en una ciudad del mapa para ver detalles.',
+      clickHint: 'Ver informacion de la direccion buscada u otra zona.',
       selectedCity: 'Ciudad seleccionada',
       coordinates: 'Coordenadas',
+      mapError: 'No se pudo encontrar esta direccion.',
+      myListingsTitle: 'Mis alojamientos',
+      myListingsSubtitle: 'Direcciones actualmente seguidas en StayManager.',
+      myListingsTabConnected: 'Alojamientos conectados',
+      myListingsTabSearch: 'Busqueda',
+      myListingsSearchHint:
+        'Use el campo superior para buscar una ciudad, una direccion o coordenadas GPS. Los resultados aparecen en el mapa y en el panel inferior.',
+      myListingsAddressPending:
+        'No se encontro la direccion en el iCal. Anadala en Conexion o compruebe que el calendario incluya LOCATION.',
+      platformAirbnb: 'Airbnb',
+      platformBooking: 'Booking.com',
+      platformChannel: 'Channel Manager',
+      myListingsEmpty: 'Ninguna direccion guardada via Airbnb, Booking o Channel Manager.',
+      calendarTitle: 'Calendario mensual de prevision',
+      calendarSubtitle: 'Demanda estimada segun la direccion seleccionada.',
+      legendLow: 'Demanda estandar',
+      legendMedium: 'Demanda en subida',
+      legendHigh: 'Alta demanda',
+      hoverHint: 'Pasa el cursor sobre un dia coloreado para ver el evento.',
+      calendarNoLocation: 'Busca una direccion para mostrar el calendario de prevision.',
+      riskLow: 'Bajo',
+      riskMedium: 'Medio',
+      riskHigh: 'Alto',
     },
     de: {
       searchLabel: 'Suche Adresse / GPS-Koordinaten',
       searchPlaceholder: 'Bsp: Paris oder 48.8566,2.3522',
+      searchAction: 'Suchen',
       noResult: 'Kein Ergebnis fur diese Suche.',
-      clickHint: 'Klicken Sie auf eine Stadt in der Karte, um Details zu sehen.',
+      clickHint: 'Informationen zur gesuchten Adresse oder einem anderen Bereich anzeigen.',
       selectedCity: 'Ausgewahlte Stadt',
       coordinates: 'Koordinaten',
+      mapError: 'Diese Adresse konnte nicht gefunden werden.',
+      myListingsTitle: 'Meine Unterkunfte',
+      myListingsSubtitle: 'Aktuell in StayManager verfolgte Adressen.',
+      myListingsTabConnected: 'Verbundene Unterkunfte',
+      myListingsTabSearch: 'Suche',
+      myListingsSearchHint:
+        'Nutzen Sie das Suchfeld oben fur Stadt, Adresse oder GPS-Koordinaten. Die Ergebnisse erscheinen auf der Karte und im Panel darunter.',
+      myListingsAddressPending:
+        'Keine Adresse im iCal gefunden. Tragen Sie sie unter Verbinden ein oder prufen Sie LOCATION im Kalender.',
+      platformAirbnb: 'Airbnb',
+      platformBooking: 'Booking.com',
+      platformChannel: 'Channel Manager',
+      myListingsEmpty: 'Keine Adresse uber Airbnb, Booking oder Channel Manager gespeichert.',
+      calendarTitle: 'Monatlicher Prognosekalender',
+      calendarSubtitle: 'Geschaftsprognose basierend auf der ausgewahlten Adresse.',
+      legendLow: 'Standardnachfrage',
+      legendMedium: 'Steigende Nachfrage',
+      legendHigh: 'Hohe Nachfrage',
+      hoverHint: 'Fahren Sie uber einen farbigen Tag, um das Ereignis zu sehen.',
+      calendarNoLocation: 'Suchen Sie eine Adresse, um den Prognosekalender anzuzeigen.',
+      riskLow: 'Niedrig',
+      riskMedium: 'Mittel',
+      riskHigh: 'Hoch',
     },
     it: {
       searchLabel: 'Ricerca indirizzo / coordinate GPS',
       searchPlaceholder: 'Es: Parigi o 48.8566,2.3522',
+      searchAction: 'Cerca',
       noResult: 'Nessun risultato per questa ricerca.',
-      clickHint: 'Clicca una citta sulla mappa per vedere i dettagli.',
+      clickHint: 'Visualizza le informazioni sull indirizzo cercato o su un altra zona.',
       selectedCity: 'Citta selezionata',
       coordinates: 'Coordinate',
+      mapError: 'Impossibile trovare questo indirizzo.',
+      myListingsTitle: 'I miei alloggi',
+      myListingsSubtitle: 'Indirizzi attualmente monitorati in StayManager.',
+      myListingsTabConnected: 'Alloggi collegati',
+      myListingsTabSearch: 'Ricerca',
+      myListingsSearchHint:
+        'Usa il campo in alto per cercare una citta, un indirizzo o coordinate GPS. I risultati compaiono sulla mappa e nel pannello sotto.',
+      myListingsAddressPending:
+        'Indirizzo non trovato nell iCal. Inseriscilo in Connessione o verifica la riga LOCATION nel calendario.',
+      platformAirbnb: 'Airbnb',
+      platformBooking: 'Booking.com',
+      platformChannel: 'Channel Manager',
+      myListingsEmpty: 'Nessun indirizzo salvato tramite Airbnb, Booking o Channel Manager.',
+      calendarTitle: 'Calendario previsionale mese per mese',
+      calendarSubtitle: 'Domanda stimata in base all indirizzo selezionato.',
+      legendLow: 'Domanda standard',
+      legendMedium: 'Domanda in aumento',
+      legendHigh: 'Alta domanda',
+      hoverHint: 'Passa il mouse su un giorno colorato per vedere l evento.',
+      calendarNoLocation: 'Cerca un indirizzo per visualizzare il calendario previsionale.',
+      riskLow: 'Basso',
+      riskMedium: 'Medio',
+      riskHigh: 'Alto',
     },
   }[locale]
 
   const [query, setQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
+  const [useSatelliteFallback, setUseSatelliteFallback] = useState(false)
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
+  const [listingsPanelTab, setListingsPanelTab] = useState<'connected' | 'search'>('connected')
+  const [connectedListVersion, setConnectedListVersion] = useState(0)
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null)
-  const cities: CityPoint[] = [
-    { id: 'paris', name: 'Paris', country: 'France', address: '10 Rue de Rivoli, 75001 Paris', lat: 48.8566, lng: 2.3522, x: 45, y: 39 },
-    { id: 'london', name: 'London', country: 'England', address: 'Westminster, London SW1A', lat: 51.5074, lng: -0.1278, x: 41, y: 30 },
-    { id: 'madrid', name: 'Madrid', country: 'Spain', address: 'Centro, 28013 Madrid', lat: 40.4168, lng: -3.7038, x: 39, y: 58 },
-    { id: 'rome', name: 'Rome', country: 'Italy', address: 'Centro Storico, Roma RM', lat: 41.9028, lng: 12.4964, x: 56, y: 54 },
-    { id: 'berlin', name: 'Berlin', country: 'Germany', address: 'Mitte, 10117 Berlin', lat: 52.52, lng: 13.405, x: 56, y: 29 },
-    { id: 'barcelona', name: 'Barcelona', country: 'Spain', address: 'Ciutat Vella, 08002 Barcelona', lat: 41.3874, lng: 2.1686, x: 46, y: 56 },
-    { id: 'milan', name: 'Milan', country: 'Italy', address: 'Centro, Milano MI', lat: 45.4642, lng: 9.19, x: 53, y: 47 },
+  const [isBroadCityAnalysis, setIsBroadCityAnalysis] = useState(false)
+  const [targetPosition, setTargetPosition] = useState<[number, number] | null>(null)
+  const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'custom'>('month')
+  const [pricingMode, setPricingMode] = useState<'standard' | 'ultra'>('ultra')
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
+  const [rangeStart, setRangeStart] = useState(formatIsoDate(today))
+  const [rangeEnd, setRangeEnd] = useState(formatIsoDate(plus30Days))
+  const [rangeError, setRangeError] = useState('')
+  const [searchedLabel, setSearchedLabel] = useState('')
+  const [locationContext, setLocationContext] = useState<LocationContext>({
+    city: 'Paris',
+    country: 'France',
+    countryCode: 'FR',
+  })
+  const [liveHolidays, setLiveHolidays] = useState<HolidayItem[]>([])
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, { weatherCode: number; tempMax: number }>>({})
+  const [newsByDate, setNewsByDate] = useState<Record<string, number>>({})
+  const [conflictByDate, setConflictByDate] = useState<Record<string, number>>({})
+  const [newsHotspotScore, setNewsHotspotScore] = useState(0)
+  const [liveSignalsByDate, setLiveSignalsByDate] = useState<Record<string, LiveSignalDay>>({})
+  const [globalLiveByDate, setGlobalLiveByDate] = useState<Record<string, { worldAlerts: number; labels: string[] }>>({})
+  const [hoveredDayEvent, setHoveredDayEvent] = useState<{ date: string; event: string } | null>(null)
+  const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [providerStatus, setProviderStatus] = useState<Record<string, 'connected' | 'missing_key' | 'error'>>({})
+  const [showWatchInfo, setShowWatchInfo] = useState(false)
+  const currentYear = new Date().getFullYear()
+  const frenchSchoolHolidayRanges: DateRange[] = [
+    { start: `${currentYear}-02-10`, end: `${currentYear}-03-10`, label: 'Vacances scolaires d hiver (zones FR)' },
+    { start: `${currentYear}-04-06`, end: `${currentYear}-05-05`, label: 'Vacances scolaires de printemps (zones FR)' },
+    { start: `${currentYear}-07-06`, end: `${currentYear}-09-01`, label: 'Grandes vacances scolaires' },
+    { start: `${currentYear}-10-19`, end: `${currentYear}-11-03`, label: 'Vacances de la Toussaint' },
+    { start: `${currentYear}-12-21`, end: `${currentYear + 1}-01-05`, label: 'Vacances de Noel' },
   ]
+  const namedEventRanges: NamedEventRange[] = [
+    { start: `${currentYear}-01-16`, end: `${currentYear}-01-21`, label: 'Paris Fashion Week (Homme)', city: 'paris' },
+    { start: `${currentYear}-02-24`, end: `${currentYear}-03-03`, label: 'Paris Fashion Week (Femme)', city: 'paris' },
+    { start: `${currentYear}-05-14`, end: `${currentYear}-05-25`, label: 'Festival de Cannes' },
+    { start: `${currentYear}-06-30`, end: `${currentYear}-07-13`, label: 'Wimbledon Championships', city: 'london' },
+    { start: `${currentYear}-09-20`, end: `${currentYear}-09-28`, label: 'London Fashion Week', city: 'london' },
+    { start: `${currentYear}-09-23`, end: `${currentYear}-10-01`, label: 'Paris Fashion Week', city: 'paris' },
+  ]
+  if (OLYMPIC_SUMMER_YEARS.includes(currentYear)) {
+    namedEventRanges.push({
+      start: `${currentYear}-07-20`,
+      end: `${currentYear}-08-20`,
+      label: 'Jeux olympiques (annee officielle)',
+    })
+  }
+  const cities: CityPoint[] = [
+    { id: 'paris', name: 'Paris', country: 'France', address: 'Centre-ville, 75001 Paris', lat: 48.8566, lng: 2.3522 },
+    { id: 'london', name: 'London', country: 'England', address: 'Westminster, London SW1A', lat: 51.5074, lng: -0.1278 },
+    { id: 'madrid', name: 'Madrid', country: 'Spain', address: 'Centro, 28013 Madrid', lat: 40.4168, lng: -3.7038 },
+    { id: 'rome', name: 'Rome', country: 'Italy', address: 'Centro Storico, Roma RM', lat: 41.9028, lng: 12.4964 },
+    { id: 'berlin', name: 'Berlin', country: 'Germany', address: 'Mitte, 10117 Berlin', lat: 52.52, lng: 13.405 },
+    { id: 'brussels', name: 'Bruxelles', country: 'Belgium', address: 'Grand-Place, 1000 Bruxelles', lat: 50.8503, lng: 4.3517 },
+    { id: 'barcelona', name: 'Barcelona', country: 'Spain', address: 'Ciutat Vella, 08002 Barcelona', lat: 41.3874, lng: 2.1686 },
+    { id: 'milan', name: 'Milan', country: 'Italy', address: 'Centro, Milano MI', lat: 45.4642, lng: 9.19 },
+    { id: 'amsterdam', name: 'Amsterdam', country: 'Netherlands', address: 'Centrum, 1012 JS Amsterdam', lat: 52.3676, lng: 4.9041 },
+    { id: 'vienna', name: 'Vienne', country: 'Austria', address: 'Innere Stadt, 1010 Wien', lat: 48.2082, lng: 16.3738 },
+    { id: 'lisbon', name: 'Lisbonne', country: 'Portugal', address: 'Baixa, 1100 Lisboa', lat: 38.7223, lng: -9.1393 },
+    { id: 'warsaw', name: 'Varsovie', country: 'Poland', address: 'Srodmiescie, 00-001 Warszawa', lat: 52.2297, lng: 21.0122 },
+    { id: 'athens', name: 'Athenes', country: 'Greece', address: 'Plaka, Athina', lat: 37.9838, lng: 23.7275 },
+    { id: 'istanbul', name: 'Istanbul', country: 'Turkey', address: 'Fatih, Istanbul', lat: 41.0082, lng: 28.9784 },
+    { id: 'zurich', name: 'Zurich', country: 'Switzerland', address: 'Altstadt, 8001 Zurich', lat: 47.3769, lng: 8.5417 },
+    { id: 'copenhagen', name: 'Copenhague', country: 'Denmark', address: 'Indre By, 1050 Kobenhavn', lat: 55.6761, lng: 12.5683 },
+    { id: 'stockholm', name: 'Stockholm', country: 'Sweden', address: 'Norrmalm, 111 22 Stockholm', lat: 59.3293, lng: 18.0686 },
+    { id: 'prague', name: 'Prague', country: 'Czech Republic', address: 'Stare Mesto, 110 00 Praha', lat: 50.0755, lng: 14.4378 },
+    { id: 'dublin', name: 'Dublin', country: 'Ireland', address: 'Temple Bar, Dublin 2', lat: 53.3498, lng: -6.2603 },
+    { id: 'moscow', name: 'Moscou', country: 'Russia', address: 'Tverskoy District, Moscou', lat: 55.7558, lng: 37.6173 },
+    { id: 'dubai', name: 'Dubai', country: 'United Arab Emirates', address: 'Downtown Dubai', lat: 25.2048, lng: 55.2708 },
+    { id: 'cairo', name: 'Le Caire', country: 'Egypt', address: 'Centre-ville, Le Caire', lat: 30.0444, lng: 31.2357 },
+    { id: 'lagos', name: 'Lagos', country: 'Nigeria', address: 'Victoria Island, Lagos', lat: 6.5244, lng: 3.3792 },
+    { id: 'johannesburg', name: 'Johannesburg', country: 'South Africa', address: 'Sandton, Johannesburg', lat: -26.2041, lng: 28.0473 },
+    { id: 'rio', name: 'Rio de Janeiro', country: 'Brazil', address: 'Copacabana, Rio de Janeiro', lat: -22.9068, lng: -43.1729 },
+    { id: 'buenosaires', name: 'Buenos Aires', country: 'Argentina', address: 'Microcentro, CABA', lat: -34.6037, lng: -58.3816 },
+    { id: 'mexicocity', name: 'Mexico City', country: 'Mexico', address: 'Centro Historico, Ciudad de Mexico', lat: 19.4326, lng: -99.1332 },
+    { id: 'newyork', name: 'New York', country: 'United States', address: 'Manhattan, New York', lat: 40.7128, lng: -74.006 },
+    { id: 'losangeles', name: 'Los Angeles', country: 'United States', address: 'Downtown, Los Angeles', lat: 34.0522, lng: -118.2437 },
+    { id: 'chicago', name: 'Chicago', country: 'United States', address: 'The Loop, Chicago', lat: 41.8781, lng: -87.6298 },
+    { id: 'toronto', name: 'Toronto', country: 'Canada', address: 'Downtown, Toronto', lat: 43.6532, lng: -79.3832 },
+    { id: 'tokyo', name: 'Tokyo', country: 'Japan', address: 'Shinjuku, Tokyo', lat: 35.6762, lng: 139.6503 },
+    { id: 'seoul', name: 'Seoul', country: 'South Korea', address: 'Jung-gu, Seoul', lat: 37.5665, lng: 126.978 },
+    { id: 'shanghai', name: 'Shanghai', country: 'China', address: 'Huangpu, Shanghai', lat: 31.2304, lng: 121.4737 },
+    { id: 'beijing', name: 'Pekin', country: 'China', address: 'Dongcheng, Beijing', lat: 39.9042, lng: 116.4074 },
+    { id: 'hongkong', name: 'Hong Kong', country: 'China', address: 'Central, Hong Kong', lat: 22.3193, lng: 114.1694 },
+    { id: 'singapore', name: 'Singapour', country: 'Singapore', address: 'Downtown Core', lat: 1.3521, lng: 103.8198 },
+    { id: 'mumbai', name: 'Mumbai', country: 'India', address: 'Colaba, Mumbai', lat: 19.076, lng: 72.8777 },
+    { id: 'sydney', name: 'Sydney', country: 'Australia', address: 'CBD, Sydney', lat: -33.8688, lng: 151.2093 },
+  ]
+  const myListings = useMemo(() => {
+    return getConnectedApartmentsFromStorage().map((apt) => {
+      const resolved = Boolean(apt.address.trim())
+      return {
+        id: apt.id,
+        name: apt.name,
+        address: resolved ? apt.address : copy.myListingsAddressPending,
+        addressResolved: resolved,
+        platform: apt.platform,
+      }
+    })
+  }, [locale, connectedListVersion, copy.myListingsAddressPending])
 
   const filteredCities = useMemo(() => {
     const value = query.trim().toLowerCase()
@@ -91,6 +580,1110 @@ export function DashboardIntelPage() {
   const selectedCity =
     cities.find((city) => city.id === selectedCityId) ??
     (filteredCities.length === 1 ? filteredCities[0] : null)
+  const selectedListing = myListings.find((listing) => listing.id === selectedListingId) ?? null
+  const activeLocationLabel =
+    selectedCity?.name || searchedLabel || (targetPosition ? `${targetPosition[0]}, ${targetPosition[1]}` : locationContext.city)
+  const activeLocationAddress =
+    selectedListing?.addressResolved
+      ? selectedListing.address
+      : (!isBroadCityAnalysis && searchedLabel ? searchedLabel : '') ||
+        selectedCity?.address ||
+        `${locationContext.city}, ${locationContext.country}`
+  const displayedAnalyzedAddress = isBroadCityAnalysis
+    ? `${locationContext.city}, ${locationContext.country}`
+    : selectedListing
+      ? selectedListing.addressResolved
+        ? selectedListing.address
+        : copy.myListingsAddressPending
+      : activeLocationAddress
+  const normalizedAddress = activeLocationAddress.toLowerCase()
+  const isPreciseAddress =
+    /\d/.test(activeLocationAddress) ||
+    normalizedAddress.includes('rue') ||
+    normalizedAddress.includes('avenue') ||
+    normalizedAddress.includes('boulevard') ||
+    normalizedAddress.includes('street') ||
+    normalizedAddress.includes('road')
+  const analysisPrecisionMessage =
+    isBroadCityAnalysis || !isPreciseAddress
+      ? 'Analyse large sur la ville. Ajouter une adresse precise nous aidera a mieux vous conseiller.'
+      : ''
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'long' })
+  const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+
+  const countryToCode: Record<string, string> = {
+    france: 'FR',
+    spain: 'ES',
+    espagne: 'ES',
+    italy: 'IT',
+    italie: 'IT',
+    germany: 'DE',
+    allemagne: 'DE',
+    belgium: 'BE',
+    belgique: 'BE',
+    england: 'GB',
+    'united kingdom': 'GB',
+    'royaume uni': 'GB',
+    netherlands: 'NL',
+    'pays-bas': 'NL',
+    austria: 'AT',
+    autriche: 'AT',
+    portugal: 'PT',
+    poland: 'PL',
+    pologne: 'PL',
+    greece: 'GR',
+    grece: 'GR',
+    turkey: 'TR',
+    turquie: 'TR',
+    switzerland: 'CH',
+    suisse: 'CH',
+    denmark: 'DK',
+    danemark: 'DK',
+    sweden: 'SE',
+    suede: 'SE',
+    'czech republic': 'CZ',
+    tchequie: 'CZ',
+    ireland: 'IE',
+    irlande: 'IE',
+    russia: 'RU',
+    russie: 'RU',
+    egypt: 'EG',
+    egypte: 'EG',
+    nigeria: 'NG',
+    'south africa': 'ZA',
+    'afrique du sud': 'ZA',
+    brazil: 'BR',
+    bresil: 'BR',
+    argentina: 'AR',
+    argentine: 'AR',
+    mexico: 'MX',
+    mexique: 'MX',
+    'united states': 'US',
+    'etats-unis': 'US',
+    canada: 'CA',
+    japan: 'JP',
+    japon: 'JP',
+    'south korea': 'KR',
+    'coree du sud': 'KR',
+    china: 'CN',
+    chine: 'CN',
+    singapore: 'SG',
+    india: 'IN',
+    inde: 'IN',
+    australia: 'AU',
+    australie: 'AU',
+    'united arab emirates': 'AE',
+    uae: 'AE',
+  }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setRefreshTick((v) => v + 1), 5 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const [lat, lng] = targetPosition ?? [48.8566, 2.3522]
+    const year = new Date().getFullYear()
+
+    const fetchLiveSources = async () => {
+      const status: Record<string, 'connected' | 'missing_key' | 'error'> = {}
+      try {
+        const weatherRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weathercode,temperature_2m_max&timezone=auto`,
+        )
+        const weatherData = (await weatherRes.json()) as {
+          daily?: { time?: string[]; weathercode?: number[]; temperature_2m_max?: number[] }
+        }
+        const weatherMap: Record<string, { weatherCode: number; tempMax: number }> = {}
+        if (weatherData.daily?.time) {
+          weatherData.daily.time.forEach((date, idx) => {
+            weatherMap[date] = {
+              weatherCode: weatherData.daily?.weathercode?.[idx] ?? 0,
+              tempMax: weatherData.daily?.temperature_2m_max?.[idx] ?? 0,
+            }
+          })
+        }
+        setWeatherByDate(weatherMap)
+      } catch {
+        setWeatherByDate({})
+      }
+
+      try {
+        const code = locationContext.countryCode || 'FR'
+        const holidaysRes = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`)
+        const holidays = (await holidaysRes.json()) as HolidayItem[]
+        setLiveHolidays(Array.isArray(holidays) ? holidays : [])
+      } catch {
+        setLiveHolidays([])
+      }
+
+      try {
+        const query = `${locationContext.city} ${locationContext.country}`
+        const newsRes = await fetch(
+          `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
+            query,
+          )}&mode=ArtList&format=json&maxrecords=100&sort=DateDesc`,
+        )
+        const newsData = (await newsRes.json()) as { articles?: GdeltArticle[] }
+        const dateCounts: Record<string, number> = {}
+        const conflictCounts: Record<string, number> = {}
+        const typedSignals: Record<string, LiveSignalDay> = {}
+        let total = 0
+        ;(newsData.articles ?? []).forEach((article) => {
+          if (!article.seendate) return
+          const iso = `${article.seendate.slice(0, 4)}-${article.seendate.slice(4, 6)}-${article.seendate.slice(6, 8)}`
+          dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
+          total += 1
+
+          const title = (article.title ?? '').toLowerCase()
+          if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+          const rawTitle = (article.title ?? '').trim()
+          const rawTitleLower = rawTitle.toLowerCase()
+          if (
+            title.includes('concert') ||
+            title.includes('festival') ||
+            title.includes('live') ||
+            title.includes('music') ||
+            title.includes('spectacle')
+          ) {
+            typedSignals[iso].concerts += 1
+            if (!typedSignals[iso].sources.includes('GDELT-concerts')) typedSignals[iso].sources.push('GDELT-concerts')
+            if (rawTitle && typedSignals[iso].concertLabels.length < 3) typedSignals[iso].concertLabels.push(rawTitle)
+          }
+          const artistBoost = MEGA_ARTISTS.find((artist) => rawTitleLower.includes(artist))
+          if (artistBoost) {
+            typedSignals[iso].concerts += 3
+            if (!typedSignals[iso].sources.includes('GDELT-mega-artist')) typedSignals[iso].sources.push('GDELT-mega-artist')
+            if (typedSignals[iso].concertLabels.length < 5) {
+              typedSignals[iso].concertLabels.push(`Concert majeur: ${artistBoost.toUpperCase()}`)
+            }
+          }
+          if (
+            title.includes('match') ||
+            title.includes('football') ||
+            title.includes('soccer') ||
+            title.includes('rugby') ||
+            title.includes('basket') ||
+            MAJOR_SPORT_KEYWORDS.some((k) => title.includes(k))
+          ) {
+            typedSignals[iso].sports += 1
+            if (!typedSignals[iso].sources.includes('GDELT-sports')) typedSignals[iso].sources.push('GDELT-sports')
+            if (rawTitle && typedSignals[iso].sportsLabels.length < 3) typedSignals[iso].sportsLabels.push(rawTitle)
+          }
+          if (
+            title.includes('expo') ||
+            title.includes('conference') ||
+            title.includes('summit') ||
+            title.includes('convention') ||
+            title.includes('salon')
+          ) {
+            typedSignals[iso].business += 1
+            if (!typedSignals[iso].sources.includes('GDELT-business')) typedSignals[iso].sources.push('GDELT-business')
+            if (rawTitle && typedSignals[iso].businessLabels.length < 3) typedSignals[iso].businessLabels.push(rawTitle)
+          }
+          if (
+            title.includes('war') ||
+            title.includes('guerre') ||
+            title.includes('conflict') ||
+            title.includes('attaque') ||
+            title.includes('military') ||
+            title.includes('strike')
+          ) {
+            conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 1
+          }
+        })
+
+        const newsApiKey = import.meta.env.VITE_NEWSAPI_KEY as string | undefined
+        if (newsApiKey) {
+          const naRes = await fetch(
+            `https://newsapi.org/v2/everything?q=${encodeURIComponent(
+              `${locationContext.city} OR ${locationContext.country}`,
+            )}&sortBy=publishedAt&pageSize=100&apiKey=${newsApiKey}`,
+          )
+          if (naRes.ok) {
+            status.NewsAPI = 'connected'
+            const naData = (await naRes.json()) as NewsApiResponse
+            for (const article of naData.articles ?? []) {
+              const iso = normalizeIsoDate(article.publishedAt)
+              if (!iso) continue
+              dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
+              const title = (article.title ?? '').toLowerCase()
+              if (
+                title.includes('war') ||
+                title.includes('guerre') ||
+                title.includes('conflict') ||
+                title.includes('attaque') ||
+                title.includes('terror') ||
+                title.includes('riot')
+              ) {
+                conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 2
+              }
+            }
+          } else {
+            status.NewsAPI = 'error'
+          }
+        } else status.NewsAPI = 'missing_key'
+
+        const nytKey = import.meta.env.VITE_NYT_API_KEY as string | undefined
+        if (nytKey) {
+          const nytRes = await fetch(
+            `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${encodeURIComponent(
+              locationContext.city,
+            )}&sort=newest&api-key=${nytKey}`,
+          )
+          if (nytRes.ok) {
+            status.NYT = 'connected'
+            const nytData = (await nytRes.json()) as NytResponse
+            for (const doc of nytData.response?.docs ?? []) {
+              const iso = normalizeIsoDate(doc.pub_date)
+              if (!iso) continue
+              dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
+              const title = (doc.headline?.main ?? '').toLowerCase()
+              if (
+                title.includes('war') ||
+                title.includes('conflict') ||
+                title.includes('attack') ||
+                title.includes('terror')
+              ) {
+                conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 2
+              }
+            }
+          } else {
+            status.NYT = 'error'
+          }
+        } else status.NYT = 'missing_key'
+
+        const leagueIds = ['4328', '4331', '4332', '4334', '4337']
+        const sportsResponses = await Promise.allSettled(
+          leagueIds.map((id) => fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=${id}`)),
+        )
+        for (const settled of sportsResponses) {
+          if (settled.status !== 'fulfilled') continue
+          const data = (await settled.value.json()) as {
+            events?: Array<{ dateEvent?: string; strEvent?: string; strHomeTeam?: string; strAwayTeam?: string }>
+          }
+          for (const event of data.events ?? []) {
+            const iso = event.dateEvent
+            if (!iso) continue
+            if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+            typedSignals[iso].sports += 2
+            if (!typedSignals[iso].sources.includes('TheSportsDB')) typedSignals[iso].sources.push('TheSportsDB')
+            const versusLabel =
+              event.strHomeTeam && event.strAwayTeam
+                ? `Match de ${event.strHomeTeam} vs ${event.strAwayTeam}`
+                : event.strEvent
+                  ? `Match de ${event.strEvent}`
+                  : 'Match majeur detecte'
+            if (typedSignals[iso].sportsLabels.length < 5) typedSignals[iso].sportsLabels.push(versusLabel)
+          }
+        }
+
+        const ticketmasterKey = import.meta.env.VITE_TICKETMASTER_API_KEY as string | undefined
+        if (ticketmasterKey) {
+          const tmRes = await fetch(
+            `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&size=50&sort=date,asc&countryCode=${locationContext.countryCode}`,
+          )
+          if (tmRes.ok) {
+            status.Ticketmaster = 'connected'
+            const tmData = (await tmRes.json()) as TicketmasterResponse
+            for (const event of tmData._embedded?.events ?? []) {
+              const iso = event.dates?.start?.localDate
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              const category = (event.classifications?.[0]?.segment?.name ?? '').toLowerCase()
+              const eventName = (event.name ?? '').trim()
+              if (category.includes('sport')) {
+                typedSignals[iso].sports += 2
+                if (!typedSignals[iso].sources.includes('Ticketmaster')) typedSignals[iso].sources.push('Ticketmaster')
+                if (eventName && typedSignals[iso].sportsLabels.length < 6) typedSignals[iso].sportsLabels.push(`Match de ${eventName}`)
+              } else if (category.includes('music')) {
+                typedSignals[iso].concerts += 2
+                if (!typedSignals[iso].sources.includes('Ticketmaster')) typedSignals[iso].sources.push('Ticketmaster')
+                if (eventName && typedSignals[iso].concertLabels.length < 6) typedSignals[iso].concertLabels.push(eventName)
+              } else {
+                typedSignals[iso].business += 1
+                if (!typedSignals[iso].sources.includes('Ticketmaster')) typedSignals[iso].sources.push('Ticketmaster')
+                if (eventName && typedSignals[iso].businessLabels.length < 6) typedSignals[iso].businessLabels.push(eventName)
+              }
+            }
+          } else {
+            status.Ticketmaster = 'error'
+          }
+        } else status.Ticketmaster = 'missing_key'
+
+        const seatGeekClientId = import.meta.env.VITE_SEATGEEK_CLIENT_ID as string | undefined
+        if (seatGeekClientId) {
+          const sgRes = await fetch(
+            `https://api.seatgeek.com/2/events?client_id=${seatGeekClientId}&per_page=50&sort=datetime_local.asc`,
+          )
+          if (sgRes.ok) {
+            status.SeatGeek = 'connected'
+            const sgData = (await sgRes.json()) as SeatgeekResponse
+            for (const event of sgData.events ?? []) {
+              const date = event.datetime_local?.slice(0, 10)
+              if (!date) continue
+              if (!typedSignals[date]) typedSignals[date] = emptyLiveSignalDay()
+              const type = (event.type ?? '').toLowerCase()
+              const title = (event.title ?? '').trim()
+              if (type.includes('sport')) {
+                typedSignals[date].sports += 2
+                if (!typedSignals[date].sources.includes('SeatGeek')) typedSignals[date].sources.push('SeatGeek')
+                if (title && typedSignals[date].sportsLabels.length < 6) typedSignals[date].sportsLabels.push(`Match de ${title}`)
+              } else if (type.includes('concert') || type.includes('music')) {
+                typedSignals[date].concerts += 2
+                if (!typedSignals[date].sources.includes('SeatGeek')) typedSignals[date].sources.push('SeatGeek')
+                if (title && typedSignals[date].concertLabels.length < 6) typedSignals[date].concertLabels.push(title)
+              } else {
+                typedSignals[date].business += 1
+                if (!typedSignals[date].sources.includes('SeatGeek')) typedSignals[date].sources.push('SeatGeek')
+                if (title && typedSignals[date].businessLabels.length < 6) typedSignals[date].businessLabels.push(title)
+              }
+            }
+          } else {
+            status.SeatGeek = 'error'
+          }
+        } else status.SeatGeek = 'missing_key'
+
+        const predictHqToken = import.meta.env.VITE_PREDICTHQ_API_TOKEN as string | undefined
+        if (predictHqToken) {
+          const phqRes = await fetch('https://api.predicthq.com/v1/events/?limit=50&sort=start', {
+            headers: { Authorization: `Bearer ${predictHqToken}` },
+          })
+          if (phqRes.ok) {
+            status.PredictHQ = 'connected'
+            const phqData = (await phqRes.json()) as PredictHQResponse
+            for (const event of phqData.results ?? []) {
+              const date = event.start?.slice(0, 10)
+              if (!date) continue
+              if (!typedSignals[date]) typedSignals[date] = emptyLiveSignalDay()
+              const category = (event.category ?? '').toLowerCase()
+              const title = (event.title ?? '').trim()
+              if (category.includes('sports')) {
+                typedSignals[date].sports += 2
+                if (!typedSignals[date].sources.includes('PredictHQ')) typedSignals[date].sources.push('PredictHQ')
+                if (title && typedSignals[date].sportsLabels.length < 6) typedSignals[date].sportsLabels.push(`Match de ${title}`)
+              } else if (category.includes('concerts') || category.includes('performing-arts')) {
+                typedSignals[date].concerts += 2
+                if (!typedSignals[date].sources.includes('PredictHQ')) typedSignals[date].sources.push('PredictHQ')
+                if (title && typedSignals[date].concertLabels.length < 6) typedSignals[date].concertLabels.push(title)
+              } else {
+                typedSignals[date].business += 1
+                if (!typedSignals[date].sources.includes('PredictHQ')) typedSignals[date].sources.push('PredictHQ')
+                if (title && typedSignals[date].businessLabels.length < 6) typedSignals[date].businessLabels.push(title)
+              }
+            }
+          } else {
+            status.PredictHQ = 'error'
+          }
+        } else status.PredictHQ = 'missing_key'
+
+        const eventbriteToken = import.meta.env.VITE_EVENTBRITE_API_TOKEN as string | undefined
+        if (eventbriteToken) {
+          const ebRes = await fetch(
+            `https://www.eventbriteapi.com/v3/events/search/?location.address=${encodeURIComponent(
+              locationContext.city,
+            )}&expand=venue&sort_by=date`,
+            { headers: { Authorization: `Bearer ${eventbriteToken}` } },
+          )
+          if (ebRes.ok) {
+            status.Eventbrite = 'connected'
+            const ebData = (await ebRes.json()) as EventbriteResponse
+            for (const event of ebData.events ?? []) {
+              const iso = normalizeIsoDate(event.start?.local ?? event.start?.utc)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              typedSignals[iso].business += 2
+              if (!typedSignals[iso].sources.includes('Eventbrite')) typedSignals[iso].sources.push('Eventbrite')
+              const label = event.name?.text?.trim()
+              if (label && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(label)
+            }
+          } else {
+            status.Eventbrite = 'error'
+          }
+        } else status.Eventbrite = 'missing_key'
+
+        const bandsintownAppId = import.meta.env.VITE_BANDSINTOWN_APP_ID as string | undefined
+        if (bandsintownAppId) {
+          status.Bandsintown = 'connected'
+          const artistHints = [locationContext.city, 'Coldplay', 'Taylor Swift', 'Drake']
+          for (const artist of artistHints) {
+            const biRes = await fetch(
+              `https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}`,
+            )
+            if (!biRes.ok) {
+              status.Bandsintown = 'error'
+              continue
+            }
+            const biData = (await biRes.json()) as BandsintownEvent[]
+            for (const event of biData ?? []) {
+              const iso = normalizeIsoDate(event.datetime)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              typedSignals[iso].concerts += 2
+              if (!typedSignals[iso].sources.includes('Bandsintown')) typedSignals[iso].sources.push('Bandsintown')
+              const label = event.title?.trim()
+              if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
+            }
+          }
+        } else status.Bandsintown = 'missing_key'
+
+        const songkickApiKey = import.meta.env.VITE_SONGKICK_API_KEY as string | undefined
+        if (songkickApiKey) {
+          const skRes = await fetch(
+            `https://api.songkick.com/api/3.0/events.json?apikey=${songkickApiKey}&location=sk:${encodeURIComponent(
+              locationContext.city,
+            )}`,
+          )
+          if (skRes.ok) {
+            status.Songkick = 'connected'
+            const skData = (await skRes.json()) as SongkickResponse
+            for (const event of skData.resultsPage?.results?.event ?? []) {
+              const iso = normalizeIsoDate(event.start?.date)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              typedSignals[iso].concerts += 2
+              if (!typedSignals[iso].sources.includes('Songkick')) typedSignals[iso].sources.push('Songkick')
+              const label = event.displayName?.trim()
+              if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
+            }
+          } else {
+            status.Songkick = 'error'
+          }
+        } else status.Songkick = 'missing_key'
+
+        const allEventsApiKey = import.meta.env.VITE_ALLEVENTS_API_KEY as string | undefined
+        if (allEventsApiKey) {
+          const aeRes = await fetch(
+            `https://api.allevents.in/events?city=${encodeURIComponent(locationContext.city)}&from=${encodeURIComponent(
+              rangeStart,
+            )}&to=${encodeURIComponent(rangeEnd)}`,
+            { headers: { Authorization: allEventsApiKey } },
+          )
+          if (aeRes.ok) {
+            status.AllEvents = 'connected'
+            const aeData = (await aeRes.json()) as { events?: Array<{ eventname?: string; start_time?: string; category?: string }> }
+            for (const event of aeData.events ?? []) {
+              const iso = normalizeIsoDate(event.start_time)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              const category = (event.category ?? '').toLowerCase()
+              const label = (event.eventname ?? '').trim()
+              if (category.includes('music') || category.includes('concert')) {
+                typedSignals[iso].concerts += 2
+                if (!typedSignals[iso].sources.includes('AllEvents')) typedSignals[iso].sources.push('AllEvents')
+                if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
+              } else {
+                typedSignals[iso].business += 1
+                if (!typedSignals[iso].sources.includes('AllEvents')) typedSignals[iso].sources.push('AllEvents')
+                if (label && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(label)
+              }
+            }
+          } else {
+            status.AllEvents = 'error'
+          }
+        } else status.AllEvents = 'missing_key'
+
+        const meetupToken = import.meta.env.VITE_MEETUP_API_TOKEN as string | undefined
+        if (meetupToken) {
+          const meetupRes = await fetch(`https://api.meetup.com/find/upcoming_events?query=${encodeURIComponent(locationContext.city)}`, {
+            headers: { Authorization: `Bearer ${meetupToken}` },
+          })
+          if (meetupRes.ok) {
+            status.Meetup = 'connected'
+            const meetupData = (await meetupRes.json()) as MeetupResponse
+            for (const event of meetupData.events ?? []) {
+              const iso = normalizeIsoDate(event.dateTime)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              typedSignals[iso].business += 1
+              if (!typedSignals[iso].sources.includes('Meetup')) typedSignals[iso].sources.push('Meetup')
+              const label = event.name?.trim()
+              if (label && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(label)
+            }
+          } else {
+            status.Meetup = 'error'
+          }
+        } else status.Meetup = 'missing_key'
+
+        const feverToken = import.meta.env.VITE_FEVER_API_TOKEN as string | undefined
+        const feverEndpoint = import.meta.env.VITE_FEVER_ENDPOINT as string | undefined
+        if (feverToken && feverEndpoint) {
+          const feverRes = await fetch(
+            `${feverEndpoint}?city=${encodeURIComponent(locationContext.city)}&from=${encodeURIComponent(
+              rangeStart,
+            )}&to=${encodeURIComponent(rangeEnd)}`,
+            {
+              headers: { Authorization: `Bearer ${feverToken}` },
+            },
+          )
+          if (feverRes.ok) {
+            status.Fever = 'connected'
+            const feverData = (await feverRes.json()) as { events?: Array<{ name?: string; start_time?: string; category?: string }> }
+            for (const event of feverData.events ?? []) {
+              const iso = normalizeIsoDate(event.start_time)
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              const category = (event.category ?? '').toLowerCase()
+              const label = (event.name ?? '').trim()
+              if (category.includes('music') || category.includes('concert') || category.includes('show')) {
+                typedSignals[iso].concerts += 2
+                if (!typedSignals[iso].sources.includes('Fever')) typedSignals[iso].sources.push('Fever')
+                if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
+              } else {
+                typedSignals[iso].business += 1
+                if (!typedSignals[iso].sources.includes('Fever')) typedSignals[iso].sources.push('Fever')
+                if (label && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(label)
+              }
+            }
+          } else {
+            status.Fever = 'error'
+          }
+        } else status.Fever = 'missing_key'
+
+        const priceLabsApiKey = import.meta.env.VITE_PRICELABS_API_KEY as string | undefined
+        const priceLabsEndpoint = import.meta.env.VITE_PRICELABS_ENDPOINT as string | undefined
+        if (priceLabsApiKey && priceLabsEndpoint) {
+          const plRes = await fetch(
+            `${priceLabsEndpoint}?city=${encodeURIComponent(locationContext.city)}&country=${encodeURIComponent(
+              locationContext.country,
+            )}&start_date=${encodeURIComponent(rangeStart)}&end_date=${encodeURIComponent(rangeEnd)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${priceLabsApiKey}`,
+              },
+            },
+          )
+          if (plRes.ok) {
+            status.PriceLabs = 'connected'
+            const plData = (await plRes.json()) as PriceLabsResponse | Record<string, unknown>
+            const candidateRows = [
+              ...((plData as PriceLabsResponse).data ?? []),
+              ...((plData as PriceLabsResponse).events ?? []),
+              ...((plData as PriceLabsResponse).results ?? []),
+              ...((Array.isArray((plData as { items?: unknown[] }).items) ? (plData as { items?: unknown[] }).items : []) as Array<
+                Record<string, unknown>
+              >),
+            ] as Array<Record<string, unknown>>
+            for (const row of candidateRows) {
+              const iso = normalizeIsoDate(
+                pickFirstString(
+                  row.date,
+                  row.event_date,
+                  row.start_date,
+                  row.check_in_date,
+                  row.day,
+                  row.start,
+                  row.datetime,
+                ),
+              )
+              if (!iso) continue
+              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
+              if (!typedSignals[iso].sources.includes('PriceLabs')) typedSignals[iso].sources.push('PriceLabs')
+
+              const eventType = pickFirstString(row.event_type, row.type, row.category, row.event_category).toLowerCase()
+              const name = pickFirstString(row.event_name, row.name, row.title, row.description)
+              const demandIndex = pickFirstNumber(row.demand_index, row.demand, row.score, row.demandScore, row.multiplier)
+              const demandBoost = demandIndex && demandIndex > 0 ? Math.min(5, Math.max(1, Math.round(demandIndex / 20))) : 1
+
+              if (eventType.includes('sport')) {
+                typedSignals[iso].sports += demandBoost
+                if (name && typedSignals[iso].sportsLabels.length < 8) typedSignals[iso].sportsLabels.push(`Match de ${name}`)
+              } else if (eventType.includes('concert') || eventType.includes('music')) {
+                typedSignals[iso].concerts += demandBoost
+                if (name && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(name)
+              } else {
+                typedSignals[iso].business += demandBoost
+                if (name && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(name)
+              }
+            }
+          } else {
+            status.PriceLabs = 'error'
+          }
+        } else status.PriceLabs = 'missing_key'
+
+        const globalSignals: Record<string, { worldAlerts: number; labels: string[] }> = {}
+
+        const globalNewsRes = await fetch(
+          `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
+            'concert OR festival OR match OR football OR summit OR conference OR expo',
+          )}&mode=ArtList&format=json&maxrecords=120&sort=DateDesc`,
+        )
+        const globalNewsData = (await globalNewsRes.json()) as { articles?: GdeltArticle[] }
+        ;(globalNewsData.articles ?? []).forEach((article) => {
+          if (!article.seendate) return
+          const iso = `${article.seendate.slice(0, 4)}-${article.seendate.slice(4, 6)}-${article.seendate.slice(6, 8)}`
+          if (!globalSignals[iso]) globalSignals[iso] = { worldAlerts: 0, labels: [] }
+          globalSignals[iso].worldAlerts += 1
+          if (article.title && globalSignals[iso].labels.length < 3) globalSignals[iso].labels.push(article.title)
+        })
+
+        const quakesRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
+        const quakesData = (await quakesRes.json()) as { features?: EarthquakeFeature[] }
+        ;(quakesData.features ?? []).forEach((feature) => {
+          const time = feature.properties?.time
+          if (!time) return
+          const date = new Date(time)
+          const iso = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(
+            date.getUTCDate(),
+          ).padStart(2, '0')}`
+          if (!globalSignals[iso]) globalSignals[iso] = { worldAlerts: 0, labels: [] }
+          globalSignals[iso].worldAlerts += 1
+          const mag = feature.properties?.mag ?? 0
+          const place = feature.properties?.place ?? 'zone inconnue'
+          if (mag >= 4 && globalSignals[iso].labels.length < 5) {
+            globalSignals[iso].labels.push(`Alerte mondiale: seisme M${mag.toFixed(1)} (${place})`)
+          }
+        })
+
+        setNewsByDate(dateCounts)
+        setConflictByDate(conflictCounts)
+        setNewsHotspotScore(total)
+        setLiveSignalsByDate(typedSignals)
+        setGlobalLiveByDate(globalSignals)
+        setProviderStatus(status)
+      } catch {
+        setNewsByDate({})
+        setConflictByDate({})
+        setNewsHotspotScore(0)
+        setLiveSignalsByDate({})
+        setGlobalLiveByDate({})
+        setProviderStatus(status)
+      }
+    }
+
+    fetchLiveSources()
+  }, [locationContext.city, locationContext.country, locationContext.countryCode, targetPosition, refreshTick, rangeEnd, rangeStart])
+
+  const monthlyCalendar = useMemo(() => {
+    const seed = Math.abs(Math.round((targetPosition?.[0] ?? selectedCity?.lat ?? 48.8566) * 100))
+    const startMonthDate = new Date()
+    startMonthDate.setDate(1)
+    return Array.from({ length: 60 }, (_, monthOffset) => {
+      const monthDate = new Date(startMonthDate.getFullYear(), startMonthDate.getMonth() + monthOffset, 1)
+      const year = monthDate.getFullYear()
+      const monthIndex = monthDate.getMonth()
+      const firstDay = new Date(year, monthIndex, 1)
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+      const jsStartDay = firstDay.getDay() // 0 Sunday
+      const startOffset = jsStartDay === 0 ? 6 : jsStartDay - 1 // Monday first
+      const monthName = `${monthFormatter.format(firstDay).charAt(0).toUpperCase() + monthFormatter.format(firstDay).slice(1)} ${year}`
+      const cells: Array<{ day: number; isoDate: string; level: 'low' | 'medium' | 'high'; event: string } | null> = []
+
+      for (let i = 0; i < startOffset; i += 1) cells.push(null)
+
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = new Date(year, monthIndex, day)
+        const dow = date.getDay()
+        const isoDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        const isWeekend = dow === 0 || dow === 6
+        const holiday = liveHolidays.find((h) => h.date === isoDate)
+        const weather = weatherByDate[isoDate]
+        const liveNewsCount = newsByDate[isoDate] ?? 0
+        const liveConflictCount = conflictByDate[isoDate] ?? 0
+        const liveSignals = liveSignalsByDate[isoDate] ?? {
+          concerts: 0,
+          sports: 0,
+          business: 0,
+          sources: [],
+          concertLabels: [],
+          sportsLabels: [],
+          businessLabels: [],
+        }
+        const hasPriceLabsSignal = liveSignals.sources.includes('PriceLabs')
+        const globalLive = globalLiveByDate[isoDate] ?? { worldAlerts: 0, labels: [] }
+        const severeWeather = weather ? [95, 96, 99, 65, 66, 67].includes(weather.weatherCode) : false
+        const heatWave = weather ? weather.tempMax >= 32 : false
+        const isPeakWeekend = isWeekend && ((seed + day + monthIndex) % 3 === 0)
+        const isWeekendLift = isWeekend && ((seed + day + monthIndex) % 2 === 0)
+        const isFriday = dow === 5
+        const isMonday = dow === 1
+        const isSummer = [5, 6, 7, 8].includes(monthIndex)
+        const isWinter = [11, 0, 1, 2].includes(monthIndex)
+        const schoolHolidayRange = frenchSchoolHolidayRanges.find((range) => isoDate >= range.start && isoDate <= range.end)
+        const activeCityKey = (selectedCity?.name || locationContext.city || '').toLowerCase()
+        const activeLocationKey = `${activeLocationLabel} ${locationContext.city} ${locationContext.country}`.toLowerCase()
+        const isCoastalMarket = includesAny(activeLocationKey, COASTAL_MARKERS)
+        const isSkiMarket = includesAny(activeLocationKey, SKI_MARKERS)
+        const namedEvent = namedEventRanges.find(
+          (range) =>
+            isoDate >= range.start &&
+            isoDate <= range.end &&
+            (!range.city || activeCityKey.includes(range.city) || activeLocationLabel.toLowerCase().includes(range.city)),
+        )
+        const schoolHolidayFromPublicHoliday = holiday
+          ? /(school|vacances scolaires|spring break|autumn break|winter break|summer break)/i.test(
+              `${holiday.localName} ${holiday.name}`,
+            )
+          : false
+        const hasSchoolHoliday = Boolean(schoolHolidayRange) || schoolHolidayFromPublicHoliday
+        const previousIso = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(Math.max(1, day - 1)).padStart(2, '0')}`
+        const nextIso = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(Math.min(daysInMonth, day + 1)).padStart(2, '0')}`
+        const previousHoliday = liveHolidays.find((h) => h.date === previousIso)
+        const nextHoliday = liveHolidays.find((h) => h.date === nextIso)
+        const isLongWeekend = (isFriday && nextHoliday) || (isMonday && previousHoliday)
+
+        const reasons: string[] = []
+        let bump = 2
+        let structuralBump = 0
+        let eventDrivenBump = 0
+
+        if (holiday) {
+          reasons.push(`Jour ferie officiel: ${holiday.localName || holiday.name}`)
+          bump += 8
+          eventDrivenBump += 8
+        }
+        if (hasPriceLabsSignal) {
+          reasons.push('Signal PriceLabs live: ajustement prioritaire applique')
+          bump += 4
+          eventDrivenBump += 4
+        }
+        if (namedEvent) {
+          reasons.push(`Evenement confirme: ${namedEvent.label}`)
+          bump += 7
+          eventDrivenBump += 7
+        }
+        if (hasSchoolHoliday) {
+          reasons.push(`Vacances scolaires actives: ${schoolHolidayRange?.label ?? 'periode scolaire active'}`)
+          bump += 5
+          structuralBump += 5
+        }
+        if (isLongWeekend) {
+          reasons.push('Week-end de 3 jours: forte acceleration de la demande')
+          bump += 8
+          eventDrivenBump += 8
+        }
+        if (isCoastalMarket && isSummer) {
+          reasons.push('Bord de mer en ete: pic massif de reservations (ADR et occupation en forte hausse)')
+          bump += isWeekend ? 9 : 6
+          structuralBump += isWeekend ? 9 : 6
+        }
+        if (isSkiMarket && isWinter) {
+          reasons.push('Station de ski en hiver: occupation, sejours courts et ADR explosent')
+          bump += hasSchoolHoliday || isWeekend ? 10 : 6
+          structuralBump += hasSchoolHoliday || isWeekend ? 10 : 6
+        }
+        if (liveSignals.concerts >= 3) {
+          reasons.push(
+            liveSignals.concertLabels[0]
+              ? `Concert confirme: ${liveSignals.concertLabels[0]} (${liveSignals.concerts} signaux)`
+              : `Concerts / live shows detectes (${liveSignals.concerts} signaux)`,
+          )
+          bump += 7
+          eventDrivenBump += 7
+        }
+        if (liveSignals.sports >= 3) {
+          reasons.push(
+            liveSignals.sportsLabels[0]
+              ? `${liveSignals.sportsLabels[0]} (${liveSignals.sports} signaux matchs)`
+              : `Evenements sportifs majeurs detectes (F1, rugby, tennis, football, NFL...) - ${liveSignals.sports} signaux`,
+          )
+          bump += 6
+          eventDrivenBump += 6
+        }
+        if (liveSignals.business >= 3) {
+          reasons.push(
+            liveSignals.businessLabels[0]
+              ? `Salon / conference: ${liveSignals.businessLabels[0]} (${liveSignals.business} signaux)`
+              : `Salon / conference en ville (${liveSignals.business} signaux)`,
+          )
+          bump += 4
+          eventDrivenBump += 4
+        }
+        if (liveNewsCount >= 8) {
+          reasons.push(`Activite locale tres forte: ${liveNewsCount} articles detectes ce jour`)
+          bump += 5
+          eventDrivenBump += 5
+        } else if (liveNewsCount >= 4) {
+          reasons.push(`Activite locale en hausse: ${liveNewsCount} articles detectes ce jour`)
+          bump += 3
+          eventDrivenBump += 3
+        }
+        if (liveConflictCount >= 6) {
+          reasons.push(`Risque geopolitique eleve: ${liveConflictCount} signaux conflit (demande touristique en baisse)`)
+          bump -= 14
+        } else if (liveConflictCount >= 3) {
+          reasons.push(`Risque geopolitique modere: ${liveConflictCount} signaux conflit (demande sous pression)`)
+          bump -= 8
+        } else if (liveConflictCount >= 1) {
+          reasons.push(`Tension geopolitique detectee: ${liveConflictCount} signal`)
+          bump -= 3
+        }
+        if (severeWeather) {
+          reasons.push(
+            `Alerte meteo locale: code ${weather?.weatherCode ?? 'N/A'} / max ${Math.round(weather?.tempMax ?? 0)}C`,
+          )
+          bump += 2
+          eventDrivenBump += 2
+        } else if (heatWave) {
+          reasons.push(`Chaleur soutenue: ${Math.round(weather?.tempMax ?? 0)}C max`)
+          bump += 2
+          structuralBump += 2
+        }
+        if (isSkiMarket && isWinter && weather && weather.tempMax <= 1) {
+          reasons.push(`Conditions froides favorables au ski: ${Math.round(weather.tempMax)}C max`)
+          bump += 4
+          structuralBump += 4
+        }
+        if (isPeakWeekend || isWeekendLift) {
+          if (namedEvent) {
+            reasons.push(`Week-end impacte par: ${namedEvent.label}`)
+            bump += 4
+            eventDrivenBump += 4
+          } else if (liveSignals.concertLabels[0]) {
+            reasons.push(`Week-end impacte par: ${liveSignals.concertLabels[0]}`)
+            bump += 4
+            eventDrivenBump += 4
+          } else if (liveSignals.sportsLabels[0]) {
+            reasons.push(`Week-end impacte par: ${liveSignals.sportsLabels[0]}`)
+            bump += 4
+            eventDrivenBump += 4
+          } else {
+            reasons.push('Effet week-end (hausse naturelle de la demande)')
+            bump += 3
+            structuralBump += 3
+          }
+        }
+        if (newsHotspotScore >= 60 && (seed + day + monthIndex) % 5 === 0) {
+          reasons.push(`Contexte local global tres dynamique (${newsHotspotScore} articles recents)`)
+          bump += 2
+          eventDrivenBump += 2
+        }
+        if (globalLive.worldAlerts >= 10) {
+          reasons.push(
+            globalLive.labels[0]
+              ? `Signal monde en direct: ${globalLive.labels[0]}`
+              : `Signal monde en direct: ${globalLive.worldAlerts} activites detectees`,
+          )
+          bump += 3
+          eventDrivenBump += 3
+        }
+
+        const sourceCount = new Set(liveSignals.sources).size
+        const dynamicMultiplier = pricingMode === 'ultra' ? 1.35 + Math.min(0.55, sourceCount * 0.08) : 1
+        let cappedBump =
+          pricingMode === 'ultra'
+            ? Math.max(-35, Math.min(55, Math.round(bump * dynamicMultiplier)))
+            : Math.max(-20, Math.min(25, bump))
+        // Guardrails: structural seasonality alone should not become ultra-red.
+        if (pricingMode === 'ultra' && eventDrivenBump < 8) cappedBump = Math.min(cappedBump, 28)
+        if (pricingMode === 'ultra' && eventDrivenBump < 5 && structuralBump >= 10) cappedBump = Math.min(cappedBump, 24)
+        const level: 'low' | 'medium' | 'high' =
+          cappedBump >= (pricingMode === 'ultra' ? 18 : 12)
+            ? 'high'
+            : cappedBump >= (pricingMode === 'ultra' ? 10 : 7)
+              ? 'medium'
+              : 'low'
+        const reasonsLabel = reasons.length > 0 ? reasons.join(' | ') : 'Demande standard'
+        const sourceLabel = liveSignals.sources.length > 0 ? ` [sources: ${liveSignals.sources.join(', ')}]` : ''
+        const actionLabel = cappedBump >= 0 ? 'Augmentez vos prix de' : 'Baissez vos prix de'
+        const event = `${reasonsLabel} - ${activeLocationAddress} - ${actionLabel} ${Math.abs(cappedBump)}%${sourceLabel}`
+        cells.push({ day, isoDate, level, event })
+      }
+
+      return {
+        key: `${year}-${monthIndex}`,
+        monthName,
+        cells,
+      }
+    })
+  }, [
+    activeLocationAddress,
+    activeLocationLabel,
+    liveHolidays,
+    liveSignalsByDate,
+    monthFormatter,
+    newsByDate,
+    conflictByDate,
+    newsHotspotScore,
+    pricingMode,
+    globalLiveByDate,
+    selectedCity,
+    targetPosition,
+    weatherByDate,
+  ])
+  const displayedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
+  const rangeFilteredMonths = monthlyCalendar
+    .map((month) => ({
+      ...month,
+      cells: month.cells.map((cell) => {
+        if (!cell) return null
+        if (cell.isoDate < rangeStart || cell.isoDate > rangeEnd) return null
+        return cell
+      }),
+    }))
+    .filter((month) => month.cells.some(Boolean))
+  const monthlyWatchSummary = useMemo(() => {
+    const cells = displayedMonth.cells.filter(
+      (cell): cell is { day: number; isoDate: string; level: 'low' | 'medium' | 'high'; event: string } => Boolean(cell),
+    )
+    const highDays = cells.filter((cell) => cell.level === 'high').length
+    const mediumDays = cells.filter((cell) => cell.level === 'medium').length
+    const lowDays = cells.filter((cell) => cell.level === 'low').length
+    const hasConcert = cells.some((cell) => cell.event.toLowerCase().includes('concert'))
+    const hasSports = cells.some(
+      (cell) =>
+        cell.event.toLowerCase().includes('match') ||
+        cell.event.toLowerCase().includes('sport') ||
+        cell.event.toLowerCase().includes('f1'),
+    )
+    const hasSchoolHoliday = cells.some((cell) => cell.event.toLowerCase().includes('vacances scolaires'))
+    const hasConflictRisk = cells.some((cell) => cell.event.toLowerCase().includes('geopolitique'))
+    const hasStrongWeather = cells.some(
+      (cell) => cell.event.toLowerCase().includes('alerte meteo') || cell.event.toLowerCase().includes('chaleur'),
+    )
+
+    const lines: string[] = []
+    lines.push(
+      `Pour ${displayedMonth.monthName} a ${displayedAnalyzedAddress}, la pression de demande est estimee a ${highDays} jours forts, ${mediumDays} jours en hausse et ${lowDays} jours standards.`,
+    )
+    if (hasSchoolHoliday) {
+      lines.push('Les vacances scolaires impactent la demande sur une partie du mois, avec des effets plus marqués autour des week-ends.')
+    }
+    if (hasConcert || hasSports) {
+      lines.push(
+        `Des signaux evenementiels sont detectes (${hasConcert ? 'concerts/shows' : ''}${hasConcert && hasSports ? ' et ' : ''}${hasSports ? 'sports majeurs' : ''}), ce qui peut accelerer les réservations de dernière minute.`,
+      )
+    }
+    if (hasStrongWeather) {
+      lines.push('La météo en temps réel influence certains jours (chaleur/alerte), ce qui ajuste le niveau de prix recommandé.')
+    }
+    if (hasConflictRisk) {
+      lines.push('Un risque géopolitique est détecté sur certains jours: la recommandation privilégie la prudence tarifaire sur ces dates.')
+    }
+    lines.push(
+      'Conseil: conservez une stratégie dynamique, avec hausses ciblées sur les pics confirmés et ajustements modérés sur les jours sans convergence forte de signaux.',
+    )
+    return lines
+  }, [displayedMonth, displayedAnalyzedAddress])
+
+  const onSearch = async (e: FormEvent) => {
+    e.preventDefault()
+    const value = query.trim()
+    if (!value) return
+
+    const coords = value.split(',').map((v) => Number(v.trim()))
+    const hasCoordSearch = coords.length === 2 && !Number.isNaN(coords[0]) && !Number.isNaN(coords[1])
+    const queryLooksLikePreciseAddress =
+      /\d/.test(value) ||
+      /(rue|avenue|boulevard|street|road|lane|chemin|impasse|place)/i.test(value)
+    if (hasCoordSearch) {
+      setTargetPosition([coords[0], coords[1]])
+      setSearchError('')
+      setSelectedListingId(null)
+      setSelectedCityId(null)
+      setIsBroadCityAnalysis(false)
+      setSearchedLabel(`${coords[0]}, ${coords[1]}`)
+      setLocationContext((prev) => ({ ...prev, city: `${coords[0]}, ${coords[1]}` }))
+      return
+    }
+
+    // Fallback local: match known cities/listings first
+    const localMatch = cities.find(
+      (city) =>
+        city.name.toLowerCase().includes(value.toLowerCase()) ||
+        city.address.toLowerCase().includes(value.toLowerCase()),
+    )
+    if (localMatch) {
+      setTargetPosition([localMatch.lat, localMatch.lng])
+      setSearchError('')
+      setSelectedListingId(null)
+      setSelectedCityId(localMatch.id)
+      setIsBroadCityAnalysis(!queryLooksLikePreciseAddress && value.toLowerCase() === localMatch.name.toLowerCase())
+      setSearchedLabel(localMatch.name)
+      const code = countryToCode[localMatch.country.toLowerCase()] ?? 'FR'
+      setLocationContext({ city: localMatch.name, country: localMatch.country, countryCode: code })
+      return
+    }
+
+    setIsSearching(true)
+    setSearchError('')
+    try {
+      // Provider 1: Nominatim (OSM)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(
+          value,
+        )}`,
+      )
+      const results = (await response.json()) as Array<{
+        lat: string
+        lon: string
+        address?: { city?: string; town?: string; village?: string; country?: string }
+      }>
+      if (results.length > 0) {
+        const lat = Number(results[0].lat)
+        const lng = Number(results[0].lon)
+        setTargetPosition([lat, lng])
+        setSearchedLabel(value)
+        setSelectedListingId(null)
+        setSelectedCityId(null)
+        const city = results[0].address?.city || results[0].address?.town || results[0].address?.village || value
+        const country = results[0].address?.country || 'France'
+        const code = countryToCode[country.toLowerCase()] ?? 'FR'
+        setLocationContext({ city, country, countryCode: code })
+        setIsBroadCityAnalysis(!queryLooksLikePreciseAddress && value.toLowerCase() === city.toLowerCase())
+        return
+      }
+
+      // Provider 2 fallback: maps.co (Nominatim mirror)
+      const fallbackResponse = await fetch(
+        `https://geocode.maps.co/search?q=${encodeURIComponent(value)}&limit=1`,
+      )
+      const fallbackResults = (await fallbackResponse.json()) as Array<{ lat: string; lon: string }>
+      if (fallbackResults.length > 0) {
+        const lat = Number(fallbackResults[0].lat)
+        const lng = Number(fallbackResults[0].lon)
+        setTargetPosition([lat, lng])
+        setSearchedLabel(value)
+        setSelectedListingId(null)
+        setSelectedCityId(null)
+        setLocationContext((prev) => ({ ...prev, city: value }))
+        setIsBroadCityAnalysis(!queryLooksLikePreciseAddress)
+        return
+      }
+
+      setSearchError(copy.mapError)
+    } catch {
+      setSearchError(copy.mapError)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const onCalendarDayEnter = (date: string, event: string) => {
+    if (hoverClearTimer.current) {
+      clearTimeout(hoverClearTimer.current)
+      hoverClearTimer.current = null
+    }
+    setHoveredDayEvent({ date, event })
+  }
+
+  const onCalendarDayLeave = () => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current)
+    hoverClearTimer.current = setTimeout(() => setHoveredDayEvent(null), 120)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onConnectionsUpdated = () => setConnectedListVersion((v) => v + 1)
+    window.addEventListener('sm-connections-updated', onConnectionsUpdated)
+    return () => window.removeEventListener('sm-connections-updated', onConnectionsUpdated)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const changed = await enrichReservationAccessAddressesFromIcal()
+      if (!cancelled && changed) setConnectedListVersion((v) => v + 1)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [connectedListVersion])
 
   return (
     <section className="min-h-screen flex-1 bg-white px-4 py-6 sm:px-6">
@@ -104,42 +1697,93 @@ export function DashboardIntelPage() {
       <div className="mx-auto mt-6 max-w-5xl">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTabIntel}</h1>
         <div className="mt-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-pm-sm sm:p-5">
-          <label className="mb-2 block text-sm font-semibold text-zinc-800">{copy.searchLabel}</label>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-          />
+          <form onSubmit={onSearch}>
+            <label className="mb-2 block text-sm font-semibold text-zinc-800">{copy.searchLabel}</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={copy.searchPlaceholder}
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              />
+              <button
+                type="submit"
+                disabled={isSearching}
+                className="rounded-xl bg-[#4a86f7] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-60"
+              >
+                {copy.searchAction}
+              </button>
+            </div>
+          </form>
 
           <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
-            <div className="relative">
-              <img
-                src="https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/europe_gebco_lrg.jpg"
-                alt="Carte interactive de l Europe"
-                className="h-[320px] w-full object-cover sm:h-[440px]"
-                loading="lazy"
-                referrerPolicy="no-referrer"
+            <MapContainer
+              center={[48.5, 8.5]}
+              zoom={2}
+              scrollWheelZoom
+              minZoom={2}
+              maxZoom={16}
+              className="europe-map h-[320px] w-full sm:h-[440px]"
+            >
+              <TileLayer
+                attribution={
+                  useSatelliteFallback
+                    ? '&copy; OpenStreetMap contributors'
+                    : '&copy; NASA Earth Observatory'
+                }
+                url={
+                  useSatelliteFallback
+                    ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                    : 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg'
+                }
+                className="europe-night-tiles"
+                eventHandlers={{
+                  tileerror: () => {
+                    setUseSatelliteFallback(true)
+                  },
+                }}
               />
-              {filteredCities.map((city) => (
-                <button
+              <FlyToLocation target={targetPosition} />
+              <MapResizer />
+              {cities.map((city) => (
+                <CircleMarker
                   key={city.id}
-                  type="button"
-                  onClick={() => setSelectedCityId(city.id)}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${
-                    selectedCity?.id === city.id
-                      ? 'border-blue-900 bg-blue-600'
-                      : 'border-white bg-[#4a86f7]'
-                  } h-4 w-4 shadow-[0_0_0_4px_rgba(74,134,247,0.22)] transition`}
-                  style={{ left: `${city.x}%`, top: `${city.y}%` }}
-                  aria-label={city.name}
-                />
+                  center={[city.lat, city.lng]}
+                  radius={selectedCity?.id === city.id ? 6 : 4}
+                  pathOptions={{
+                    color: selectedCity?.id === city.id ? '#1e3a8a' : '#dbeafe',
+                    weight: 1.5,
+                    fillColor: '#4a86f7',
+                    fillOpacity: selectedCity?.id === city.id ? 0.9 : 0.55,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedListingId(null)
+                      setSelectedCityId(city.id)
+                      setIsBroadCityAnalysis(true)
+                      setTargetPosition([city.lat, city.lng])
+                      setSearchedLabel(city.name)
+                      const code = countryToCode[city.country.toLowerCase()] ?? 'FR'
+                      setLocationContext({ city: city.name, country: city.country, countryCode: code })
+                    },
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -2]} opacity={0.95}>
+                    {city.name}
+                  </Tooltip>
+                  <Popup>
+                    <strong>{city.name}</strong>
+                    <br />
+                    {city.address}
+                  </Popup>
+                </CircleMarker>
               ))}
-            </div>
+            </MapContainer>
           </div>
 
           <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3.5 text-sm">
+            {searchError ? <p className="mb-2 font-medium text-rose-600">{searchError}</p> : null}
             {selectedCity ? (
               <div className="space-y-1 text-zinc-700">
                 <p className="font-semibold text-zinc-900">
@@ -156,6 +1800,208 @@ export function DashboardIntelPage() {
               <p className="text-zinc-600">{copy.clickHint}</p>
             )}
           </div>
+
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3.5">
+            <h3 className="text-sm font-bold text-zinc-900">{copy.myListingsTitle}</h3>
+            <p className="mt-1 text-xs text-zinc-600">{copy.myListingsSubtitle}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setListingsPanelTab('connected')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  listingsPanelTab === 'connected' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {copy.myListingsTabConnected}
+              </button>
+              <button
+                type="button"
+                onClick={() => setListingsPanelTab('search')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  listingsPanelTab === 'search' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {copy.myListingsTabSearch}
+              </button>
+            </div>
+            {listingsPanelTab === 'search' ? (
+              <p className="mt-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-600">{copy.myListingsSearchHint}</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {myListings.length > 0 ? (
+                  myListings.map((listing) => {
+                    const platformLabel =
+                      listing.platform === 'airbnb'
+                        ? copy.platformAirbnb
+                        : listing.platform === 'booking'
+                          ? copy.platformBooking
+                          : copy.platformChannel
+                    return (
+                      <article
+                        key={listing.id}
+                        onClick={() => {
+                          setSelectedListingId(listing.id)
+                          setIsBroadCityAnalysis(false)
+                          const geoHint = listing.addressResolved ? listing.address : listing.name
+                          setSearchedLabel(listing.addressResolved ? listing.address : '')
+                          const cityMatch = cities.find((city) => geoHint.toLowerCase().includes(city.name.toLowerCase()))
+                          if (cityMatch) {
+                            setSelectedCityId(cityMatch.id)
+                            setTargetPosition([cityMatch.lat, cityMatch.lng])
+                            const code = countryToCode[cityMatch.country.toLowerCase()] ?? 'FR'
+                            setLocationContext({ city: cityMatch.name, country: cityMatch.country, countryCode: code })
+                          } else {
+                            setSelectedCityId(null)
+                          }
+                        }}
+                        className={`cursor-pointer rounded-xl border bg-white px-3 py-2.5 text-sm text-zinc-700 transition ${
+                          selectedListingId === listing.id ? 'border-[#4a86f7] ring-2 ring-[#4a86f7]/25' : 'border-zinc-200 hover:border-zinc-300'
+                        }`}
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600">
+                            {platformLabel}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-zinc-900">{listing.name}</p>
+                        <p className="text-zinc-600">{listing.address}</p>
+                      </article>
+                    )
+                  })
+                ) : (
+                  <p className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-500">
+                    {copy.myListingsEmpty}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3.5">
+            <h3 className="text-sm font-bold text-zinc-900">{copy.calendarTitle}</h3>
+            <p className="mt-1 text-xs text-zinc-600">{copy.calendarSubtitle}</p>
+            <p className="mt-1 text-xs font-semibold text-zinc-800">Adresse analysee: {displayedAnalyzedAddress}</p>
+            {analysisPrecisionMessage ? <p className="mt-1 text-[11px] text-zinc-600">{analysisPrecisionMessage}</p> : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCalendarViewMode('month')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'month' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
+              >
+                Mois
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalendarViewMode('custom')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'custom' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
+              >
+                Date personnalisee
+              </button>
+              {calendarViewMode === 'month' ? (
+                <select
+                  value={selectedMonthIndex}
+                  onChange={(e) => setSelectedMonthIndex(Number(e.target.value))}
+                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800"
+                >
+                  {monthlyCalendar.map((month, idx) => (
+                    <option key={month.key} value={idx}>
+                      {month.monthName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
+                  />
+                  <input
+                    type="date"
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-medium">
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.legendLow}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />{copy.legendMedium}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />{copy.legendHigh}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-zinc-600">{copy.hoverHint}</p>
+            <div className="mt-2 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] text-zinc-700">
+              {hoveredDayEvent ? (
+                <span>
+                  <span className="font-semibold text-zinc-900">{hoveredDayEvent.date}</span> - {hoveredDayEvent.event}
+                </span>
+              ) : (
+                <span className="text-zinc-500">{copy.hoverHint}</span>
+              )}
+            </div>
+
+            {calendarViewMode === 'month' ? (
+              <div className="mt-3 w-full rounded-xl border border-zinc-200 bg-white p-3">
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-zinc-500">
+                  {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((w) => (
+                    <div key={w} className="py-1">{w}</div>
+                  ))}
+                </div>
+                <div className="mt-1 grid grid-cols-7 gap-1">
+                  {displayedMonth.cells.map((cell, idx) => (
+                    <div key={`${displayedMonth.key}-${idx}`} className="h-8">
+                      {cell ? (
+                        <button
+                          type="button"
+                          onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
+                          onMouseLeave={onCalendarDayLeave}
+                          className={`h-full w-full rounded-md text-[9px] font-bold text-white ${
+                            cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                        >
+                          {cell.day}
+                        </button>
+                      ) : (
+                        <div className="h-full w-full" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {rangeFilteredMonths.map((month) => (
+                  <div key={month.key} className="w-full rounded-xl border border-zinc-200 bg-white p-3">
+                    <p className="px-1 pb-2 text-xs font-semibold text-zinc-800">{month.monthName}</p>
+                    <div className="grid grid-cols-7 gap-1">
+                      {month.cells.map((cell, idx) => (
+                        <div key={`${month.key}-${idx}`} className="h-8">
+                          {cell ? (
+                            <button
+                              type="button"
+                              onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
+                              onMouseLeave={onCalendarDayLeave}
+                              className={`h-full w-full rounded-md text-[9px] font-bold text-white ${
+                                cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`}
+                            >
+                              {cell.day}
+                            </button>
+                          ) : (
+                            <div className="h-full w-full" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </section>

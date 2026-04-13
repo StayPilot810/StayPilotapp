@@ -123,3 +123,12 @@ body {
   display: block;
   overflow: visible;
 }
+
+/* Veille informationnelle: rendu satellite de nuit, centré Europe */
+.europe-map {
+  background: #070b18;
+}
+
+.leaflet-tile.europe-night-tiles {
+  filter: brightness(0.95) contrast(1.06) saturate(1.18) hue-rotate(4deg);
+}

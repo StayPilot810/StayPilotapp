@@ -2,6 +2,8 @@ import { CalendarDays, Filter } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { Locale } from '../i18n/navbar'
 import { useLanguage } from '../hooks/useLanguage'
+import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { isTestModeEnabled } from '../utils/testMode'
 import {
   BookingReservationPopover,
   type CalendarReservationDetail,
@@ -262,16 +264,6 @@ const MOCK_BOOKINGS: CalendarReservationDetail[] = [
   },
 ]
 
-const APARTMENT_COUNT = 4
-
-const DEMO_STATS = {
-  occupancyRate: '69%',
-  totalBookings: 16,
-  bookedNights: '83 / 120',
-  airbnbCount: 8,
-  bookingCount: 8,
-} as const
-
 type PeriodTab = 'this' | 'last' | 'next'
 type ModalKind = 'option' | 'action'
 
@@ -301,6 +293,8 @@ export function BookingCalendarOverview() {
   const [periodTab, setPeriodTab] = useState<PeriodTab>('this')
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [apartmentFilter, setApartmentFilter] = useState<'all' | string>('all')
+  const [rangeStartDay, setRangeStartDay] = useState<number | null>(null)
+  const [rangeEndDay, setRangeEndDay] = useState<number | null>(null)
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [hoverPop, setHoverPop] = useState<null | {
     booking: CalendarReservationDetail
@@ -309,6 +303,50 @@ export function BookingCalendarOverview() {
   const hidePopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const bcp47 = BCP47[locale]
+
+  const connectedApartments = useMemo(() => {
+    const fromConnected = getConnectedApartmentsFromStorage().map((apt) => ({ id: apt.id, name: apt.name }))
+    if (fromConnected.length > 0) return fromConnected
+    if (isTestModeEnabled()) {
+      return [
+        { id: 'test-1', name: 'Logement test 1' },
+        { id: 'test-2', name: 'Logement test 2' },
+      ]
+    }
+    return []
+  }, [t.apartmentLabel])
+
+  const apartmentEntries = useMemo(
+    () => connectedApartments.map((apt, index) => ({ ...apt, index })),
+    [connectedApartments],
+  )
+  const visibleApartmentEntries = useMemo(() => {
+    if (apartmentFilter === 'all') return apartmentEntries
+    return apartmentEntries.filter((apt) => String(apt.index + 1) === apartmentFilter)
+  }, [apartmentEntries, apartmentFilter])
+  const hasConnectedListings = apartmentEntries.length > 0
+  const apartmentCount = apartmentEntries.length
+  const availableBookings = useMemo(() => MOCK_BOOKINGS.filter((b) => b.apt < apartmentCount), [apartmentCount])
+  const visibleBookings = useMemo(() => {
+    const byApartment =
+      apartmentFilter === 'all' ? availableBookings : availableBookings.filter((b) => b.apt === Number(apartmentFilter) - 1)
+    if (rangeStartDay == null || rangeEndDay == null) return byApartment
+    return byApartment.filter((b) => b.end >= rangeStartDay && b.start <= rangeEndDay)
+  }, [apartmentFilter, availableBookings, rangeStartDay, rangeEndDay])
+  const computedStats = useMemo(() => {
+    const totalSlots = visibleApartmentEntries.length * DAYS_IN_MONTH
+    const bookedNights = visibleBookings.reduce((sum, b) => sum + b.nights, 0)
+    const occupancyRate = totalSlots > 0 ? `${Math.round((bookedNights / totalSlots) * 100)}%` : '0%'
+    const airbnbCount = visibleBookings.filter((b) => b.channel === 'airbnb').length
+    const bookingCount = visibleBookings.filter((b) => b.channel === 'booking').length
+    return {
+      occupancyRate,
+      totalBookings: visibleBookings.length,
+      bookedNights: `${bookedNights} / ${totalSlots}`,
+      airbnbCount,
+      bookingCount,
+    }
+  }, [visibleApartmentEntries.length, visibleBookings])
 
   const closeModal = useCallback(() => setModal(null), [])
 
@@ -428,12 +466,7 @@ export function BookingCalendarOverview() {
   ]
 
   const onApartmentChange = (value: string) => {
-    if (value === 'all') {
-      setApartmentFilter('all')
-      return
-    }
-    setModal('option')
-    setApartmentFilter('all')
+    setApartmentFilter(value === 'all' ? 'all' : value)
   }
 
   const onPeriodTabClick = (id: PeriodTab) => {
@@ -444,10 +477,26 @@ export function BookingCalendarOverview() {
     showDemoAction()
   }
 
-  const onMiniCalendarDayClick = () => {
+  const onMiniCalendarDayClick = (day: number) => {
+    if (rangeStartDay == null || (rangeStartDay != null && rangeEndDay != null)) {
+      setRangeStartDay(day)
+      setRangeEndDay(null)
+      return
+    }
+    const start = Math.min(rangeStartDay, day)
+    const end = Math.max(rangeStartDay, day)
+    setRangeStartDay(start)
+    setRangeEndDay(end)
     setCalendarOpen(false)
-    showDemoAction()
   }
+
+  const clearDateRange = () => {
+    setRangeStartDay(null)
+    setRangeEndDay(null)
+    setCalendarOpen(false)
+  }
+
+  const dateRangeLabel = rangeStartDay != null && rangeEndDay != null ? `${t.customDates}: ${rangeStartDay} - ${rangeEndDay}` : t.customDates
 
   const modalMessage = modal === 'option' ? t.demoUnavailableOption : t.demoUnavailableAction
 
@@ -554,7 +603,7 @@ export function BookingCalendarOverview() {
                 }`}
               >
                 <CalendarDays className="h-4 w-4 shrink-0" strokeWidth={2} />
-                {t.customDates}
+                {dateRangeLabel}
               </button>
               {calendarOpen ? (
                 <div
@@ -576,17 +625,31 @@ export function BookingCalendarOverview() {
                     ))}
                     {Array.from({ length: DAYS_IN_MONTH }, (_, i) => {
                       const day = i + 1
+                      const isSelectedRange = rangeStartDay != null && rangeEndDay != null && day >= rangeStartDay && day <= rangeEndDay
                       return (
                         <button
                           key={day}
                           type="button"
-                          onClick={onMiniCalendarDayClick}
-                          className="flex min-h-[44px] w-full items-center justify-center rounded-lg text-xs font-semibold text-[#3f3f46] transition-colors hover:bg-[#e8f0fe] hover:text-[#1a1a1a] sm:aspect-square sm:min-h-0"
+                          onClick={() => onMiniCalendarDayClick(day)}
+                          className={`flex min-h-[44px] w-full items-center justify-center rounded-lg text-xs font-semibold transition-colors sm:aspect-square sm:min-h-0 ${
+                            isSelectedRange
+                              ? 'bg-[#4f86f7] text-white hover:bg-[#3f78eb]'
+                              : 'text-[#3f3f46] hover:bg-[#e8f0fe] hover:text-[#1a1a1a]'
+                          }`}
                         >
                           {day}
                         </button>
                       )
                     })}
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={clearDateRange}
+                      className="rounded-md px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-100"
+                    >
+                      Reinitialiser
+                    </button>
                   </div>
                 </div>
               ) : null}
@@ -600,9 +663,9 @@ export function BookingCalendarOverview() {
               onChange={(e) => onApartmentChange(e.target.value)}
             >
               <option value="all">{t.allApartments}</option>
-              {Array.from({ length: APARTMENT_COUNT }, (_, i) => (
-                <option key={i} value={String(i + 1)}>
-                  {apartmentName(t.apartmentLabel, i + 1)}
+              {connectedApartments.map((apt, i) => (
+                <option key={apt.id} value={String(i + 1)}>
+                  {apt.name}
                 </option>
               ))}
             </select>
@@ -616,6 +679,19 @@ export function BookingCalendarOverview() {
           </div>
         </div>
 
+        {!hasConnectedListings ? (
+          <div className="px-4 py-8 sm:px-6 sm:py-10">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-5 text-center sm:px-6 sm:py-6">
+              <p className="text-sm font-semibold text-zinc-900">
+                Veuillez connecter vos logements pour afficher le calendrier des reservations et l'analyse detaillee.
+              </p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Une fois connectes, vous retrouverez ici la meme vue interactive que sur la page d accueil.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="-mx-px overflow-x-auto overscroll-x-contain touch-pan-x">
           <div className="min-w-[720px] px-4 pb-2 pt-3 sm:px-6 sm:pt-4">
             <div
@@ -634,10 +710,10 @@ export function BookingCalendarOverview() {
                 </div>
               ))}
 
-              {Array.from({ length: APARTMENT_COUNT }, (_, apt) => (
-                <div key={apt} className="contents">
+              {visibleApartmentEntries.map((aptEntry) => (
+                <div key={aptEntry.id} className="contents">
                   <div className="flex items-center py-3 pr-2 text-sm font-medium text-[#3f3f46]">
-                    {apartmentName(t.apartmentLabel, apt + 1)}
+                    {aptEntry.name}
                   </div>
                   <div
                     className="relative grid min-h-[3.5rem] items-center border-t border-zinc-100 py-0.5"
@@ -653,7 +729,7 @@ export function BookingCalendarOverview() {
                         aria-hidden
                       />
                     ))}
-                    {MOCK_BOOKINGS.filter((b) => b.apt === apt).map((b) => {
+                    {visibleBookings.filter((b) => b.apt === aptEntry.index).map((b) => {
                       const start = Math.max(1, b.start)
                       const end = Math.min(DAYS_IN_MONTH, b.end)
                       const colStart = start
@@ -697,18 +773,18 @@ export function BookingCalendarOverview() {
               <CalendarDays className="h-4 w-4 text-[#71717a]" strokeWidth={2} />
               <span className="font-medium">{t.footerOccupancy}</span>
               <span className="font-semibold" style={{ color: brandBlue }}>
-                {DEMO_STATS.occupancyRate}
+                {computedStats.occupancyRate}
               </span>
             </span>
             <span>
               <span className="font-medium">{t.footerTotalBookings}</span>
               <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{DEMO_STATS.totalBookings}</span>
+              <span className="font-semibold text-[#1a1a1a]">{computedStats.totalBookings}</span>
             </span>
             <span>
               <span className="font-medium">{t.footerBookedNights}</span>
               <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{DEMO_STATS.bookedNights}</span>
+              <span className="font-semibold text-[#1a1a1a]">{computedStats.bookedNights}</span>
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-4 sm:justify-end">
@@ -716,16 +792,18 @@ export function BookingCalendarOverview() {
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: airbnbRed }} />
               <span className="font-medium">{t.footerAirbnb}</span>
               <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{DEMO_STATS.airbnbCount}</span>
+              <span className="font-semibold text-[#1a1a1a]">{computedStats.airbnbCount}</span>
             </span>
             <span className="flex items-center gap-2 text-[#3f3f46]">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: bookingBlue }} />
               <span className="font-medium">{t.footerBooking}</span>
               <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{DEMO_STATS.bookingCount}</span>
+              <span className="font-semibold text-[#1a1a1a]">{computedStats.bookingCount}</span>
             </span>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   )
