@@ -11,7 +11,7 @@ export type StoredAccount = {
   createdAt: string
 }
 
-const ACCOUNTS_KEY = 'sm_accounts'
+const ACCOUNTS_KEY = 'staypilot_accounts'
 
 function normalize(value: string) {
   return value.trim().toLowerCase()

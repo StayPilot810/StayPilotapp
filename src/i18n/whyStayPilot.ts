@@ -5,16 +5,16 @@ export type WhyBenefit = {
   body: string
 }
 
-export type WhyStayManagerCopy = {
+export type WhyStayPilotCopy = {
   whySectionTitle: string
   whySectionSubtitle: string
   whyBenefits: [WhyBenefit, WhyBenefit, WhyBenefit, WhyBenefit]
 }
 
-const fr: WhyStayManagerCopy = {
+const fr: WhyStayPilotCopy = {
   whySectionTitle: 'Hôte Airbnb : reprenez le contrôle de votre temps et de votre encaisse',
   whySectionSubtitle:
-    'Vous voulez scaler, voyager, dormir — pas passer vos soirées sur trois onglets. StayManager est le cockpit qui transforme vos annonces en cash récurrent, sans vous embaucher vous-même comme coordinateur.',
+    'Vous voulez scaler, voyager, dormir — pas passer vos soirées sur trois onglets. StayPilot est le cockpit qui transforme vos annonces en cash récurrent, sans vous embaucher vous-même comme coordinateur.',
   whyBenefits: [
     {
       title: 'Jusqu’à +18 % de RevPAR quand vous jouez prix + calendrier serré',
@@ -35,10 +35,10 @@ const fr: WhyStayManagerCopy = {
   ],
 }
 
-const en: WhyStayManagerCopy = {
+const en: WhyStayPilotCopy = {
   whySectionTitle: 'Airbnb host: take back your time and your payout',
   whySectionSubtitle:
-    'You want to scale, travel, sleep—not live in three browser tabs. StayManager is the cockpit that turns listings into recurring cash without hiring yourself as night coordinator.',
+    'You want to scale, travel, sleep—not live in three browser tabs. StayPilot is the cockpit that turns listings into recurring cash without hiring yourself as night coordinator.',
   whyBenefits: [
     {
       title: 'Up to +18% RevPAR when you tighten pricing + calendar discipline',
@@ -59,10 +59,10 @@ const en: WhyStayManagerCopy = {
   ],
 }
 
-const es: WhyStayManagerCopy = {
+const es: WhyStayPilotCopy = {
   whySectionTitle: 'Anfitrión Airbnb: recupere su tiempo y su cobro',
   whySectionSubtitle:
-    'Quiere escalar, viajar, dormir — no vivir en tres pestañas. StayManager es la cabina que convierte anuncios en cash recurrente sin contratarse usted como coordinador.',
+    'Quiere escalar, viajar, dormir — no vivir en tres pestañas. StayPilot es la cabina que convierte anuncios en cash recurrente sin contratarse usted como coordinador.',
   whyBenefits: [
     {
       title: 'Hasta +18 % RevPAR al afinar precio + calendario',
@@ -83,10 +83,10 @@ const es: WhyStayManagerCopy = {
   ],
 }
 
-const de: WhyStayManagerCopy = {
+const de: WhyStayPilotCopy = {
   whySectionTitle: 'Airbnb-Gastgeber: holen Sie Zeit und Auszahlung zurück',
   whySectionSubtitle:
-    'Sie wollen skalieren, reisen, schlafen — nicht in drei Tabs leben. StayManager ist das Cockpit, das Listings in wiederkehrenden Cashflow verwandelt — ohne sich selbst als Nacht-Koordinator einzustellen.',
+    'Sie wollen skalieren, reisen, schlafen — nicht in drei Tabs leben. StayPilot ist das Cockpit, das Listings in wiederkehrenden Cashflow verwandelt — ohne sich selbst als Nacht-Koordinator einzustellen.',
   whyBenefits: [
     {
       title: 'Bis zu +18 % RevPAR bei diszipliniertem Pricing + Kalender',
@@ -107,10 +107,10 @@ const de: WhyStayManagerCopy = {
   ],
 }
 
-const it: WhyStayManagerCopy = {
+const it: WhyStayPilotCopy = {
   whySectionTitle: 'Host Airbnb: riprendete tempo e incassi',
   whySectionSubtitle:
-    'Volete scalare, viaggiare, dormire — non vivere su tre tab. StayManager è la cabina che trasforma gli annunci in cash ricorrente senza assumervi come coordinatori notturni.',
+    'Volete scalare, viaggiare, dormire — non vivere su tre tab. StayPilot è la cabina che trasforma gli annunci in cash ricorrente senza assumervi come coordinatori notturni.',
   whyBenefits: [
     {
       title: 'Fino a +18 % RevPAR con prezzo + calendario serrati',
@@ -131,7 +131,7 @@ const it: WhyStayManagerCopy = {
   ],
 }
 
-export const whyStayManagerTranslations: Record<Locale, WhyStayManagerCopy> = {
+export const whyStayPilotTranslations: Record<Locale, WhyStayPilotCopy> = {
   fr,
   en,
   es,

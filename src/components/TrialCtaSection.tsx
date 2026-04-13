@@ -28,7 +28,7 @@ export function TrialCtaSection() {
           </p>
           <div className="mt-6 sm:mt-7">
             <MotionAnchor
-              href="#"
+              href="/inscription"
               className="mx-auto inline-flex min-h-[48px] w-full max-w-[20rem] items-center justify-center rounded-full px-8 py-3.5 text-[15px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/45 focus-visible:ring-offset-2 sm:mx-0 sm:w-auto sm:min-h-0 sm:max-w-none sm:shadow-pm-cta-lg"
               style={{ backgroundColor: primary }}
             >

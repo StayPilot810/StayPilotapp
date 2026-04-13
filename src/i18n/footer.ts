@@ -2,6 +2,12 @@ import type { Locale } from './navbar'
 
 export type FooterCopy = {
   footerTagline: string
+  footerWhyTitle: string
+  footerWhyDescription: string
+  footerChatbotKicker: string
+  footerChatbotTitle: string
+  footerChatbotDescription: string
+  footerChatbotHint: string
   footerColProduct: string
   footerColCompany: string
   footerColSupport: string
@@ -22,7 +28,15 @@ export type FooterCopy = {
 
 const fr: FooterCopy = {
   footerTagline:
-    'StayManager : plus de nuits payées, plus de cash sur le compte — moins de soirées perdues sur Airbnb.',
+    'StayPilot : plus de nuits payées, plus de cash sur le compte — moins de soirées perdues sur Airbnb.',
+  footerWhyTitle: 'Pourquoi StayPilot',
+  footerWhyDescription:
+    "Une experience premium pour piloter vos locations avec clarte : calendrier unifie, suivi business en temps reel et decisions plus rapides, sans complexite inutile.",
+  footerChatbotKicker: 'Nouvelle fonctionnalite',
+  footerChatbotTitle: 'Chatbot commercial StayPilot',
+  footerChatbotDescription:
+    "Posez vos questions en direct pour obtenir une recommandation rapide (offre Starter, Pro ou Scale), une aide sur vos blocages, ou un plan d'action concret. Ouvrez le bouton en bas a droite.",
+  footerChatbotHint: 'Chatbot en bas a droite',
   footerColProduct: 'Produit',
   footerColCompany: 'Entreprise',
   footerColSupport: 'Support',
@@ -35,7 +49,7 @@ const fr: FooterCopy = {
   footerLinkHelp: "Centre d'aide",
   footerLinkContact: 'Contact',
   footerLinkFaq: 'FAQ',
-  footerCopyright: '© 2026 StayManager. Tous droits réservés.',
+  footerCopyright: '© 2026 StayPilot. Tous droits réservés.',
   footerLegal: 'Mentions légales',
   footerPrivacy: 'Confidentialité',
   footerTerms: 'CGU',
@@ -43,7 +57,15 @@ const fr: FooterCopy = {
 
 const en: FooterCopy = {
   footerTagline:
-    'StayManager: more paid nights, more cash in the bank—fewer nights lost refreshing Airbnb.',
+    'StayPilot: more paid nights, more cash in the bank—fewer nights lost refreshing Airbnb.',
+  footerWhyTitle: 'Why StayPilot',
+  footerWhyDescription:
+    'A premium way to run short-term rentals: unified calendar, real-time business visibility, and faster decisions without unnecessary complexity.',
+  footerChatbotKicker: 'New feature',
+  footerChatbotTitle: 'StayPilot sales chatbot',
+  footerChatbotDescription:
+    'Ask questions live to get fast plan guidance (Starter, Pro, or Scale), help with blockers, and a concrete next step. Open the button at the bottom right.',
+  footerChatbotHint: 'Chatbot at bottom right',
   footerColProduct: 'Product',
   footerColCompany: 'Company',
   footerColSupport: 'Support',
@@ -56,7 +78,7 @@ const en: FooterCopy = {
   footerLinkHelp: 'Help center',
   footerLinkContact: 'Contact',
   footerLinkFaq: 'FAQ',
-  footerCopyright: '© 2026 StayManager. All rights reserved.',
+  footerCopyright: '© 2026 StayPilot. All rights reserved.',
   footerLegal: 'Legal notice',
   footerPrivacy: 'Privacy',
   footerTerms: 'Terms',
@@ -64,7 +86,15 @@ const en: FooterCopy = {
 
 const es: FooterCopy = {
   footerTagline:
-    'StayManager: más noches pagadas, más cash en cuenta — menos noches perdidas en Airbnb.',
+    'StayPilot: más noches pagadas, más cash en cuenta — menos noches perdidas en Airbnb.',
+  footerWhyTitle: 'Por que StayPilot',
+  footerWhyDescription:
+    'Una experiencia premium para gestionar alquileres vacacionales: calendario unificado, visibilidad en tiempo real y decisiones mas rapidas sin complejidad innecesaria.',
+  footerChatbotKicker: 'Nueva funcionalidad',
+  footerChatbotTitle: 'Chatbot comercial StayPilot',
+  footerChatbotDescription:
+    'Haga preguntas en directo para recibir una recomendación rápida (Starter, Pro o Scale), ayuda con bloqueos y un siguiente paso claro. Abra el botón abajo a la derecha.',
+  footerChatbotHint: 'Chatbot abajo a la derecha',
   footerColProduct: 'Producto',
   footerColCompany: 'Empresa',
   footerColSupport: 'Soporte',
@@ -77,7 +107,7 @@ const es: FooterCopy = {
   footerLinkHelp: 'Centro de ayuda',
   footerLinkContact: 'Contacto',
   footerLinkFaq: 'FAQ',
-  footerCopyright: '© 2026 StayManager. Todos los derechos reservados.',
+  footerCopyright: '© 2026 StayPilot. Todos los derechos reservados.',
   footerLegal: 'Aviso legal',
   footerPrivacy: 'Privacidad',
   footerTerms: 'Términos',
@@ -85,7 +115,15 @@ const es: FooterCopy = {
 
 const de: FooterCopy = {
   footerTagline:
-    'StayManager: mehr bezahlte Nächte, mehr Cash auf dem Konto — weniger Abende mit Airbnb-Refresh.',
+    'StayPilot: mehr bezahlte Nächte, mehr Cash auf dem Konto — weniger Abende mit Airbnb-Refresh.',
+  footerWhyTitle: 'Warum StayPilot',
+  footerWhyDescription:
+    'Ein Premium-Erlebnis fur die Vermietung: einheitlicher Kalender, Echtzeit-Transparenz und schnellere Entscheidungen ohne unnötige Komplexität.',
+  footerChatbotKicker: 'Neue Funktion',
+  footerChatbotTitle: 'StayPilot Vertriebs-Chatbot',
+  footerChatbotDescription:
+    'Stellen Sie live Fragen und erhalten Sie schnell eine passende Empfehlung (Starter, Pro oder Scale), Hilfe bei Blockern und den nächsten Schritt. Unten rechts öffnen.',
+  footerChatbotHint: 'Chatbot unten rechts',
   footerColProduct: 'Produkt',
   footerColCompany: 'Unternehmen',
   footerColSupport: 'Support',
@@ -98,7 +136,7 @@ const de: FooterCopy = {
   footerLinkHelp: 'Hilfe-Center',
   footerLinkContact: 'Kontakt',
   footerLinkFaq: 'FAQ',
-  footerCopyright: '© 2026 StayManager. Alle Rechte vorbehalten.',
+  footerCopyright: '© 2026 StayPilot. Alle Rechte vorbehalten.',
   footerLegal: 'Impressum',
   footerPrivacy: 'Datenschutz',
   footerTerms: 'AGB',
@@ -106,7 +144,15 @@ const de: FooterCopy = {
 
 const it: FooterCopy = {
   footerTagline:
-    'StayManager: più notti pagate, più cash in conto — meno serate buttate su Airbnb.',
+    'StayPilot: più notti pagate, più cash in conto — meno serate buttate su Airbnb.',
+  footerWhyTitle: 'Perche StayPilot',
+  footerWhyDescription:
+    'Un’esperienza premium per gestire gli affitti brevi: calendario unificato, visibilita in tempo reale e decisioni piu rapide senza complessita inutile.',
+  footerChatbotKicker: 'Nuova funzionalita',
+  footerChatbotTitle: 'Chatbot commerciale StayPilot',
+  footerChatbotDescription:
+    "Fate domande in tempo reale per ottenere una raccomandazione rapida (Starter, Pro o Scale), aiuto sui blocchi e un prossimo passo concreto. Aprite il pulsante in basso a destra.",
+  footerChatbotHint: 'Chatbot in basso a destra',
   footerColProduct: 'Prodotto',
   footerColCompany: 'Azienda',
   footerColSupport: 'Supporto',
@@ -119,7 +165,7 @@ const it: FooterCopy = {
   footerLinkHelp: 'Centro assistenza',
   footerLinkContact: 'Contatto',
   footerLinkFaq: 'FAQ',
-  footerCopyright: '© 2026 StayManager. Tutti i diritti riservati.',
+  footerCopyright: '© 2026 StayPilot. Tutti i diritti riservati.',
   footerLegal: 'Note legali',
   footerPrivacy: 'Privacy',
   footerTerms: 'Termini',

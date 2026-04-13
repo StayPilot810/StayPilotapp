@@ -1,10 +1,11 @@
 import { useLanguage } from '../hooks/useLanguage'
+import { CONTACT_EMAIL } from '../i18n/contactPage'
 
 export function DashboardWhatsAppPage() {
   const { t } = useLanguage()
 
   const prefilledMessage = encodeURIComponent(
-    'Bonjour équipe StayManager, je suis client Premium et je souhaite échanger avec vous sur mon compte.',
+    'Bonjour équipe StayPilot, je suis client Premium et je souhaite échanger avec vous sur mon compte.',
   )
 
   return (
@@ -39,12 +40,15 @@ export function DashboardWhatsAppPage() {
             <p className="mt-2 text-sm font-semibold text-zinc-900">
               Vous pouvez aussi nous écrire par email :{' '}
               <a
-                href="mailto:support@staymanager.fr"
+                href={`mailto:${CONTACT_EMAIL}`}
                 className="text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
               >
-                support@staymanager.fr
+                {CONTACT_EMAIL}
               </a>
               .
+            </p>
+            <p className="mt-1 text-sm text-zinc-700">
+              N'hésitez pas à contacter aussi notre chatbot StayPilot (bouton en bas à droite) pour une réponse rapide.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">

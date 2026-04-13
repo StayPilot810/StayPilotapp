@@ -9,8 +9,7 @@ const borderSubtle = '#1E293B'
 const itemText =
   'block text-[15px] font-medium leading-snug text-[#94A3B8] sm:text-[15px]'
 
-const legalText =
-  'text-[14px] font-medium text-[#94A3B8] sm:text-[14px]'
+const footerLinkClass = `${itemText} rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1120]`
 
 /** Pied de page global (rendu depuis {@link App}). */
 export function SiteFooter() {
@@ -50,13 +49,19 @@ export function SiteFooter() {
             <h2 className="text-base font-semibold text-white">{t.footerColProduct}</h2>
             <ul className="mt-5 flex flex-col gap-3.5">
               <li>
-                <span className={itemText}>{t.footerLinkFeatures}</span>
+                <a href="/pourquoi-staypilot" className={footerLinkClass}>
+                  {t.footerWhyTitle}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkPricing}</span>
+                <a href="/#tarifs" className={footerLinkClass}>
+                  {t.footerLinkPricing}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkNews}</span>
+                <a href="/nouveautes" className={footerLinkClass}>
+                  {t.footerLinkNews}
+                </a>
               </li>
             </ul>
           </div>
@@ -65,13 +70,19 @@ export function SiteFooter() {
             <h2 className="text-base font-semibold text-white">{t.footerColCompany}</h2>
             <ul className="mt-5 flex flex-col gap-3.5">
               <li>
-                <span className={itemText}>{t.footerLinkAbout}</span>
+                <a href="/a-propos" className={footerLinkClass}>
+                  {t.footerLinkAbout}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkBlog}</span>
+                <a href="/blog" className={footerLinkClass}>
+                  {t.footerLinkBlog}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkCareers}</span>
+                <a href="/carrieres" className={footerLinkClass}>
+                  {t.footerLinkCareers}
+                </a>
               </li>
             </ul>
           </div>
@@ -80,13 +91,19 @@ export function SiteFooter() {
             <h2 className="text-base font-semibold text-white">{t.footerColSupport}</h2>
             <ul className="mt-5 flex flex-col gap-3.5">
               <li>
-                <span className={itemText}>{t.footerLinkHelp}</span>
+                <a href="/centre-aide" className={footerLinkClass}>
+                  {t.footerLinkHelp}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkContact}</span>
+                <a href="/contact" className={footerLinkClass}>
+                  {t.footerLinkContact}
+                </a>
               </li>
               <li>
-                <span className={itemText}>{t.footerLinkFaq}</span>
+                <a href="#faq" className={footerLinkClass}>
+                  {t.footerLinkFaq}
+                </a>
               </li>
             </ul>
           </div>
@@ -98,9 +115,15 @@ export function SiteFooter() {
         >
           <p className="text-[14px] font-medium text-[#94A3B8] sm:text-[15px]">{t.footerCopyright}</p>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-            <span className={legalText}>{t.footerLegal}</span>
-            <span className={legalText}>{t.footerPrivacy}</span>
-            <span className={legalText}>{t.footerTerms}</span>
+            <a href="/mentions-legales" className={footerLinkClass}>
+              {t.footerLegal}
+            </a>
+            <a href="/confidentialite" className={footerLinkClass}>
+              {t.footerPrivacy}
+            </a>
+            <a href="/cgu" className={footerLinkClass}>
+              {t.footerTerms}
+            </a>
           </div>
         </div>
       </Reveal>

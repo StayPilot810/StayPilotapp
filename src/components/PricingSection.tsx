@@ -128,7 +128,7 @@ function PlanCardInner({
       </ul>
       <div className="mt-6">
         <MotionAnchor
-          href="#"
+          href="/inscription"
           className={`flex min-h-[48px] w-full items-center justify-center rounded-xl px-4 py-3 text-[15px] font-semibold shadow-pm-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:text-[14px] ${
             isFeatured
               ? 'bg-white text-[#4a86f7] shadow-pm-md hover:bg-zinc-50 focus-visible:ring-white/50'

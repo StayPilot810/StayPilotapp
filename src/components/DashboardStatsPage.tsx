@@ -7,7 +7,7 @@ import { isTestModeEnabled } from '../utils/testMode'
 
 function hasRealConnectedListings() {
   try {
-    const raw = localStorage.getItem('sm_connected_channels')
+    const raw = localStorage.getItem('staypilot_connected_channels')
     const connected = raw ? (JSON.parse(raw) as { airbnb?: boolean; booking?: boolean; channelManager?: boolean }) : {}
     return Boolean(connected.airbnb || connected.booking || connected.channelManager)
   } catch {
@@ -140,7 +140,7 @@ export function DashboardStatsPage() {
 
   useEffect(() => {
     const connectedApartments = getConnectedApartmentsFromStorage()
-    const accessRaw = localStorage.getItem('sm_reservation_access')
+    const accessRaw = localStorage.getItem('staypilot_reservation_access')
     const access = accessRaw ? (JSON.parse(accessRaw) as Partial<Record<ChannelKey, AccessConfig>>) : {}
     let cancelled = false
 

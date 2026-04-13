@@ -7,7 +7,7 @@ const accent = '#4f86f7'
 
 const icons = [Workflow, RefreshCw, Timer, LayoutDashboard] as const
 
-export function WhyStayManager() {
+export function WhyStayPilot() {
   const { t } = useLanguage()
   const reduceMotion = useReducedMotion()
   const { whyBenefits, whySectionSubtitle, whySectionTitle } = t
@@ -16,12 +16,12 @@ export function WhyStayManager() {
     <section
       id="pourquoi-nous"
       className="scroll-mt-[64px] border-b border-zinc-200/50 bg-white py-12 sm:scroll-mt-[72px] sm:py-16 lg:py-20"
-      aria-labelledby="why-stay-heading"
+      aria-labelledby="why-staypilot-heading"
     >
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
         <Reveal className="mx-auto max-w-2xl text-center" y={18}>
           <h2
-            id="why-stay-heading"
+            id="why-staypilot-heading"
             className="text-[1.375rem] font-bold tracking-[-0.03em] text-zinc-900 sm:text-3xl lg:text-[2rem]"
           >
             {whySectionTitle}

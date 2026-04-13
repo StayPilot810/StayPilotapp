@@ -295,7 +295,7 @@ export function DashboardIntelPage() {
       coordinates: 'Coordonnees',
       mapError: 'Impossible de trouver cette adresse.',
       myListingsTitle: 'Mes logements',
-      myListingsSubtitle: 'Adresses actuellement suivies sur StayManager.',
+      myListingsSubtitle: 'Adresses actuellement suivies sur StayPilot.',
       myListingsTabConnected: 'Logements connectes',
       myListingsTabSearch: 'Recherche',
       myListingsSearchHint:
@@ -327,7 +327,7 @@ export function DashboardIntelPage() {
       coordinates: 'Coordinates',
       mapError: 'Unable to find this address.',
       myListingsTitle: 'My listings',
-      myListingsSubtitle: 'Addresses currently tracked in StayManager.',
+      myListingsSubtitle: 'Addresses currently tracked in StayPilot.',
       myListingsTabConnected: 'Connected listings',
       myListingsTabSearch: 'Search',
       myListingsSearchHint:
@@ -359,7 +359,7 @@ export function DashboardIntelPage() {
       coordinates: 'Coordenadas',
       mapError: 'No se pudo encontrar esta direccion.',
       myListingsTitle: 'Mis alojamientos',
-      myListingsSubtitle: 'Direcciones actualmente seguidas en StayManager.',
+      myListingsSubtitle: 'Direcciones actualmente seguidas en StayPilot.',
       myListingsTabConnected: 'Alojamientos conectados',
       myListingsTabSearch: 'Busqueda',
       myListingsSearchHint:
@@ -391,7 +391,7 @@ export function DashboardIntelPage() {
       coordinates: 'Koordinaten',
       mapError: 'Diese Adresse konnte nicht gefunden werden.',
       myListingsTitle: 'Meine Unterkunfte',
-      myListingsSubtitle: 'Aktuell in StayManager verfolgte Adressen.',
+      myListingsSubtitle: 'Aktuell in StayPilot verfolgte Adressen.',
       myListingsTabConnected: 'Verbundene Unterkunfte',
       myListingsTabSearch: 'Suche',
       myListingsSearchHint:
@@ -423,7 +423,7 @@ export function DashboardIntelPage() {
       coordinates: 'Coordinate',
       mapError: 'Impossibile trovare questo indirizzo.',
       myListingsTitle: 'I miei alloggi',
-      myListingsSubtitle: 'Indirizzi attualmente monitorati in StayManager.',
+      myListingsSubtitle: 'Indirizzi attualmente monitorati in StayPilot.',
       myListingsTabConnected: 'Alloggi collegati',
       myListingsTabSearch: 'Ricerca',
       myListingsSearchHint:

@@ -7,9 +7,9 @@ export type ConnectedApartment = {
   address: string
 }
 
-const CHANNEL_STORAGE_KEY = 'sm_connected_channels'
-const ACCESS_STORAGE_KEY = 'sm_reservation_access'
-const APARTMENT_NAME_KEY = 'sm_connected_apartment_names'
+const CHANNEL_STORAGE_KEY = 'staypilot_connected_channels'
+const ACCESS_STORAGE_KEY = 'staypilot_reservation_access'
+const APARTMENT_NAME_KEY = 'staypilot_connected_apartment_names'
 
 function fallbackName(platform: ChannelKey) {
   if (platform === 'airbnb') return 'Appartement 1'

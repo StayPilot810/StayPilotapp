@@ -51,8 +51,8 @@ const INITIAL_ROWS: ExpenseRow[] = [
   { id: '7', apartment: 'Tous les appartements', label: 'Mensualite pret bancaire', category: 'Financement', amount: 980, dueDate: '2026-04-20', status: 'Prelevement automatique' },
 ]
 
-const STORAGE_KEY = 'sm_expenses_rows_v1'
-const STORAGE_FIXED_KEY = 'sm_fixed_charges_v1'
+const STORAGE_KEY = 'staypilot_expenses_rows_v1'
+const STORAGE_FIXED_KEY = 'staypilot_fixed_charges_v1'
 const MONTHS = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Decembre']
 const PIE_COLORS = ['#4a86f7', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6']
 function isRemovedSampleLabel(label: string) {

@@ -41,7 +41,7 @@ export type NavbarCopy = {
 
 export const translations: Record<Locale, NavbarCopy> = {
   fr: {
-    brand: 'StayManager',
+    brand: 'StayPilot',
     whyUs: 'Encaisser plus',
     features: 'Fonctionnalités',
     reviews: 'Avis',
@@ -58,7 +58,7 @@ export const translations: Record<Locale, NavbarCopy> = {
     languagesTab: 'Langues',
   },
   es: {
-    brand: 'StayManager',
+    brand: 'StayPilot',
     whyUs: 'Cobrar más',
     features: 'Palancas de ingreso',
     reviews: 'Pruebas',
@@ -75,7 +75,7 @@ export const translations: Record<Locale, NavbarCopy> = {
     languagesTab: 'Idiomas',
   },
   en: {
-    brand: 'StayManager',
+    brand: 'StayPilot',
     whyUs: 'Earn more',
     features: 'Revenue levers',
     reviews: 'Proof',
@@ -92,7 +92,7 @@ export const translations: Record<Locale, NavbarCopy> = {
     languagesTab: 'Languages',
   },
   de: {
-    brand: 'StayManager',
+    brand: 'StayPilot',
     whyUs: 'Mehr kassieren',
     features: 'Umsatz-Hebel',
     reviews: 'Beweise',
@@ -109,7 +109,7 @@ export const translations: Record<Locale, NavbarCopy> = {
     languagesTab: 'Sprachen',
   },
   it: {
-    brand: 'StayManager',
+    brand: 'StayPilot',
     whyUs: 'Incassare di più',
     features: 'Leve di ricavo',
     reviews: 'Prove',

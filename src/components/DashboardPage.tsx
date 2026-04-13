@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChartColumn, Gem, MessageCircle, Package, Sparkles, Wallet } from 'lucide-react'
+import { Building2, CalendarDays, ChartColumn, Gem, MessageCircle, Package, Sparkles, Wallet } from 'lucide-react'
 import { getStoredAccounts } from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
 import { isTestModeEnabled, setTestModeEnabled } from '../utils/testMode'
@@ -19,13 +19,13 @@ export function DashboardPage() {
       return plan
     }
 
-    const sessionPlan = localStorage.getItem('sm_current_plan')?.trim()
+    const sessionPlan = localStorage.getItem('staypilot_current_plan')?.trim()
     if (sessionPlan) {
       setActivePlanLabel(localizePlanLabel(sessionPlan))
       return
     }
 
-    const savedIdentifier = localStorage.getItem('sm_login_identifier')?.trim().toLowerCase()
+    const savedIdentifier = localStorage.getItem('staypilot_login_identifier')?.trim().toLowerCase()
     const accounts = getStoredAccounts()
 
     const currentAccount =
@@ -44,6 +44,7 @@ export function DashboardPage() {
     t.dashboardTabStats,
     t.dashboardTabIntel,
     t.dashboardTabCleaning,
+    t.dashboardTabCompany,
     t.dashboardTabExpenses,
     t.dashboardTabSupplies,
     t.dashboardTabWhatsApp,
@@ -52,13 +53,14 @@ export function DashboardPage() {
   const primaryTab = tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
   const rowOneTabs = [tabs[1], primaryTab, tabs[2], tabs[3]]
-  const rowTwoTabs = [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
+  const rowTwoTabs = [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8], tabs[9]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabStats]: <ChartColumn className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabIntel]: <Sparkles className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabCleaning]: <span className="text-lg grayscale saturate-0" aria-hidden>🧽</span>,
+    [t.dashboardTabCompany]: <Building2 className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabExpenses]: <Wallet className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabSupplies]: <Package className="h-5 w-5 text-zinc-500" />,
     [t.dashboardTabWhatsApp]: <MessageCircle className="h-5 w-5 text-violet-600" />,
@@ -70,6 +72,7 @@ export function DashboardPage() {
     if (tab === t.dashboardTabStats) return '/dashboard/statistiques'
     if (tab === t.dashboardTabIntel) return '/dashboard/veille-informationnelle'
     if (tab === t.dashboardTabCleaning) return '/dashboard/prestataire-menage'
+    if (tab === t.dashboardTabCompany) return '/dashboard/societe'
     if (tab === t.dashboardTabExpenses) return '/dashboard/tableau-charges'
     if (tab === t.dashboardTabSupplies) return '/dashboard/consommables'
     if (tab === t.dashboardTabWhatsApp) return '/dashboard/whatsapp'

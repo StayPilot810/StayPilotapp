@@ -9,6 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# Secrets (clé OpenAI, etc.)
+.env
+.env.*
+!.env.example
 dist-ssr
 *.local
 

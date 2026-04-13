@@ -1,9 +1,12 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(() => {
+  const envDir = process.cwd()
+
+  return {
   plugins: [
     react(),
     tailwindcss(),
@@ -44,6 +47,56 @@ export default defineConfig({
             res.end(JSON.stringify({ error: 'Proxy error' }))
           }
         })
+
+        server.middlewares.use('/api/chat', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const chunks = []
+            for await (const chunk of req) {
+              chunks.push(chunk)
+            }
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let body = {}
+            try {
+              body = raw ? JSON.parse(raw) : {}
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'invalid_json' }))
+              return
+            }
+            // Relire .env à chaque requête : au démarrage le fichier peut encore être vide
+            // si la clé a été collée après le lancement de `npm run dev`.
+            const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            const { handleAiChat } = await import('./server/aiChat.mjs')
+            const { status, json } = await handleAiChat(body, {
+              OPENAI_API_KEY: liveEnv.OPENAI_API_KEY,
+              GROQ_API_KEY: liveEnv.GROQ_API_KEY,
+              STAYPILOT_AI_PROVIDER: liveEnv.STAYPILOT_AI_PROVIDER,
+              OPENAI_CHAT_MODEL: liveEnv.OPENAI_CHAT_MODEL,
+              GROQ_CHAT_MODEL: liveEnv.GROQ_CHAT_MODEL,
+              GROQ_VISION_MODEL: liveEnv.GROQ_VISION_MODEL,
+              OPENAI_VISION_MODEL: liveEnv.OPENAI_VISION_MODEL,
+            })
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(json))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: 'server_error',
+                message: e instanceof Error ? e.message : 'Erreur serveur',
+              }),
+            )
+          }
+        })
       },
     },
   ],
@@ -58,4 +111,5 @@ export default defineConfig({
       interval: 200,
     },
   },
+  }
 })

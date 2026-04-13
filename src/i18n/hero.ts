@@ -58,7 +58,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     ctaDemo: 'Voir la démo',
     ctaMicroTrust: 'Aucune carte débitée pendant l’essai • Annulation en 1 clic',
     heroTrustBullets:
-      '✔ Sans engagement  •  ✔ Configuration en 2 minutes  •  ✔ +500 propriétaires utilisent déjà StayManager',
+      '✔ Sans engagement  •  ✔ Configuration en 2 minutes  •  ✔ +500 propriétaires utilisent déjà StayPilot',
     platforms: 'Connecté à Airbnb, Booking.com et les principaux canaux',
     revenueTitle: 'Synthèse d’activité (mois)',
     revenueTrend: '+12 % vs mois dernier',
@@ -129,7 +129,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     ctaDemo: 'Ver la demo',
     ctaMicroTrust: 'Sin cargo a la tarjeta en la prueba • Baja en 1 clic',
     heroTrustBullets:
-      '✔ Sin compromiso  •  ✔ Configuración en 2 minutos  •  ✔ +500 anfitriones ya usan StayManager',
+      '✔ Sin compromiso  •  ✔ Configuración en 2 minutos  •  ✔ +500 anfitriones ya usan StayPilot',
     platforms: 'Conectado a Airbnb, Booking.com y los principales canales',
     revenueTitle: 'Resumen de actividad (mes)',
     revenueTrend: '+12 % vs mes anterior',
@@ -200,7 +200,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     ctaDemo: 'Watch demo',
     ctaMicroTrust: 'No card charged during trial • Cancel in 1 click',
     heroTrustBullets:
-      '✔ No commitment  •  ✔ Set up in 2 minutes  •  ✔ 500+ hosts already on StayManager',
+      '✔ No commitment  •  ✔ Set up in 2 minutes  •  ✔ 500+ hosts already on StayPilot',
     platforms: 'Works with Airbnb, Booking.com, and major booking channels',
     revenueTitle: 'Activity overview (month)',
     revenueTrend: '+12% vs last month',
@@ -271,7 +271,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     ctaDemo: 'Demo ansehen',
     ctaMicroTrust: 'Keine Kartenbelastung in der Testphase • Kündigung mit 1 Klick',
     heroTrustBullets:
-      '✔ Keine Bindung  •  ✔ Einrichtung in 2 Minuten  •  ✔ Bereits 500+ Gastgeber nutzen StayManager',
+      '✔ Keine Bindung  •  ✔ Einrichtung in 2 Minuten  •  ✔ Bereits 500+ Gastgeber nutzen StayPilot',
     platforms: 'Anbindung an Airbnb, Booking.com und große Buchungskanäle',
     revenueTitle: 'Aktivitätsüberblick (Monat)',
     revenueTrend: '+12 % zum Vormonat',
@@ -342,7 +342,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     ctaDemo: 'Vedi la demo',
     ctaMicroTrust: 'Nessun addebito sulla carta in prova • Disdetta in 1 clic',
     heroTrustBullets:
-      '✔ Nessun vincolo  •  ✔ Configurazione in 2 minuti  •  ✔ Oltre 500 host usano già StayManager',
+      '✔ Nessun vincolo  •  ✔ Configurazione in 2 minuti  •  ✔ Oltre 500 host usano già StayPilot',
     platforms: 'Collegato ad Airbnb, Booking.com e ai principali canali',
     revenueTitle: 'Panoramica attività (mese)',
     revenueTrend: '+12 % vs mese scorso',

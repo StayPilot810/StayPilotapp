@@ -15,7 +15,7 @@ type SupplyRow = {
   updatedAt: string
 }
 
-const STORAGE_ROWS_KEY = 'sm_supplies_rows_v1'
+const STORAGE_ROWS_KEY = 'staypilot_supplies_rows_v1'
 
 function getApartmentOptionsFromConnections() {
   const fromConnected = getConnectedApartmentsFromStorage().map((apt) => apt.name)

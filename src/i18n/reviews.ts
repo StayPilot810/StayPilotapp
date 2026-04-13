@@ -18,7 +18,7 @@ export type ReviewsCopy = {
 }
 
 const fr: ReviewsCopy = {
-  trustTitle: 'Ils sécurisent leur marge avec StayManager',
+  trustTitle: 'Ils sécurisent leur marge avec StayPilot',
   trustSubtitle: 'Des exploitants qui voulaient moins d’admin — et plus de nuits rentables.',
   moreReviewsTitle: "Plus d'avis",
   featured: [
@@ -94,7 +94,7 @@ const fr: ReviewsCopy = {
 }
 
 const en: ReviewsCopy = {
-  trustTitle: 'Operators who protect margin with StayManager',
+  trustTitle: 'Operators who protect margin with StayPilot',
   trustSubtitle: 'Teams that wanted less admin—and more profitable nights.',
   moreReviewsTitle: 'More reviews',
   featured: [
@@ -170,7 +170,7 @@ const en: ReviewsCopy = {
 }
 
 const es: ReviewsCopy = {
-  trustTitle: 'Operadores que protegen margen con StayManager',
+  trustTitle: 'Operadores que protegen margen con StayPilot',
   trustSubtitle: 'Equipos que querían menos administración — y más noches rentables.',
   moreReviewsTitle: 'Más opiniones',
   featured: [
@@ -246,7 +246,7 @@ const es: ReviewsCopy = {
 }
 
 const de: ReviewsCopy = {
-  trustTitle: 'Betreiber, die Marge mit StayManager absichern',
+  trustTitle: 'Betreiber, die Marge mit StayPilot absichern',
   trustSubtitle: 'Teams mit weniger Admin — und profitableren Nächten.',
   moreReviewsTitle: 'Weitere Bewertungen',
   featured: [
@@ -322,7 +322,7 @@ const de: ReviewsCopy = {
 }
 
 const it: ReviewsCopy = {
-  trustTitle: 'Operatori che proteggono il margine con StayManager',
+  trustTitle: 'Operatori che proteggono il margine con StayPilot',
   trustSubtitle: 'Team che volevano meno amministrazione — e più notti redditizie.',
   moreReviewsTitle: 'Altre recensioni',
   featured: [

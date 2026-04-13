@@ -1,7 +1,7 @@
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
-const CHANNEL_STORAGE_KEY = 'sm_connected_channels'
-const ACCESS_STORAGE_KEY = 'sm_reservation_access'
+const CHANNEL_STORAGE_KEY = 'staypilot_connected_channels'
+const ACCESS_STORAGE_KEY = 'staypilot_reservation_access'
 
 type AccessRecord = {
   ical?: string

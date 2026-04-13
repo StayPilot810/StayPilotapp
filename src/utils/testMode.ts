@@ -1,4 +1,4 @@
-const TEST_MODE_KEY = 'sm_test_mode_enabled'
+const TEST_MODE_KEY = 'staypilot_test_mode_enabled'
 
 export function isTestModeEnabled() {
   try {

@@ -7,9 +7,15 @@ import { heroTranslations } from '../i18n/hero'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
 import { reviewsTranslations } from '../i18n/reviews'
 import { statsRowTranslations } from '../i18n/statsRow'
-import { whyStayManagerTranslations } from '../i18n/whyStayManager'
+import { whyStayPilotTranslations } from '../i18n/whyStayPilot'
 import { trialAndPricingTranslations } from '../i18n/trialAndPricing'
 import { authDashboardTranslations } from '../i18n/authDashboard'
+import { aboutPageTranslations } from '../i18n/aboutPage'
+import { blogPageTranslations } from '../i18n/blogPage'
+import { careersPageTranslations } from '../i18n/careersPage'
+import { helpCenterPageTranslations } from '../i18n/helpCenterPage'
+import { contactPageTranslations } from '../i18n/contactPage'
+import { aiChatTranslations } from '../i18n/aiChat'
 import type { Locale } from '../i18n/navbar'
 import { translations } from '../i18n/navbar'
 import { LanguageContext } from './languageContext'
@@ -33,7 +39,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         ...translations[locale],
         ...heroTranslations[locale],
         ...featureCardsTranslations[locale],
-        ...whyStayManagerTranslations[locale],
+        ...whyStayPilotTranslations[locale],
         ...statsRowTranslations[locale],
         ...bookingCalendarTranslations[locale],
         ...reviewsTranslations[locale],
@@ -42,6 +48,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         ...faqTranslations[locale],
         ...footerTranslations[locale],
         ...authDashboardTranslations[locale],
+        ...aboutPageTranslations[locale],
+        ...blogPageTranslations[locale],
+        ...careersPageTranslations[locale],
+        ...helpCenterPageTranslations[locale],
+        ...contactPageTranslations[locale],
+        ...aiChatTranslations[locale],
       },
     }),
     [locale, setLocale],

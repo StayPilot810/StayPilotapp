@@ -71,9 +71,10 @@ export function SignupPage() {
     setAccountsCount(updatedAccounts.length)
     setAccountsPreview(updatedAccounts)
     setSubmitError('')
-    localStorage.setItem('sm_login_identifier', username.trim())
-    localStorage.setItem('sm_session_active', 'true')
-    localStorage.setItem('sm_current_plan', plan)
+    localStorage.setItem('staypilot_login_identifier', username.trim())
+    localStorage.setItem('staypilot_session_active', 'true')
+    localStorage.setItem('staypilot_current_plan', plan)
+    window.dispatchEvent(new Event('staypilot-session-changed'))
     window.location.href = '/dashboard'
   }
 

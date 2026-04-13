@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/connexion", "destination": "/index.html" },
+    { "source": "/inscription", "destination": "/index.html" },
+    { "source": "/a-propos", "destination": "/index.html" },
+    { "source": "/blog", "destination": "/index.html" },
+    { "source": "/carrieres", "destination": "/index.html" },
+    { "source": "/centre-aide", "destination": "/index.html" },
+    { "source": "/contact", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/dashboard/:path*", "destination": "/index.html" }
+  ]
+}

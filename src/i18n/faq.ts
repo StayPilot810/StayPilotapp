@@ -15,13 +15,13 @@ export type FaqCopy = {
 
 const fr: FaqCopy = {
   faqTitle: 'Questions fréquentes',
-  faqSubtitle: 'Tout ce que vous devez savoir sur StayManager.',
+  faqSubtitle: 'Tout ce que vous devez savoir sur StayPilot.',
   faqSeeMore: 'Voir plus de questions',
   faqSeeLess: 'Voir moins de questions',
   faqItems: [
     {
       question: "À qui s'adresse l'application ?",
-      answer: `Notre application est conçue pour les propriétaires et conciergeries souhaitant centraliser et optimiser la gestion de leurs logements courte durée sans complexité. Que vous gériez 1 ou 50 logements sur Airbnb, Booking.com ou d'autres plateformes, StayManager vous aide à organiser votre activité efficacement. Elle s'adresse aussi bien aux propriétaires débutants qu'aux professionnels expérimentés recherchant une solution simple et complète pour piloter leur activité au quotidien.`,
+      answer: `Notre application est conçue pour les propriétaires et conciergeries souhaitant centraliser et optimiser la gestion de leurs logements courte durée sans complexité. Que vous gériez 1 ou 50 logements sur Airbnb, Booking.com ou d'autres plateformes, StayPilot vous aide à organiser votre activité efficacement. Elle s'adresse aussi bien aux propriétaires débutants qu'aux professionnels expérimentés recherchant une solution simple et complète pour piloter leur activité au quotidien.`,
     },
     {
       question: "L'application est-elle facile à prendre en main ?",
@@ -61,7 +61,7 @@ const fr: FaqCopy = {
     },
     {
       question: "Puis-je communiquer avec mes voyageurs depuis l'application ?",
-      answer: `Non, la messagerie avec les voyageurs n'est pas intégrée pour le moment. Les échanges avec vos voyageurs se font directement via vos plateformes de réservation (Airbnb, Booking.com, etc.). StayManager se concentre sur l'organisation et le pilotage de votre activité en interne : calendrier, ménages, performances, tâches, consommables. Nous priorisons les fonctionnalités qui vous font vraiment gagner du temps au quotidien.`,
+      answer: `Non, la messagerie avec les voyageurs n'est pas intégrée pour le moment. Les échanges avec vos voyageurs se font directement via vos plateformes de réservation (Airbnb, Booking.com, etc.). StayPilot se concentre sur l'organisation et le pilotage de votre activité en interne : calendrier, ménages, performances, tâches, consommables. Nous priorisons les fonctionnalités qui vous font vraiment gagner du temps au quotidien.`,
     },
     {
       question: "L'application est-elle accessible sur mobile ?",
@@ -84,13 +84,13 @@ const fr: FaqCopy = {
 
 const en: FaqCopy = {
   faqTitle: 'Frequently asked questions',
-  faqSubtitle: 'Everything you need to know about StayManager.',
+  faqSubtitle: 'Everything you need to know about StayPilot.',
   faqSeeMore: 'See more questions',
   faqSeeLess: 'See fewer questions',
   faqItems: [
     {
       question: 'Who is the app for?',
-      answer: `Our app is designed for owners and concierge services who want to centralize and simplify short-term rental management. Whether you run 1 or 50 listings on Airbnb, Booking.com, or elsewhere, StayManager helps you stay organized. It suits beginners and experienced operators alike who want a straightforward, complete way to run day-to-day operations.`,
+      answer: `Our app is designed for owners and concierge services who want to centralize and simplify short-term rental management. Whether you run 1 or 50 listings on Airbnb, Booking.com, or elsewhere, StayPilot helps you stay organized. It suits beginners and experienced operators alike who want a straightforward, complete way to run day-to-day operations.`,
     },
     {
       question: 'Is the app easy to learn?',
@@ -130,7 +130,7 @@ const en: FaqCopy = {
     },
     {
       question: 'Can I message guests from the app?',
-      answer: `No—guest messaging is not built in today. You message guests on Airbnb, Booking.com, etc. StayManager focuses on internal organization and operations: calendar, cleaning, performance, tasks, consumables. We prioritize features that save you real time every day.`,
+      answer: `No—guest messaging is not built in today. You message guests on Airbnb, Booking.com, etc. StayPilot focuses on internal organization and operations: calendar, cleaning, performance, tasks, consumables. We prioritize features that save you real time every day.`,
     },
     {
       question: 'Does it work on mobile?',
@@ -153,13 +153,13 @@ const en: FaqCopy = {
 
 const es: FaqCopy = {
   faqTitle: 'Preguntas frecuentes',
-  faqSubtitle: 'Lo esencial sobre StayManager.',
+  faqSubtitle: 'Lo esencial sobre StayPilot.',
   faqSeeMore: 'Ver más preguntas',
   faqSeeLess: 'Ver menos preguntas',
   faqItems: [
     {
       question: '¿Para quién es la aplicación?',
-      answer: `Está pensada para propietarios y concierges que quieren centralizar y optimizar la gestión de alquileres de corta estancia. Tenga 1 o 50 alojamientos en Airbnb, Booking.com u otras plataformas, StayManager le ayuda a organizarse. Sirve tanto para principiantes como para profesionales que buscan una solución simple y completa para el día a día.`,
+      answer: `Está pensada para propietarios y concierges que quieren centralizar y optimizar la gestión de alquileres de corta estancia. Tenga 1 o 50 alojamientos en Airbnb, Booking.com u otras plataformas, StayPilot le ayuda a organizarse. Sirve tanto para principiantes como para profesionales que buscan una solución simple y completa para el día a día.`,
     },
     {
       question: '¿Es fácil de usar?',
@@ -199,7 +199,7 @@ const es: FaqCopy = {
     },
     {
       question: '¿Puedo hablar con huéspedes desde la app?',
-      answer: `No, la mensajería con huéspedes no está integrada por ahora: use las plataformas. StayManager se centra en la organización interna: calendario, limpieza, rendimiento, tareas, consumibles.`,
+      answer: `No, la mensajería con huéspedes no está integrada por ahora: use las plataformas. StayPilot se centra en la organización interna: calendario, limpieza, rendimiento, tareas, consumibles.`,
     },
     {
       question: '¿Funciona en móvil?',
@@ -222,7 +222,7 @@ const es: FaqCopy = {
 
 const de: FaqCopy = {
   faqTitle: 'Häufige Fragen',
-  faqSubtitle: 'Das Wichtigste über StayManager.',
+  faqSubtitle: 'Das Wichtigste über StayPilot.',
   faqSeeMore: 'Weitere Fragen anzeigen',
   faqSeeLess: 'Weniger Fragen anzeigen',
   faqItems: [
@@ -268,7 +268,7 @@ const de: FaqCopy = {
     },
     {
       question: 'Kann ich Gäste in der App kontaktieren?',
-      answer: `Nein, Gäste-Messaging ist derzeit nicht integriert—das läuft über die Portale. StayManager fokussiert interne Organisation: Kalender, Reinigung, Performance, Aufgaben, Verbrauchsmaterial.`,
+      answer: `Nein, Gäste-Messaging ist derzeit nicht integriert—das läuft über die Portale. StayPilot fokussiert interne Organisation: Kalender, Reinigung, Performance, Aufgaben, Verbrauchsmaterial.`,
     },
     {
       question: 'Funktioniert es mobil?',
@@ -291,7 +291,7 @@ const de: FaqCopy = {
 
 const it: FaqCopy = {
   faqTitle: 'Domande frequenti',
-  faqSubtitle: 'Tutto quello che serve sapere su StayManager.',
+  faqSubtitle: 'Tutto quello che serve sapere su StayPilot.',
   faqSeeMore: 'Mostra altre domande',
   faqSeeLess: 'Mostra meno domande',
   faqItems: [
@@ -337,7 +337,7 @@ const it: FaqCopy = {
     },
     {
       question: 'Posso contattare gli ospiti dall’app?',
-      answer: `No, la messaggistica ospiti non è integrata per ora: usate le piattaforme. StayManager si concentra su organizzazione interna: calendario, pulizie, performance, attività, consumabili.`,
+      answer: `No, la messaggistica ospiti non è integrata per ora: usate le piattaforme. StayPilot si concentra su organizzazione interna: calendario, pulizie, performance, attività, consumabili.`,
     },
     {
       question: 'Funziona su mobile?',

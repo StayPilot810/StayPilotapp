@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { findAccountForLogin, getStoredAccounts } from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
 
-const LS_REMEMBER = 'sm_remember_me'
-const LS_IDENTIFIER = 'sm_login_identifier'
-const LS_SESSION_ACTIVE = 'sm_session_active'
-const LS_CURRENT_PLAN = 'sm_current_plan'
+const LS_REMEMBER = 'staypilot_remember_me'
+const LS_IDENTIFIER = 'staypilot_login_identifier'
+const LS_SESSION_ACTIVE = 'staypilot_session_active'
+const LS_CURRENT_PLAN = 'staypilot_current_plan'
 
 export function LoginPage() {
   const { t } = useLanguage()
@@ -50,16 +50,16 @@ export function LoginPage() {
     }
     setLoginError('')
 
+    localStorage.setItem(LS_SESSION_ACTIVE, 'true')
+    localStorage.setItem(LS_CURRENT_PLAN, account.plan || 'Pro')
     if (rememberMe) {
       localStorage.setItem(LS_REMEMBER, 'true')
       localStorage.setItem(LS_IDENTIFIER, identifier.trim())
-      localStorage.setItem(LS_SESSION_ACTIVE, 'true')
     } else {
       localStorage.setItem(LS_REMEMBER, 'false')
       localStorage.removeItem(LS_IDENTIFIER)
-      localStorage.removeItem(LS_SESSION_ACTIVE)
     }
-    localStorage.setItem(LS_CURRENT_PLAN, account.plan || 'Pro')
+    window.dispatchEvent(new Event('staypilot-session-changed'))
 
     setConnected(true)
     setAutoConnected(false)
@@ -173,6 +173,7 @@ export function LoginPage() {
               onClick={() => {
                 localStorage.setItem(LS_SESSION_ACTIVE, 'true')
                 localStorage.setItem(LS_CURRENT_PLAN, 'Gratuit')
+                window.dispatchEvent(new Event('staypilot-session-changed'))
                 window.location.href = '/dashboard'
               }}
               className="mx-auto inline-flex min-w-[220px] items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"

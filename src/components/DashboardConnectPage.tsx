@@ -9,9 +9,9 @@ import {
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
-const STORAGE_KEY = 'sm_connected_channels'
-const RESERVATION_ACCESS_KEY = 'sm_reservation_access'
-const APARTMENT_NAME_KEY = 'sm_connected_apartment_names'
+const STORAGE_KEY = 'staypilot_connected_channels'
+const RESERVATION_ACCESS_KEY = 'staypilot_reservation_access'
+const APARTMENT_NAME_KEY = 'staypilot_connected_apartment_names'
 const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 
 function notifyConnectionsUpdated() {
