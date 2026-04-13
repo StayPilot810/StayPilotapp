@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -19,6 +19,7 @@ const primary = '#4f86f7'
 const green = '#22c55e'
 
 const REVENUE_VALUES = [1180, 1320, 1480, 1620, 1780, 1950, 2320, 2680, 2440, 2160, 1720, 2180]
+const OCCUPANCY_VALUES = [52, 56, 61, 64, 68, 72, 79, 84, 80, 75, 69, 74]
 
 const axisTick = { fill: '#9ca3af', fontSize: 11, fontFamily: 'Inter, sans-serif' }
 
@@ -28,7 +29,8 @@ function formatEuros(n: number, locale: string) {
   return `${n.toLocaleString(locale)}\u00a0€`
 }
 
-type ChartRow = { m: string; revenue: number }
+type ChartMetric = 'revenue' | 'occupancy'
+type ChartRow = { m: string; revenue: number; occupancy: number }
 
 function RevenueTooltip({
   active,
@@ -37,6 +39,7 @@ function RevenueTooltip({
   loc,
   monthLabel,
   valueLabel,
+  metric,
 }: {
   active?: boolean
   payload?: ReadonlyArray<{ payload?: ChartRow }>
@@ -44,6 +47,7 @@ function RevenueTooltip({
   loc: string
   monthLabel: string
   valueLabel: string
+  metric: ChartMetric
 }) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload
@@ -58,7 +62,7 @@ function RevenueTooltip({
         {monthLabel}: {month}
       </p>
       <p className="font-semibold" style={{ color: primary }}>
-        {valueLabel}: {formatEuros(row.revenue, loc)}
+        {valueLabel}: {metric === 'revenue' ? formatEuros(row.revenue, loc) : `${row.occupancy}%`}
       </p>
     </div>
   )
@@ -124,6 +128,7 @@ export function Hero() {
   const { locale } = useLanguage()
   const copy = heroTranslations[locale]
   const reduceMotion = useReducedMotion()
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('revenue')
   const loc = locale === 'en' ? 'en-GB' : locale === 'de' ? 'de-DE' : locale === 'it' ? 'it-IT' : locale === 'es' ? 'es-ES' : 'fr-FR'
 
   const chartData = useMemo((): ChartRow[] => {
@@ -131,8 +136,15 @@ export function Hero() {
     return REVENUE_VALUES.map((revenue, i) => ({
       m: months[i] ?? '',
       revenue,
+      occupancy: OCCUPANCY_VALUES[i] ?? 0,
     }))
   }, [locale, copy])
+
+  const isRevenue = chartMetric === 'revenue'
+  const currentValue = isRevenue ? formatEuros(2180, loc) : '74%'
+  const currentTrend = isRevenue ? copy.revenueTrend : copy.occupancyTrend
+  const currentTitle = isRevenue ? copy.revenueTitle : copy.occupancyTitle
+  const currentTooltipLabel = isRevenue ? copy.tooltipRevenue : copy.tooltipOccupancy
 
   return (
     <section className="relative border-b border-zinc-200/50 bg-white bg-[radial-gradient(ellipse_100%_60%_at_50%_-30%,rgba(79,134,247,0.09),transparent_55%)]">
@@ -213,14 +225,36 @@ export function Hero() {
               }
               className="rounded-2xl border border-zinc-200/70 bg-white p-5 shadow-pm-sm sm:p-6 sm:shadow-pm-md"
             >
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:text-[11px]">
-                {copy.revenueTitle}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:text-[11px]">
+                  {currentTitle}
+                </p>
+                <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setChartMetric('revenue')}
+                    className={`rounded-md px-2 py-1 transition-colors ${
+                      isRevenue ? 'bg-white text-zinc-900 shadow-pm-xs' : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    €
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMetric('occupancy')}
+                    className={`rounded-md px-2 py-1 transition-colors ${
+                      !isRevenue ? 'bg-white text-zinc-900 shadow-pm-xs' : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    %
+                  </button>
+                </div>
+              </div>
               <p className="mt-1.5 text-[1.875rem] font-bold tracking-tight text-zinc-900 sm:text-[2.25rem]">
-                {formatEuros(2180, loc)}
+                {currentValue}
               </p>
               <p className="mt-0.5 text-xs font-semibold sm:text-[13px]" style={{ color: green }}>
-                {copy.revenueTrend}
+                {currentTrend}
               </p>
               <div className="mt-3 h-[168px] w-full sm:mt-4 sm:h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -228,12 +262,12 @@ export function Hero() {
                     <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e5e7eb" />
                     <XAxis dataKey="m" axisLine={false} tickLine={false} tick={axisTick} dy={8} />
                     <YAxis
-                      domain={[1000, 3000]}
-                      ticks={[1000, 1500, 2000, 2500, 3000]}
+                      domain={isRevenue ? [1000, 3000] : [40, 90]}
+                      ticks={isRevenue ? [1000, 1500, 2000, 2500, 3000] : [40, 50, 60, 70, 80, 90]}
                       axisLine={false}
                       tickLine={false}
                       tick={axisTick}
-                      tickFormatter={(v) => `${v}€`}
+                      tickFormatter={(v) => (isRevenue ? `${v}€` : `${v}%`)}
                       width={44}
                     />
                     <Tooltip
@@ -245,13 +279,14 @@ export function Hero() {
                           label={props.label}
                           loc={loc}
                           monthLabel={copy.tooltipMonth}
-                          valueLabel={copy.tooltipRevenue}
+                          valueLabel={currentTooltipLabel}
+                          metric={chartMetric}
                         />
                       )}
                     />
                     <Line
                       type="monotone"
-                      dataKey="revenue"
+                      dataKey={chartMetric}
                       stroke={primary}
                       strokeWidth={2.5}
                       dot={false}

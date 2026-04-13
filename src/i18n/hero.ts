@@ -62,7 +62,7 @@ export const heroTranslations: Record<Locale, HeroCopy> = {
     platforms: 'Connecté à Airbnb, Booking.com et les principaux canaux',
     revenueTitle: 'Synthèse d’activité (mois)',
     revenueTrend: '+12 % vs mois dernier',
-    occupancyTitle: 'Taux de réservation',
+    occupancyTitle: "Taux d'occupation",
     occupancyTrend: '+6% vs mois dernier',
     heroBubble1: '✔ Ménage planifié',
     heroBubble2: '✔ Réservation confirmée',

@@ -1,0 +1,175 @@
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { findAccountForLogin, getStoredAccounts } from '../lib/accounts'
+
+const LS_REMEMBER = 'sm_remember_me'
+const LS_IDENTIFIER = 'sm_login_identifier'
+const LS_SESSION_ACTIVE = 'sm_session_active'
+
+export function LoginPage() {
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
+  const [autoConnected, setAutoConnected] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [accountsCount, setAccountsCount] = useState(0)
+
+  useEffect(() => {
+    const accounts = getStoredAccounts()
+    setAccountsCount(accounts.length)
+    const remembered = localStorage.getItem(LS_REMEMBER) === 'true'
+    const savedIdentifier = localStorage.getItem(LS_IDENTIFIER) ?? ''
+    const sessionActive = localStorage.getItem(LS_SESSION_ACTIVE) === 'true'
+
+    if (savedIdentifier) setIdentifier(savedIdentifier)
+    setRememberMe(remembered)
+
+    if (remembered && savedIdentifier && sessionActive) {
+      setAutoConnected(true)
+      setConnected(true)
+    }
+  }, [])
+
+  const canSubmit = useMemo(
+    () => identifier.trim().length > 0 && password.trim().length > 0,
+    [identifier, password],
+  )
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!canSubmit) return
+    const account = findAccountForLogin(identifier, password)
+    if (!account) {
+      setConnected(false)
+      setAutoConnected(false)
+      setLoginError("Identifiants invalides ou aucun compte n'existe encore.")
+      return
+    }
+    setLoginError('')
+
+    if (rememberMe) {
+      localStorage.setItem(LS_REMEMBER, 'true')
+      localStorage.setItem(LS_IDENTIFIER, identifier.trim())
+      localStorage.setItem(LS_SESSION_ACTIVE, 'true')
+    } else {
+      localStorage.setItem(LS_REMEMBER, 'false')
+      localStorage.removeItem(LS_IDENTIFIER)
+      localStorage.removeItem(LS_SESSION_ACTIVE)
+    }
+
+    setConnected(true)
+    setAutoConnected(false)
+  }
+
+  return (
+    <section className="relative flex flex-1 items-center justify-center overflow-hidden border-t border-zinc-200/50 bg-[linear-gradient(180deg,#fdfefe_0%,#f5f8ff_55%,#f2f6ff_100%)] px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_68%_58%_at_16%_10%,rgba(79,134,247,0.14),transparent_68%),radial-gradient(ellipse_62%_52%_at_85%_90%,rgba(59,130,246,0.12),transparent_72%)]" />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.28]"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%234a86f7' stroke-opacity='0.35'%3E%3Crect x='160' y='120' width='340' height='220' rx='24'/%3E%3Cpath d='M210 290c48-48 106-72 174-72s126 24 174 72'/%3E%3Crect x='910' y='170' width='300' height='190' rx='22'/%3E%3Cpath d='M950 305h220M950 272h156M950 239h184'/%3E%3Crect x='500' y='520' width='400' height='210' rx='24'/%3E%3Cpath d='M550 680l58-40 56 24 74-66 58 36 54-48'/%3E%3C/g%3E%3C/svg%3E\")",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-[32px] border border-blue-200/40 bg-white/25 opacity-60 blur-xl">
+        <div className="absolute left-6 right-6 top-6 h-10 rounded-xl bg-blue-200/35" />
+        <div className="absolute left-6 top-24 h-40 w-[44%] rounded-2xl bg-blue-300/25" />
+        <div className="absolute right-6 top-24 h-28 w-[44%] rounded-2xl bg-indigo-300/20" />
+        <div className="absolute bottom-8 left-6 right-6 h-36 rounded-2xl bg-blue-400/20" />
+      </div>
+      <div className="pointer-events-none absolute inset-0 bg-white/35" />
+
+      <div className="relative w-full max-w-[560px] overflow-hidden rounded-3xl border border-zinc-200/70 bg-white/95 shadow-[0_30px_80px_-30px_rgba(15,23,42,0.35)]">
+        <div className="p-6 sm:p-8 lg:p-10">
+          <a
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+          >
+            ← Retour au menu principal
+          </a>
+          <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-[2rem]">Accédez à votre espace StayManager</h1>
+          <p className="mt-2 text-center text-xs font-medium text-zinc-500">
+            {accountsCount > 0
+              ? `${accountsCount} compte(s) détecté(s)`
+              : "Aucun compte détecté. Créez d'abord un compte via Inscription."}
+          </p>
+
+          {autoConnected ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+              Connexion automatique activée. Vous êtes déjà connecté.
+            </div>
+          ) : null}
+
+          {connected ? (
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
+              Connecté. Vous pouvez continuer vers votre dashboard.
+            </div>
+          ) : null}
+
+          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-zinc-800" htmlFor="identifier">
+                Email / nom d&apos;utilisateur
+              </label>
+              <input
+                id="identifier"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                placeholder="Email / nom d'utilisateur"
+                autoComplete="username"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-zinc-800" htmlFor="password">
+                Mot de passe
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                placeholder="Votre mot de passe"
+                autoComplete="current-password"
+              />
+            </div>
+
+            <label className="flex select-none items-center gap-2.5 text-sm font-medium text-zinc-700">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-[#4a86f7] focus:ring-[#4a86f7]/30"
+              />
+              Rester connecté
+            </label>
+
+            <a
+              href="#"
+              className="block text-center text-sm font-semibold text-[#4a86f7] transition-colors hover:text-[#3c78ee]"
+            >
+              Mot de passe oublié ?
+            </a>
+
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="mx-auto inline-flex min-w-[220px] items-center justify-center rounded-2xl bg-[#4a86f7] px-6 py-3 text-sm font-semibold text-white shadow-pm-cta transition-[filter,opacity] hover:brightness-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Accéder à mon dashboard
+            </button>
+            {loginError ? <p className="text-center text-sm font-medium text-rose-600">{loginError}</p> : null}
+            <p className="text-center text-xs font-medium text-zinc-500 sm:text-sm">
+              Accès sécurisé • Aucune donnée partagée
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+  )
+}

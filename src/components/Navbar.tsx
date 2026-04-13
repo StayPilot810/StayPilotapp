@@ -190,13 +190,13 @@ function DesktopRightActions() {
       <LanguageMenu align="right" variant="compact" className="shrink-0" />
       <NavDivider />
       <a
-        href="#"
+        href="/connexion"
         className="rounded-lg text-[14px] font-medium text-zinc-900 transition-colors duration-200 hover:text-[#4a86f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/35 focus-visible:ring-offset-2 xl:text-[15px] whitespace-nowrap"
       >
         {t.login}
       </a>
       <MotionAnchor
-        href="#"
+        href="/inscription"
         className="shrink-0 rounded-full px-4 py-2.5 text-[13px] font-semibold text-white shadow-pm-cta transition-[filter] duration-200 hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a86f7]/45 focus-visible:ring-offset-2 xl:px-5 xl:text-[15px] whitespace-nowrap"
         style={{ backgroundColor: primary }}
       >
@@ -221,21 +221,21 @@ export function Navbar() {
   const closeMobile = () => setMobileOpen(false)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white">
-      <div className="mx-auto h-[64px] max-w-[1200px] px-4 sm:h-[72px] sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white">
+        <div className="mx-auto h-[64px] max-w-[1200px] px-4 sm:h-[72px] sm:px-6 lg:px-8">
         {/* Mobile & tablette */}
         <div className="flex h-full w-full items-center justify-between lg:hidden">
           <Logo />
           <div className="flex items-center gap-2 sm:gap-3">
             <LanguageMenu align="right" />
             <a
-              href="#"
+              href="/connexion"
               className="hidden rounded-lg text-[14px] font-medium text-zinc-900 transition-colors duration-200 hover:text-[#4a86f7] md:inline whitespace-nowrap"
             >
               {t.login}
             </a>
             <MotionAnchor
-              href="#"
+              href="/inscription"
               className="inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2.5 text-[14px] font-semibold text-white shadow-pm-cta sm:px-5 sm:text-[15px] whitespace-nowrap"
               style={{ backgroundColor: primary }}
             >
@@ -270,8 +270,8 @@ export function Navbar() {
         </div>
       </div>
 
-      <AnimatePresence>
-        {mobileOpen && (
+        <AnimatePresence>
+          {mobileOpen && (
           <motion.div
             id="mobile-menu"
             initial={{ opacity: 0, y: -12 }}
@@ -312,13 +312,13 @@ export function Navbar() {
                 {t.bookCall}
               </MotionAnchor>
               <div className="my-2 border-t border-zinc-200/70" />
-              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5 text-zinc-900`}>
+              <a href="/connexion" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5 text-zinc-900`}>
                 {t.login}
               </a>
             </nav>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
+          )}
+        </AnimatePresence>
+      </header>
   )
 }
