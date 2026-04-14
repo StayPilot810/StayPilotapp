@@ -5,7 +5,7 @@ import { DEMO_APARTMENT_ROW_COUNT, DEMO_MONTH_INDEX, DEMO_YEAR } from '../data/d
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
 import { isTestModeEnabled } from '../utils/testMode'
-import { getDemoCheckoutEventsForSuivi } from '../utils/suiviMenageCheckouts'
+import { getDemoCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
 
 type InvoiceDirection = 'received' | 'sent'
 type InvoiceStatus = 'pending' | 'paid'
@@ -282,6 +282,40 @@ function saveSuiviReports(map: Record<string, SuiviMenageReport>) {
 function todayIsoLocal(): string {
   const n = new Date()
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
+
+function suiviEventStatus(event: SuiviCheckoutEvent, report?: SuiviMenageReport) {
+  const today = todayIsoLocal()
+  if (event.checkoutIso < today && report) {
+    return {
+      label: 'Enregistré',
+      tone: 'green' as const,
+      helper: `Dernière sauvegarde : ${formatChatMessageTitle(report.updatedAt)}`,
+    }
+  }
+  if (event.checkoutIso < today) {
+    return {
+      label: 'Non enregistré',
+      tone: 'red' as const,
+      helper: "Le départ est passé : merci de compléter ce suivi dès que possible.",
+    }
+  }
+  if (event.checkoutIso === today) {
+    return {
+      label: report ? 'Pré-rempli (jour J)' : 'Rappel à remplir',
+      tone: 'gray' as const,
+      helper: report
+        ? `Saisi avant départ. Vérifiez ce soir. Dernière sauvegarde : ${formatChatMessageTitle(report.updatedAt)}`
+        : 'À remplir avant minuit pour éviter un suivi manquant demain.',
+    }
+  }
+  return {
+    label: report ? 'Pré-rempli (à venir)' : 'À venir',
+    tone: 'gray' as const,
+    helper: report
+      ? `Saisi en avance. Dernière sauvegarde : ${formatChatMessageTitle(report.updatedAt)}`
+      : "Ce départ n'est pas encore passé.",
+  }
 }
 
 function downloadInvoicePdf(invoice: CleaningInvoice) {
@@ -664,6 +698,16 @@ export function DashboardCleaningPage() {
         : b.checkoutIso.localeCompare(a.checkoutIso),
     )
   }, [suiviCheckoutEvents, suiviLogementTab, suiviHorizonTab])
+
+  const selectedSuiviEvent = useMemo(
+    () => suiviFilteredCheckoutEvents.find((e) => e.id === selectedSuiviEventId),
+    [suiviFilteredCheckoutEvents, selectedSuiviEventId],
+  )
+  const selectedSuiviStatus = useMemo(
+    () =>
+      selectedSuiviEvent ? suiviEventStatus(selectedSuiviEvent, suiviReports[selectedSuiviEvent.id]) : undefined,
+    [selectedSuiviEvent, suiviReports],
+  )
 
   useEffect(() => {
     if (suiviFilteredCheckoutEvents.length === 0) {
@@ -1586,33 +1630,20 @@ export function DashboardCleaningPage() {
                   <p className="mt-0.5 text-xs text-zinc-600">
                     Choisissez le logement concerné ou « Tous » pour voir tous les départs.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSuiviLogementTab('all')}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                        suiviLogementTab === 'all'
-                          ? 'bg-sky-600 text-white shadow-sm'
-                          : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
-                      }`}
-                    >
-                      Tous les logements
-                    </button>
+                  <select
+                    value={suiviLogementTab === 'all' ? 'all' : String(suiviLogementTab)}
+                    onChange={(e) =>
+                      setSuiviLogementTab(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                    }
+                    className="mt-2 w-full max-w-sm rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="all">Tous les logements</option>
                     {Array.from({ length: suiviApartmentCount }, (_, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setSuiviLogementTab(i)}
-                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                          suiviLogementTab === i
-                            ? 'bg-sky-600 text-white shadow-sm'
-                            : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
-                        }`}
-                      >
+                      <option key={i} value={String(i)}>
                         {suiviApartmentLabel(i)}
-                      </button>
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
 
                 <div className="shrink-0 lg:max-w-xs">
@@ -1668,14 +1699,37 @@ export function DashboardCleaningPage() {
                   ) : (
                     suiviFilteredCheckoutEvents.map((ev) => (
                       <option key={ev.id} value={ev.id}>
+                        {suiviEventStatus(ev, suiviReports[ev.id]).tone === 'green'
+                          ? '🟢 '
+                          : suiviEventStatus(ev, suiviReports[ev.id]).tone === 'red'
+                            ? '🔴 '
+                            : '⚪️ '}
                         {formatSuiviCheckoutLabel(ev.checkoutIso)}
                         {suiviLogementTab === 'all' ? ` — ${suiviApartmentLabel(ev.aptIndex)}` : ''} — {ev.guest} (
-                        {ev.channel === 'airbnb' ? 'Airbnb' : 'Booking'}) — {ev.reservationId}
+                        {ev.channel === 'airbnb' ? 'Airbnb' : 'Booking'}) — {ev.reservationId} — [
+                        {suiviEventStatus(ev, suiviReports[ev.id]).label}]
                       </option>
                     ))
                   )}
                 </select>
               </label>
+
+              {selectedSuiviStatus ? (
+                <div className="flex justify-end">
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-right text-sm font-semibold ${
+                      selectedSuiviStatus.tone === 'green'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : selectedSuiviStatus.tone === 'red'
+                          ? 'border-rose-200 bg-rose-50 text-rose-700'
+                          : 'border-zinc-200 bg-zinc-100 text-zinc-700'
+                    }`}
+                  >
+                    Statut : {selectedSuiviStatus.label}
+                    <p className="mt-0.5 text-xs font-medium opacity-90">{selectedSuiviStatus.helper}</p>
+                  </div>
+                </div>
+              ) : null}
 
               {selectedSuiviEventId ? (
                 <>
@@ -1846,6 +1900,15 @@ export function DashboardCleaningPage() {
                   ) : null}
                 </>
               ) : null}
+
+              <div className="border-t border-zinc-200 pt-3">
+                <a
+                  href="/dashboard/consommables"
+                  className="inline-flex rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
+                >
+                  Aller à la liste des consommables
+                </a>
+              </div>
             </div>
           </div>
 

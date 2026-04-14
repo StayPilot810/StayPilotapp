@@ -34,6 +34,7 @@ import { LegalPage } from './components/LegalPage'
 import { PrivacyPage } from './components/PrivacyPage'
 import { TermsPage } from './components/TermsPage'
 import { AiChatWidget } from './components/AiChatWidget'
+import { ProfilePage } from './components/ProfilePage'
 import { useAppPathname } from './hooks/useAppPathname'
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
   const isTermsPage = pathname === '/cgu'
   const isHelpCenterPage = pathname === '/centre-aide'
   const isContactPage = pathname === '/contact'
+  const isProfilePage = pathname === '/profil'
   const isDashboardPage = pathname === '/dashboard'
   const isDashboardConnectPage = pathname === '/dashboard/connecter-logements'
   const isDashboardIntelPage = pathname === '/dashboard/veille-informationnelle'
@@ -124,6 +126,8 @@ export default function App() {
               <ContactPage />
               <SiteFooter />
             </>
+          ) : isProfilePage ? (
+            <ProfilePage />
           ) : isDashboardPage ? (
             <DashboardPage />
           ) : isDashboardConnectPage ? (

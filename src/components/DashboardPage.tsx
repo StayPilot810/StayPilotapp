@@ -81,7 +81,13 @@ export function DashboardPage() {
   }
 
   return (
-    <section className="flex min-h-screen flex-1 items-center justify-center border-t border-zinc-200/60 bg-[radial-gradient(ellipse_70%_60%_at_20%_0%,rgba(79,134,247,0.14),transparent_60%),linear-gradient(180deg,#f8fbff_0%,#f4f7fc_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <section className="relative flex min-h-screen flex-1 items-center justify-center border-t border-zinc-200/60 bg-[radial-gradient(ellipse_70%_60%_at_20%_0%,rgba(79,134,247,0.14),transparent_60%),linear-gradient(180deg,#f8fbff_0%,#f4f7fc_100%)] px-4 py-6 sm:px-6 lg:px-8">
+      <a
+        href="/profil"
+        className="absolute right-4 top-4 z-20 inline-flex items-center rounded-full border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow sm:right-6 sm:top-6 lg:right-8 lg:top-7"
+      >
+        Profil & paramètres
+      </a>
       <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <div className="mb-2 flex justify-center">
           <p className="rounded-full border border-blue-200/80 bg-blue-50 px-3 py-1.5 text-center text-xs font-semibold text-blue-800 sm:text-sm">

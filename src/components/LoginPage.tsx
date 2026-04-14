@@ -6,6 +6,7 @@ const LS_REMEMBER = 'staypilot_remember_me'
 const LS_IDENTIFIER = 'staypilot_login_identifier'
 const LS_SESSION_ACTIVE = 'staypilot_session_active'
 const LS_CURRENT_PLAN = 'staypilot_current_plan'
+const LS_CURRENT_USER = 'staypilot_current_user'
 
 export function LoginPage() {
   const { t } = useLanguage()
@@ -52,12 +53,12 @@ export function LoginPage() {
 
     localStorage.setItem(LS_SESSION_ACTIVE, 'true')
     localStorage.setItem(LS_CURRENT_PLAN, account.plan || 'Pro')
+    localStorage.setItem(LS_CURRENT_USER, account.username.trim())
+    localStorage.setItem(LS_IDENTIFIER, account.username.trim())
     if (rememberMe) {
       localStorage.setItem(LS_REMEMBER, 'true')
-      localStorage.setItem(LS_IDENTIFIER, identifier.trim())
     } else {
       localStorage.setItem(LS_REMEMBER, 'false')
-      localStorage.removeItem(LS_IDENTIFIER)
     }
     window.dispatchEvent(new Event('staypilot-session-changed'))
 
@@ -173,6 +174,7 @@ export function LoginPage() {
               onClick={() => {
                 localStorage.setItem(LS_SESSION_ACTIVE, 'true')
                 localStorage.setItem(LS_CURRENT_PLAN, 'Gratuit')
+                localStorage.removeItem(LS_CURRENT_USER)
                 window.dispatchEvent(new Event('staypilot-session-changed'))
                 window.location.href = '/dashboard'
               }}

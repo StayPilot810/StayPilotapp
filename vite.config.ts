@@ -97,6 +97,52 @@ export default defineConfig(() => {
             )
           }
         })
+
+        server.middlewares.use('/api/cancel-subscription-email', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const chunks = []
+            for await (const chunk of req) chunks.push(chunk)
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let body = {}
+            try {
+              body = raw ? JSON.parse(raw) : {}
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'invalid_json' }))
+              return
+            }
+
+            const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            const { sendCancellationConfirmationEmail } = await import('./server/cancellationEmail.mjs')
+            const result = await sendCancellationConfirmationEmail(body, {
+              SMTP_HOST: liveEnv.SMTP_HOST,
+              SMTP_PORT: liveEnv.SMTP_PORT,
+              SMTP_USER: liveEnv.SMTP_USER,
+              SMTP_PASS: liveEnv.SMTP_PASS,
+              SUPPORT_FROM_EMAIL: liveEnv.SUPPORT_FROM_EMAIL,
+            })
+
+            res.statusCode = result.status ?? 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(result.ok ? { ok: true } : { error: result.error || 'email_error' }))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: 'email_send_failed',
+                message: e instanceof Error ? e.message : 'Erreur envoi e-mail',
+              }),
+            )
+          }
+        })
       },
     },
   ],

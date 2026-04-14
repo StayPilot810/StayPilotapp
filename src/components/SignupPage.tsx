@@ -71,6 +71,7 @@ export function SignupPage() {
     setAccountsCount(updatedAccounts.length)
     setAccountsPreview(updatedAccounts)
     setSubmitError('')
+    localStorage.setItem('staypilot_current_user', username.trim())
     localStorage.setItem('staypilot_login_identifier', username.trim())
     localStorage.setItem('staypilot_session_active', 'true')
     localStorage.setItem('staypilot_current_plan', plan)

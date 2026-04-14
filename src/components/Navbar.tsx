@@ -312,9 +312,21 @@ export function Navbar() {
                 {t.bookCall}
               </MotionAnchor>
               <div className="my-2 border-t border-zinc-200/70" />
-              <a href="/connexion" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5 text-zinc-900`}>
+              <a
+                href="/connexion"
+                onClick={closeMobile}
+                className={`${linkGray} rounded-lg px-3 py-3.5 text-zinc-900`}
+              >
                 {t.login}
               </a>
+              <MotionAnchor
+                href="/inscription"
+                onClick={closeMobile}
+                className="rounded-full px-4 py-3 text-center text-[14px] font-semibold text-white"
+                style={{ backgroundColor: primary }}
+              >
+                {t.signup}
+              </MotionAnchor>
             </nav>
           </motion.div>
           )}
