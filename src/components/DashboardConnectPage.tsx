@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { OFFICIAL_CHANNEL_SYNC_KEY } from '../utils/officialChannelData'
@@ -192,6 +192,46 @@ export function DashboardConnectPage() {
   const detectedListings = getConnectedApartmentsFromStorage()
   const channelManagerListings = detectedListings.filter((l) => l.platform === 'channelManager')
   const nonChannelManagerListings = detectedListings.filter((l) => l.platform !== 'channelManager')
+
+  useEffect(() => {
+    // Prevent stale listings from staying visible when credentials are gone.
+    const staleAirbnb =
+      connectedChannels.airbnb &&
+      !accessInputs.airbnb.apiToken.trim() &&
+      !accessInputs.airbnb.accountId.trim()
+    const staleBooking =
+      connectedChannels.booking &&
+      !accessInputs.booking.apiToken.trim() &&
+      !accessInputs.booking.accountId.trim()
+    const staleChannelManager =
+      connectedChannels.channelManager &&
+      !accessInputs.channelManager.apiToken.trim() &&
+      !accessInputs.channelManager.accountId.trim()
+
+    if (!staleAirbnb && !staleBooking && !staleChannelManager) return
+
+    const nextConnected = {
+      ...connectedChannels,
+      airbnb: staleAirbnb ? false : connectedChannels.airbnb,
+      booking: staleBooking ? false : connectedChannels.booking,
+      channelManager: staleChannelManager ? false : connectedChannels.channelManager,
+    }
+    setConnectedChannels(nextConnected)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
+
+    if (staleChannelManager) {
+      localStorage.removeItem(OFFICIAL_CHANNEL_SYNC_KEY)
+    }
+
+    const rawNames = localStorage.getItem(APARTMENT_NAME_KEY)
+    const prevNames = rawNames ? (JSON.parse(rawNames) as Partial<Record<ChannelKey, string>>) : {}
+    if (staleAirbnb) delete prevNames.airbnb
+    if (staleBooking) delete prevNames.booking
+    if (staleChannelManager) delete prevNames.channelManager
+    localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
+
+    notifyConnectionsUpdated()
+  }, [accessInputs, connectedChannels])
 
   const onSaveConnections = () => {
     // Keep "connected" status tied to successful provider sync only.
