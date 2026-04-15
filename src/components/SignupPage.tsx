@@ -91,6 +91,7 @@ function planToPlanKey(plan: string): 'starter' | 'pro' | 'scale' {
 
 export function SignupPage() {
   const { t, locale } = useLanguage()
+  const requireEmailOtp = import.meta.env.VITE_REQUIRE_EMAIL_OTP === 'true'
   const [plan, setPlan] = useState('Pro')
   const [role, setRole] = useState<'host' | 'cleaner'>('host')
   const [invitationCode, setInvitationCode] = useState('')
@@ -172,7 +173,7 @@ export function SignupPage() {
 
   const canSubmit = useMemo(
     () =>
-      emailVerifyValidated &&
+      (!requireEmailOtp || emailVerifyValidated) &&
       (role === 'cleaner' || plan.trim().length > 0) &&
       firstName.trim().length > 0 &&
       lastName.trim().length > 0 &&
@@ -190,6 +191,7 @@ export function SignupPage() {
       password,
       invitationCode,
       emailVerifyValidated,
+      requireEmailOtp,
     ],
   )
 
@@ -290,7 +292,7 @@ export function SignupPage() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!canSubmit) return
-    if (!emailVerifyValidated) {
+    if (requireEmailOtp && !emailVerifyValidated) {
       setSubmitError(t.signupEmailVerifyInvalid)
       return
     }
