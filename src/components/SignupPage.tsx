@@ -91,7 +91,8 @@ function planToPlanKey(plan: string): 'starter' | 'pro' | 'scale' {
 
 export function SignupPage() {
   const { t, locale } = useLanguage()
-  const requireEmailOtp = import.meta.env.VITE_REQUIRE_EMAIL_OTP === 'true'
+  // OTP email verification is always required for signup.
+  const requireEmailOtp = true
   const [plan, setPlan] = useState('Pro')
   const [role, setRole] = useState<'host' | 'cleaner'>('host')
   const [invitationCode, setInvitationCode] = useState('')
@@ -387,7 +388,7 @@ export function SignupPage() {
       phone: phone.trim() || undefined,
       promoCode: role === 'host' && promoCode.trim() ? promoCode.trim() : undefined,
       preferredLocale: locale,
-      emailVerified: true,
+      emailVerified: emailVerifyValidated,
     })
     clearSignupEmailOtp(email.trim())
     const updatedAccounts = getStoredAccounts()
