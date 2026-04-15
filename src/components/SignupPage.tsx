@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Check, CircleCheck, TrendingUp, Users } from 'lucide-react'
 import { useLanguage } from '../hooks/useLanguage'
 import {
@@ -25,10 +26,6 @@ function readCleanerInvites(): CleanerInvite[] {
   } catch {
     return []
   }
-}
-
-function saveCleanerInvites(invites: CleanerInvite[]) {
-  localStorage.setItem(CLEANER_INVITES_KEY, JSON.stringify(invites))
 }
 
 function extractInviteCode(value: string) {

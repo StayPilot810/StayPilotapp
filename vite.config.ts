@@ -61,7 +61,7 @@ export default defineConfig(() => {
               chunks.push(chunk)
             }
             const raw = Buffer.concat(chunks).toString('utf8')
-            let body = {}
+            let body: any = {}
             try {
               body = raw ? JSON.parse(raw) : {}
             } catch {
@@ -73,6 +73,7 @@ export default defineConfig(() => {
             // Relire .env à chaque requête : au démarrage le fichier peut encore être vide
             // si la clé a été collée après le lancement de `npm run dev`.
             const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            // @ts-ignore runtime import in dev server middleware
             const { handleAiChat } = await import('./server/aiChat.mjs')
             const { status, json } = await handleAiChat(body, {
               OPENAI_API_KEY: liveEnv.OPENAI_API_KEY,
@@ -109,7 +110,7 @@ export default defineConfig(() => {
             const chunks = []
             for await (const chunk of req) chunks.push(chunk)
             const raw = Buffer.concat(chunks).toString('utf8')
-            let body = {}
+            let body: any = {}
             try {
               body = raw ? JSON.parse(raw) : {}
             } catch {
@@ -118,6 +119,7 @@ export default defineConfig(() => {
               res.end(JSON.stringify({ error: 'invalid_json' }))
               return
             }
+            // @ts-ignore runtime import in dev server middleware
             const { syncOfficialChannelData } = await import('./server/channelSync.mjs')
             const result = await syncOfficialChannelData(body)
             res.statusCode = result.status ?? 500
@@ -146,7 +148,7 @@ export default defineConfig(() => {
             const chunks = []
             for await (const chunk of req) chunks.push(chunk)
             const raw = Buffer.concat(chunks).toString('utf8')
-            let body = {}
+            let body: any = {}
             try {
               body = raw ? JSON.parse(raw) : {}
             } catch {
@@ -155,6 +157,7 @@ export default defineConfig(() => {
               res.end(JSON.stringify({ error: 'invalid_json' }))
               return
             }
+            // @ts-ignore runtime import in dev server middleware
             const { verifyVatNumberOfficial } = await import('./server/vatValidation.mjs')
             const result = await verifyVatNumberOfficial(body)
             res.statusCode = result.status ?? 500
@@ -178,7 +181,7 @@ export default defineConfig(() => {
             const chunks = []
             for await (const chunk of req) chunks.push(chunk)
             const raw = Buffer.concat(chunks).toString('utf8')
-            let body = {}
+            let body: any = {}
             try {
               body = raw ? JSON.parse(raw) : {}
             } catch {
@@ -188,6 +191,7 @@ export default defineConfig(() => {
               return
             }
             const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            // @ts-ignore runtime import in dev server middleware
             const { createStripeCheckoutSession } = await import('./server/stripeBilling.mjs')
             const result = await createStripeCheckoutSession(body, liveEnv)
             if (!result.ok) {
@@ -222,7 +226,7 @@ export default defineConfig(() => {
             const chunks = []
             for await (const chunk of req) chunks.push(chunk)
             const raw = Buffer.concat(chunks).toString('utf8')
-            let body = {}
+            let body: any = {}
             try {
               body = raw ? JSON.parse(raw) : {}
             } catch {
@@ -233,6 +237,7 @@ export default defineConfig(() => {
             }
 
             const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            // @ts-ignore runtime import in dev server middleware
             const { sendCancellationConfirmationEmail, sendFailedPaymentAlertEmail, sendPlanChangeConfirmationEmail, sendPasswordChangedConfirmationEmail, sendPasswordResetConfirmationEmail, sendPasswordVerificationCodeEmail, sendSignupEmailVerificationCodeEmail, sendActivityDigestEmail, sendCallBookingConfirmationEmail } = await import('./server/cancellationEmail.mjs')
             const result =
               body?.mode === 'payment_failed_alert'

@@ -1377,6 +1377,14 @@ export function ProfilePage() {
     setForgotOtpRequested(false)
     setForgotOtpValidated(false)
     setForgotPasswordOpen(false)
+    setForgotPasswordLoading(false)
+    setSaveMsg(
+      mailSent
+        ? `Mot de passe reinitialise. E-mail de confirmation envoye a ${targetEmail}.`
+        : 'Mot de passe reinitialise. Envoi e-mail non disponible pour le moment.',
+    )
+  }
+
   function validatePasswordOtp(flow: 'change' | 'forgot') {
     const targetEmail = (email || account?.email || '').trim()
     if (!targetEmail) {
@@ -1395,14 +1403,6 @@ export function ProfilePage() {
     if (flow === 'change') setPasswordOtpValidated(true)
     else setForgotOtpValidated(true)
     setSaveMsg('Code valide. Vous pouvez maintenant modifier le mot de passe.')
-  }
-
-    setForgotPasswordLoading(false)
-    setSaveMsg(
-      mailSent
-        ? `Mot de passe reinitialise. E-mail de confirmation envoye a ${targetEmail}.`
-        : 'Mot de passe reinitialise. Envoi e-mail non disponible pour le moment.',
-    )
   }
 
   if (!loggedIn) {
