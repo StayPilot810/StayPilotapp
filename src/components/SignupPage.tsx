@@ -726,8 +726,9 @@ export function SignupPage() {
 
             <button
               type="submit"
-              disabled={!canSubmit}
-              className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl bg-[#4a86f7] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_-10px_rgba(74,134,247,0.8)] transition-all hover:scale-[1.01] hover:brightness-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={false}
+              aria-disabled={!canSubmit}
+              className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl bg-[#4a86f7] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_-10px_rgba(74,134,247,0.8)] transition-all hover:scale-[1.01] hover:brightness-[0.98]"
             >
               {t.signupSubmit}
             </button>
