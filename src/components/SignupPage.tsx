@@ -89,6 +89,16 @@ function planToPlanKey(plan: string): 'starter' | 'pro' | 'scale' {
   return 'pro'
 }
 
+function formatCardDigitsOnly(value: string, maxLength: number) {
+  return value.replace(/\D/g, '').slice(0, maxLength)
+}
+
+function formatCardExpiry(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 4)
+  if (digits.length <= 2) return digits
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+
 export function SignupPage() {
   const { t, locale } = useLanguage()
   // OTP email verification is always required for signup.
@@ -146,6 +156,9 @@ export function SignupPage() {
     plan === 'Starter' ? 19.99 : plan === 'Scale' ? 99.99 : 59.99
   const priceTtc = priceNumeric
   const priceHt = vatRate > 0 ? priceTtc / (1 + vatRate / 100) : priceTtc
+  const cardNumberDigits = cardNumber.replace(/\D/g, '')
+  const cardExpiryDigits = cardExpiry.replace(/\D/g, '')
+  const cardCvcDigits = cardCvc.replace(/\D/g, '')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -189,9 +202,9 @@ export function SignupPage() {
       (role === 'cleaner'
         ? Boolean(getValidCleanerInvite())
         : cardHolder.trim().length > 0 &&
-          cardNumber.trim().length >= 14 &&
-          cardExpiry.trim().length >= 4 &&
-          cardCvc.trim().length >= 3),
+          cardNumberDigits.length >= 14 &&
+          cardExpiryDigits.length === 4 &&
+          cardCvcDigits.length >= 3),
     [
       plan,
       role,
@@ -341,6 +354,10 @@ export function SignupPage() {
         return
       }
       if (role === 'host' && (!cardHolder.trim() || cardNumber.trim().length < 14 || cardExpiry.trim().length < 4 || cardCvc.trim().length < 3)) {
+        setSubmitError('Inscription impossible : coordonnées bancaires non renseignées ou incomplètes.')
+        return
+      }
+      if (role === 'host' && (cardNumberDigits.length < 14 || cardExpiryDigits.length !== 4 || cardCvcDigits.length < 3)) {
         setSubmitError('Inscription impossible : coordonnées bancaires non renseignées ou incomplètes.')
         return
       }
@@ -499,16 +516,20 @@ export function SignupPage() {
           </p>
 
           <form className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
+            <p className="sm:col-span-2 text-xs text-zinc-700">Champs requis (obligatoire)</p>
             {role === 'host' ? (
-              <select
-                value={plan}
-                onChange={(e) => setPlan(e.target.value)}
-                className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-              >
-                <option value="Starter">{t.signupPlanStarter}</option>
-                <option value="Pro">{t.signupPlanPro}</option>
-                <option value="Scale">{t.signupPlanScale}</option>
-              </select>
+              <div className="sm:col-span-2">
+                <select
+                  value={plan}
+                  onChange={(e) => setPlan(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                >
+                  <option value="Starter">{t.signupPlanStarter}</option>
+                  <option value="Pro">{t.signupPlanPro}</option>
+                  <option value="Scale">{t.signupPlanScale}</option>
+                </select>
+                <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+              </div>
             ) : null}
             <label className="sm:col-span-2 text-xs text-zinc-700">
               Vous etes
@@ -595,74 +616,94 @@ export function SignupPage() {
                 <p className="mt-1 text-[11px] text-zinc-500">
                   Entrez le code reçu de votre hôte.
                 </p>
+                <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
               </label>
             )}
-            <input
-              type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder={t.signupFirstName}
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-            />
-            <input
-              type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder={t.signupLastName}
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-            />
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t.signupUsername}
-              className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-            />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t.signupEmail}
-              className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-            />
-            <div className="sm:col-span-2 relative">
+            <div>
               <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t.signupPassword}
-                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder={t.signupFirstName}
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
-                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
             </div>
-            <div className="sm:col-span-2 relative">
+            <div>
               <input
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirmer le mot de passe"
-                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder={t.signupLastName}
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
               />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
-                aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+            </div>
+            <div className="sm:col-span-2">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={t.signupUsername}
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              />
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+            </div>
+            <div className="sm:col-span-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t.signupEmail}
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              />
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t.signupPassword}
+                  className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirmer le mot de passe"
+                  className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                  aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
             </div>
             {requireEmailOtp ? (
               <div className="sm:col-span-2 rounded-xl border border-sky-200/80 bg-sky-50/50 p-3.5">
                 <p className="text-sm font-semibold text-zinc-900">{t.signupEmailVerifyTitle}</p>
                 <p className="mt-1 text-xs text-zinc-600">{t.signupEmailVerifyExplain}</p>
+                <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <button
                     type="button"
@@ -743,34 +784,52 @@ export function SignupPage() {
                   {t.signupCardSubtitle}
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <input
-                    type="text"
-                    value={cardHolder}
-                    onChange={(e) => setCardHolder(e.target.value)}
-                    placeholder={t.signupCardHolder}
-                    className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                  />
-                  <input
-                    type="text"
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
-                    placeholder={t.signupCardNumber}
-                    className="sm:col-span-2 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                  />
-                  <input
-                    type="text"
-                    value={cardExpiry}
-                    onChange={(e) => setCardExpiry(e.target.value)}
-                    placeholder={t.signupCardExpiry}
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                  />
-                  <input
-                    type="text"
-                    value={cardCvc}
-                    onChange={(e) => setCardCvc(e.target.value)}
-                    placeholder={t.signupCardCvc}
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                  />
+                  <div className="sm:col-span-2">
+                    <input
+                      type="text"
+                      value={cardHolder}
+                      onChange={(e) => setCardHolder(e.target.value)}
+                      placeholder={t.signupCardHolder}
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                    />
+                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <input
+                      type="text"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(formatCardDigitsOnly(e.target.value, 19))}
+                      placeholder={t.signupCardNumber}
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                    />
+                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={cardExpiry}
+                      onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
+                      placeholder={t.signupCardExpiry}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                    />
+                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={cardCvc}
+                      onChange={(e) => setCardCvc(formatCardDigitsOnly(e.target.value, 4))}
+                      placeholder={t.signupCardCvc}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                    />
+                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
+                  </div>
                 </div>
               </div>
             ) : null}

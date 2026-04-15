@@ -165,7 +165,12 @@ async function fetchBeds24Json(path, token) {
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const message = typeof json?.message === 'string' ? json.message : 'beds24_request_failed'
+    const message =
+      pickString(json?.message) ||
+      pickString(json?.error) ||
+      pickString(json?.error_description) ||
+      pickString(json?.details) ||
+      'beds24_request_failed'
     return { ok: false, status: res.status, error: message }
   }
   return { ok: true, status: 200, data: json }
@@ -284,7 +289,7 @@ function normalizeBeds24Bookings(raw) {
 }
 
 async function syncBeds24({ apiToken }) {
-  let token = pickString(apiToken)
+  let token = pickString(apiToken).replace(/\s+/g, '')
   if (!token) return { status: 400, ok: false, error: 'missing_api_token' }
   let exchangedFromInviteCode = false
 

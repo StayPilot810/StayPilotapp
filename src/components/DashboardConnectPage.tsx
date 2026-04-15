@@ -43,6 +43,24 @@ function notifyConnectionsUpdated() {
   window.dispatchEvent(new Event(CONNECTIONS_UPDATED_EVENT))
 }
 
+type ChannelAccessInput = {
+  ical: string
+  apiToken: string
+  accountId: string
+  nightlyRate: string
+  commissionRate: string
+}
+
+function sanitizeAccessInputsForStorage(
+  inputs: Record<'airbnb' | 'booking' | 'channelManager', ChannelAccessInput>,
+) {
+  return {
+    airbnb: { ...inputs.airbnb, apiToken: '', accountId: '' },
+    booking: { ...inputs.booking, apiToken: '', accountId: '' },
+    channelManager: { ...inputs.channelManager, apiToken: '', accountId: '' },
+  }
+}
+
 function renderOtaLinkCell(state: boolean | undefined) {
   if (state === true) {
     return (
@@ -109,22 +127,22 @@ export function DashboardConnectPage() {
       return {
         airbnb: {
           ical: parsed.airbnb?.ical ?? '',
-          apiToken: parsed.airbnb?.apiToken ?? '',
-          accountId: parsed.airbnb?.accountId ?? '',
+          apiToken: '',
+          accountId: '',
           nightlyRate: parsed.airbnb?.nightlyRate ?? '',
           commissionRate: parsed.airbnb?.commissionRate ?? '',
         },
         booking: {
           ical: parsed.booking?.ical ?? '',
-          apiToken: parsed.booking?.apiToken ?? '',
-          accountId: parsed.booking?.accountId ?? '',
+          apiToken: '',
+          accountId: '',
           nightlyRate: parsed.booking?.nightlyRate ?? '',
           commissionRate: parsed.booking?.commissionRate ?? '',
         },
         channelManager: {
           ical: parsed.channelManager?.ical ?? '',
-          apiToken: parsed.channelManager?.apiToken ?? '',
-          accountId: parsed.channelManager?.accountId ?? '',
+          apiToken: '',
+          accountId: '',
           nightlyRate: parsed.channelManager?.nightlyRate ?? '',
           commissionRate: parsed.channelManager?.commissionRate ?? '',
         },
@@ -176,18 +194,10 @@ export function DashboardConnectPage() {
   const nonChannelManagerListings = detectedListings.filter((l) => l.platform !== 'channelManager')
 
   const onSaveConnections = () => {
-    const next = {
-      airbnb:
-        accessInputs.airbnb.apiToken.trim().length > 0 && accessInputs.airbnb.accountId.trim().length > 0,
-      booking:
-        accessInputs.booking.apiToken.trim().length > 0 && accessInputs.booking.accountId.trim().length > 0,
-      channelManager:
-        accessInputs.channelManager.apiToken.trim().length > 0 &&
-        (selectedProvider === 'lodgify' || accessInputs.channelManager.accountId.trim().length > 0),
-    }
-    setConnectedChannels(next)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(accessInputs))
+    // Keep "connected" status tied to successful provider sync only.
+    // Saving credentials alone should not mark channels as connected.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(connectedChannels))
+    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
     notifyConnectionsUpdated()
   }
 
@@ -204,7 +214,7 @@ export function DashboardConnectPage() {
     }
     setConnectionFeedback((prev) => ({ ...prev, [platform]: 'idle' }))
     setConnectionErrorMessage('')
-    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(accessInputs))
+    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
 
     if (isValid) {
       try {
@@ -236,12 +246,26 @@ export function DashboardConnectPage() {
           setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
           return
         }
+        const syncedProperties = Array.isArray(syncJson.data.properties) ? syncJson.data.properties : []
+        if (syncedProperties.length === 0) {
+          const reverted = { ...connectedChannels, [platform]: false }
+          setConnectedChannels(reverted)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(reverted))
+          localStorage.removeItem(OFFICIAL_CHANNEL_SYNC_KEY)
+          setConnectionErrorMessage(
+            selectedProvider === 'beds24'
+              ? 'Connexion etablie mais aucun logement remonte. Verifiez les droits du token (Proprietes + Inventaire + Reservations) et les proprietes autorisees dans Beds24.'
+              : 'Connexion etablie mais aucun logement remonte depuis le provider. Verifiez les droits API et les logements partages.',
+          )
+          setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
+          return
+        }
         localStorage.setItem(
           OFFICIAL_CHANNEL_SYNC_KEY,
           JSON.stringify({
             provider: selectedProvider,
             syncedAt: syncJson.data.syncedAt || new Date().toISOString(),
-            properties: Array.isArray(syncJson.data.properties) ? syncJson.data.properties : [],
+            properties: syncedProperties,
             bookings: Array.isArray(syncJson.data.bookings) ? syncJson.data.bookings : [],
           }),
         )
@@ -251,7 +275,7 @@ export function DashboardConnectPage() {
               ...prev,
               [platform]: { ...prev[platform], apiToken: syncJson.data!.connectionToken!.trim() },
             }
-            localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(next))
+            localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(next)))
             return next
           })
         }
@@ -301,10 +325,32 @@ export function DashboardConnectPage() {
       : {}
     localStorage.setItem(
       RESERVATION_ACCESS_KEY,
-      JSON.stringify({
-        ...prevAccess,
-        [platform]: { ical: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
-      }),
+      JSON.stringify(
+        sanitizeAccessInputsForStorage({
+          airbnb: {
+            ical: prevAccess.airbnb?.ical ?? '',
+            apiToken: prevAccess.airbnb?.apiToken ?? '',
+            accountId: prevAccess.airbnb?.accountId ?? '',
+            nightlyRate: prevAccess.airbnb?.nightlyRate ?? '',
+            commissionRate: prevAccess.airbnb?.commissionRate ?? '',
+          },
+          booking: {
+            ical: prevAccess.booking?.ical ?? '',
+            apiToken: prevAccess.booking?.apiToken ?? '',
+            accountId: prevAccess.booking?.accountId ?? '',
+            nightlyRate: prevAccess.booking?.nightlyRate ?? '',
+            commissionRate: prevAccess.booking?.commissionRate ?? '',
+          },
+          channelManager: {
+            ical: prevAccess.channelManager?.ical ?? '',
+            apiToken: prevAccess.channelManager?.apiToken ?? '',
+            accountId: prevAccess.channelManager?.accountId ?? '',
+            nightlyRate: prevAccess.channelManager?.nightlyRate ?? '',
+            commissionRate: prevAccess.channelManager?.commissionRate ?? '',
+          },
+          [platform]: { ical: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
+        }),
+      ),
     )
 
     const rawNames = localStorage.getItem(APARTMENT_NAME_KEY)
@@ -582,7 +628,10 @@ export function DashboardConnectPage() {
                 onChange={(e) =>
                   setAccessInputs((prev) => ({
                     ...prev,
-                    channelManager: { ...prev.channelManager, apiToken: e.target.value },
+                    channelManager: {
+                      ...prev.channelManager,
+                      apiToken: e.target.value.replace(/\s+/g, ''),
+                    },
                   }))
                 }
                 placeholder={
@@ -603,7 +652,11 @@ export function DashboardConnectPage() {
                 onChange={(e) =>
                   setAccessInputs((prev) => ({
                     ...prev,
-                    channelManager: { ...prev.channelManager, accountId: e.target.value },
+                    channelManager: {
+                      ...prev.channelManager,
+                      accountId:
+                        selectedProvider === 'beds24' ? e.target.value.replace(/\D/g, '') : e.target.value,
+                    },
                   }))
                 }
                 placeholder={
