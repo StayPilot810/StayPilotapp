@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Check, CircleCheck, TrendingUp, Users } from 'lucide-react'
+import { Check, CircleCheck, Eye, EyeOff, TrendingUp, Users } from 'lucide-react'
 import { useLanguage } from '../hooks/useLanguage'
 import {
   accountExistsByEmailOrUsername,
@@ -106,6 +106,9 @@ export function SignupPage() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [company, setCompany] = useState('')
   const [phone, setPhone] = useState('')
   const [promoCode, setPromoCode] = useState('')
@@ -180,6 +183,8 @@ export function SignupPage() {
       username.trim().length > 0 &&
       email.trim().length > 0 &&
       password.trim().length > 0 &&
+      confirmPassword.trim().length > 0 &&
+      password === confirmPassword &&
       (role === 'cleaner'
         ? Boolean(getValidCleanerInvite())
         : cardHolder.trim().length > 0 &&
@@ -194,6 +199,7 @@ export function SignupPage() {
       username,
       email,
       password,
+      confirmPassword,
       cardHolder,
       cardNumber,
       cardExpiry,
@@ -317,6 +323,14 @@ export function SignupPage() {
         setSubmitError('Inscription impossible : mot de passe manquant.')
         return
       }
+      if (!confirmPassword.trim()) {
+        setSubmitError('Inscription impossible : confirmation du mot de passe manquante.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setSubmitError('Inscription impossible : les deux mots de passe ne sont pas identiques.')
+        return
+      }
       if (role === 'cleaner' && !getValidCleanerInvite()) {
         setSubmitError("Inscription impossible : code d'invitation ménage invalide.")
         return
@@ -343,6 +357,10 @@ export function SignupPage() {
 
     if (accountExistsByEmailOrUsername(email, username)) {
       setSubmitError(t.signupDuplicateError)
+      return
+    }
+    if (password !== confirmPassword) {
+      setSubmitError('Inscription impossible : les deux mots de passe ne sont pas identiques.')
       return
     }
 
@@ -414,6 +432,9 @@ export function SignupPage() {
     setUsername('')
     setEmail('')
     setPassword('')
+    setConfirmPassword('')
+    setShowPassword(false)
+    setShowConfirmPassword(false)
     setCompany('')
     setPhone('')
     setPromoCode('')
@@ -603,13 +624,40 @@ export function SignupPage() {
               placeholder={t.signupEmail}
               className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t.signupPassword}
-              className="sm:col-span-2 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-            />
+            <div className="sm:col-span-2 relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t.signupPassword}
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="sm:col-span-2 relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirmer le mot de passe"
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <div className="sm:col-span-2 rounded-xl border border-sky-200/80 bg-sky-50/50 p-3.5">
               <p className="text-sm font-semibold text-zinc-900">{t.signupEmailVerifyTitle}</p>
               <p className="mt-1 text-xs text-zinc-600">{t.signupEmailVerifyExplain}</p>
