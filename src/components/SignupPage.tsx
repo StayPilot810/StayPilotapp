@@ -180,7 +180,12 @@ export function SignupPage() {
       username.trim().length > 0 &&
       email.trim().length > 0 &&
       password.trim().length > 0 &&
-      (role === 'cleaner' ? Boolean(getValidCleanerInvite()) : true),
+      (role === 'cleaner'
+        ? Boolean(getValidCleanerInvite())
+        : cardHolder.trim().length > 0 &&
+          cardNumber.trim().length >= 14 &&
+          cardExpiry.trim().length >= 4 &&
+          cardCvc.trim().length >= 3),
     [
       plan,
       role,
@@ -189,6 +194,10 @@ export function SignupPage() {
       username,
       email,
       password,
+      cardHolder,
+      cardNumber,
+      cardExpiry,
+      cardCvc,
       invitationCode,
       emailVerifyValidated,
       requireEmailOtp,
@@ -291,7 +300,42 @@ export function SignupPage() {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!canSubmit) return
+    if (!canSubmit) {
+      if (!firstName.trim() || !lastName.trim()) {
+        setSubmitError('Inscription impossible : prénom et nom sont obligatoires.')
+        return
+      }
+      if (!username.trim()) {
+        setSubmitError("Inscription impossible : nom d'utilisateur manquant.")
+        return
+      }
+      if (!email.trim()) {
+        setSubmitError('Inscription impossible : adresse e-mail manquante.')
+        return
+      }
+      if (!password.trim()) {
+        setSubmitError('Inscription impossible : mot de passe manquant.')
+        return
+      }
+      if (role === 'cleaner' && !getValidCleanerInvite()) {
+        setSubmitError("Inscription impossible : code d'invitation ménage invalide.")
+        return
+      }
+      if (role === 'host' && !plan.trim()) {
+        setSubmitError('Inscription impossible : forfait non sélectionné.')
+        return
+      }
+      if (role === 'host' && (!cardHolder.trim() || cardNumber.trim().length < 14 || cardExpiry.trim().length < 4 || cardCvc.trim().length < 3)) {
+        setSubmitError('Inscription impossible : coordonnées bancaires non renseignées ou incomplètes.')
+        return
+      }
+      if (requireEmailOtp && !emailVerifyValidated) {
+        setSubmitError('Inscription impossible : adresse e-mail non vérifiée.')
+        return
+      }
+      setSubmitError("Inscription impossible : informations manquantes ou invalides.")
+      return
+    }
     if (requireEmailOtp && !emailVerifyValidated) {
       setSubmitError(t.signupEmailVerifyInvalid)
       return
