@@ -995,19 +995,6 @@ export function ProfilePage() {
     }
   }
 
-  function markPaymentMethodAsInvalid() {
-    setBillingAutopay((prev) => ({
-      ...prev,
-      paymentMethodValid: false,
-      lastNotifiedAttempt: 0,
-    }))
-    setSaveMsg(
-      `Coordonnees bancaires invalides detectees. Echeance de prelevement: ${fmtLongDate(
-        billingAutopay.nextDueIso,
-      )}. Relances auto J1/J2/J3.`,
-    )
-  }
-
   useEffect(() => {
     runBillingRecoveryEngine()
   }, [account?.email, billingAutopay, billingRecovery, email])
@@ -1015,16 +1002,6 @@ export function ProfilePage() {
   useEffect(() => {
     void sendActivityDigestIfDue()
   }, [account?.email, digest, digestEmailsEnabled, email, firstName, notifications])
-
-  function updateBillingDetailsAndReactivate() {
-    readAndSyncBillingRecovery(null)
-    setBillingAutopay({
-      paymentMethodValid: true,
-      nextDueIso: computeUpcomingBillingDue(planStartDateIso(), new Date()).toISOString(),
-      lastNotifiedAttempt: 0,
-    })
-    setSaveMsg('Coordonnees bancaires mises a jour. Prelevements reactives et acces restaure.')
-  }
 
   async function confirmCancelBilling() {
     const endDate = computeEndDateForCancellation(planStartDateIso())

@@ -682,7 +682,10 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${moneyFormatter.format(value)} EUR`, key]}
+                          formatter={(value: number | string, key: string) => [
+                            `${moneyFormatter.format(Number(value) || 0)} EUR`,
+                            key,
+                          ]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -703,7 +706,10 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis domain={[0, 100]} tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
+                          formatter={(value: number | string, key: string) => [
+                            `${percentFormatter.format(Number(value) || 0)} %`,
+                            key,
+                          ]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -726,7 +732,10 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis domain={[0, 100]} tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
+                          formatter={(value: number | string, key: string) => [
+                            `${percentFormatter.format(Number(value) || 0)} %`,
+                            key,
+                          ]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -747,7 +756,10 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${moneyFormatter.format(value)} EUR`, key]}
+                          formatter={(value: number | string, key: string) => [
+                            `${moneyFormatter.format(Number(value) || 0)} EUR`,
+                            key,
+                          ]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -794,7 +806,10 @@ export function DashboardStatsPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Tooltip
-                      formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
+                      formatter={(value: number | string, key: string) => [
+                        `${percentFormatter.format(Number(value) || 0)} %`,
+                        key,
+                      ]}
                       contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                     />
                     <Pie
