@@ -1,4 +1,14 @@
-import { sendCancellationConfirmationEmail } from '../server/cancellationEmail.mjs'
+import {
+  sendCancellationConfirmationEmail,
+  sendFailedPaymentAlertEmail,
+  sendPlanChangeConfirmationEmail,
+  sendPasswordChangedConfirmationEmail,
+  sendPasswordResetConfirmationEmail,
+  sendPasswordVerificationCodeEmail,
+  sendSignupEmailVerificationCodeEmail,
+  sendActivityDigestEmail,
+  sendCallBookingConfirmationEmail,
+} from '../server/cancellationEmail.mjs'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,7 +25,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sendCancellationConfirmationEmail(body)
+    const mode = (body?.mode || 'cancellation').trim()
+    const result =
+      mode === 'payment_failed_alert'
+        ? await sendFailedPaymentAlertEmail(body)
+        : mode === 'plan_change_confirmation'
+          ? await sendPlanChangeConfirmationEmail(body)
+        : mode === 'password_changed_confirmation'
+          ? await sendPasswordChangedConfirmationEmail(body)
+        : mode === 'password_reset_confirmation'
+          ? await sendPasswordResetConfirmationEmail(body)
+        : mode === 'password_verification_code'
+          ? await sendPasswordVerificationCodeEmail(body)
+        : mode === 'signup_email_verification_code'
+          ? await sendSignupEmailVerificationCodeEmail(body)
+        : mode === 'activity_digest'
+          ? await sendActivityDigestEmail(body)
+        : mode === 'call_booking_confirmation'
+          ? await sendCallBookingConfirmationEmail(body)
+        : await sendCancellationConfirmationEmail(body)
     if (!result.ok) {
       res.status(result.status || 500).json({ error: result.error || 'email_error' })
       return

@@ -21,10 +21,18 @@ import { translations } from '../i18n/navbar'
 import { LanguageContext } from './languageContext'
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('fr')
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window === 'undefined') return 'fr'
+    const raw = (window.localStorage.getItem('staypilot_locale') || '').trim().toLowerCase()
+    if (raw === 'fr' || raw === 'en' || raw === 'es' || raw === 'de' || raw === 'it') return raw
+    return 'fr'
+  })
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('staypilot_locale', next)
+    }
   }, [])
 
   useEffect(() => {

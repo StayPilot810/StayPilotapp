@@ -7,6 +7,8 @@
     "dev": "node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --strictPort",
     "dev:clean": "rm -rf node_modules/.vite dist && node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --strictPort",
     "build": "tsc -b && node ./node_modules/vite/bin/vite.js build",
+    "build:beds24-tutorial": "python3 scripts/build_beds24_staypilot_tutorial.py --lang fr",
+    "build:beds24-tutorial:all": "python3 scripts/build_beds24_staypilot_tutorial.py --lang all",
     "lint": "eslint .",
     "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
@@ -19,7 +21,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-leaflet": "^5.0.0",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "stripe": "^22.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

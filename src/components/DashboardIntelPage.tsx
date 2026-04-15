@@ -154,6 +154,7 @@ type NamedEventRange = {
   label: string
   city?: string
 }
+const LS_WATCH_INTEL_SUMMARY = 'staypilot_watch_intel_summary_v1'
 
 const OLYMPIC_SUMMER_YEARS = [2024, 2028, 2032]
 const COASTAL_MARKERS = [
@@ -276,6 +277,24 @@ function MapResizer() {
   return null
 }
 
+const INTEL_TUTORIAL_VO_OPTIONS = [
+  { lang: 'fr', src: '/intel-watch-tutorial.mp4' },
+  { lang: 'en', src: '/intel-watch-tutorial.en.mp4' },
+  { lang: 'es', src: '/intel-watch-tutorial.es.mp4' },
+  { lang: 'de', src: '/intel-watch-tutorial.de.mp4' },
+  { lang: 'it', src: '/intel-watch-tutorial.it.mp4' },
+] as const
+
+function normalizeTutorialLocale(locale: string): (typeof INTEL_TUTORIAL_VO_OPTIONS)[number]['lang'] {
+  const value = locale.toLowerCase()
+  if (value.startsWith('fr')) return 'fr'
+  if (value.startsWith('en')) return 'en'
+  if (value.startsWith('es')) return 'es'
+  if (value.startsWith('de')) return 'de'
+  if (value.startsWith('it')) return 'it'
+  return 'fr'
+}
+
 export function DashboardIntelPage() {
   const formatIsoDate = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -284,6 +303,7 @@ export function DashboardIntelPage() {
   plus30Days.setDate(plus30Days.getDate() + 29)
 
   const { t, locale } = useLanguage()
+  const tutorialVo = normalizeTutorialLocale(locale)
   const copy = {
     fr: {
       searchLabel: 'Recherche adresse / coordonnees GPS',
@@ -316,6 +336,18 @@ export function DashboardIntelPage() {
       riskLow: 'Faible',
       riskMedium: 'Moyen',
       riskHigh: 'Fort',
+      tutorialTitle: 'Video tuto: veille informationnelle',
+      tutorialBody:
+        'Vos logements connectes remontent automatiquement. StayPilot analyse les informations autour de l adresse (evenements, affluence, signaux de demande locale).',
+      tutorialPreciseHint:
+        'Conseil: saisissez une adresse precise sur la carte. Une ville seule est souvent trop vague pour une analyse fiable.',
+      analysisPrecisionMessage:
+        'Analyse large sur la ville. Ajouter une adresse precise nous aidera a mieux vous conseiller.',
+      analyzedAddressLabel: 'Adresse analysee',
+      calendarMonth: 'Mois',
+      calendarCustomRange: 'Date personnalisee',
+      weekdayLabels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+      videoFallback: 'Votre navigateur ne lit pas la video MP4.',
     },
     en: {
       searchLabel: 'Address / GPS coordinates search',
@@ -348,6 +380,18 @@ export function DashboardIntelPage() {
       riskLow: 'Low',
       riskMedium: 'Medium',
       riskHigh: 'High',
+      tutorialTitle: 'Tutorial video: local intelligence',
+      tutorialBody:
+        'Your connected listings are pulled in automatically. StayPilot then analyzes nearby intelligence around the address (events, traffic, local demand signals).',
+      tutorialPreciseHint:
+        'Tip: enter a precise address on the map. A city name alone is usually too broad for reliable analysis.',
+      analysisPrecisionMessage:
+        'City-level analysis is broad. Adding a precise address helps us provide better recommendations.',
+      analyzedAddressLabel: 'Analyzed address',
+      calendarMonth: 'Month',
+      calendarCustomRange: 'Custom date range',
+      weekdayLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      videoFallback: 'Your browser does not support MP4 video playback.',
     },
     es: {
       searchLabel: 'Busqueda direccion / coordenadas GPS',
@@ -380,6 +424,18 @@ export function DashboardIntelPage() {
       riskLow: 'Bajo',
       riskMedium: 'Medio',
       riskHigh: 'Alto',
+      tutorialTitle: 'Video tutorial: vigilancia informativa',
+      tutorialBody:
+        'Tus alojamientos conectados se sincronizan automaticamente. StayPilot analiza luego la informacion alrededor de la direccion (eventos, afluencia y senales de demanda local).',
+      tutorialPreciseHint:
+        'Consejo: introduce una direccion precisa en el mapa. Una ciudad sola suele ser demasiado general para un analisis fiable.',
+      analysisPrecisionMessage:
+        'El analisis a nivel ciudad es amplio. Anadir una direccion precisa mejora la recomendacion.',
+      analyzedAddressLabel: 'Direccion analizada',
+      calendarMonth: 'Mes',
+      calendarCustomRange: 'Rango personalizado',
+      weekdayLabels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'],
+      videoFallback: 'Tu navegador no admite la reproduccion de video MP4.',
     },
     de: {
       searchLabel: 'Suche Adresse / GPS-Koordinaten',
@@ -412,6 +468,18 @@ export function DashboardIntelPage() {
       riskLow: 'Niedrig',
       riskMedium: 'Mittel',
       riskHigh: 'Hoch',
+      tutorialTitle: 'Tutorial-Video: lokale Informationen',
+      tutorialBody:
+        'Ihre verbundenen Unterkunfte werden automatisch ubernommen. StayPilot analysiert dann Signale rund um die Adresse (Events, Auslastung, lokale Nachfrage).',
+      tutorialPreciseHint:
+        'Tipp: Geben Sie eine genaue Adresse auf der Karte ein. Eine Stadt allein ist fur zuverlassige Analysen oft zu ungenau.',
+      analysisPrecisionMessage:
+        'Eine Analyse nur auf Stadtebene ist ungenau. Eine genaue Adresse liefert bessere Empfehlungen.',
+      analyzedAddressLabel: 'Analysierte Adresse',
+      calendarMonth: 'Monat',
+      calendarCustomRange: 'Benutzerdefinierter Zeitraum',
+      weekdayLabels: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+      videoFallback: 'Ihr Browser unterstutzt keine MP4-Videowiedergabe.',
     },
     it: {
       searchLabel: 'Ricerca indirizzo / coordinate GPS',
@@ -444,8 +512,124 @@ export function DashboardIntelPage() {
       riskLow: 'Basso',
       riskMedium: 'Medio',
       riskHigh: 'Alto',
+      tutorialTitle: 'Video tutorial: monitoraggio informativo',
+      tutorialBody:
+        'I tuoi alloggi connessi si sincronizzano automaticamente. StayPilot analizza poi i segnali intorno all indirizzo (eventi, affluenza, domanda locale).',
+      tutorialPreciseHint:
+        'Suggerimento: inserisci un indirizzo preciso nella mappa. Una sola citta e spesso troppo generica per analisi affidabili.',
+      analysisPrecisionMessage:
+        'L analisi a livello citta e ampia. Un indirizzo preciso migliora i suggerimenti.',
+      analyzedAddressLabel: 'Indirizzo analizzato',
+      calendarMonth: 'Mese',
+      calendarCustomRange: 'Intervallo personalizzato',
+      weekdayLabels: ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
+      videoFallback: 'Il tuo browser non supporta la riproduzione video MP4.',
     },
-  }[locale]
+  }[tutorialVo]
+  const runtimeText = {
+    fr: {
+      matchOf: 'Match de',
+      officialHoliday: 'Jour ferie officiel',
+      priceLabsSignal: 'Signal PriceLabs live: ajustement prioritaire applique',
+      confirmedEvent: 'Evenement confirme',
+      schoolHolidaysActive: 'Vacances scolaires actives',
+      schoolHolidayPeriodActive: 'periode scolaire active',
+      threeDayWeekend: 'Week-end de 3 jours: forte acceleration de la demande',
+      coastalSummer: 'Bord de mer en ete: pic massif de reservations (ADR et occupation en forte hausse)',
+      skiWinter: 'Station de ski en hiver: occupation, sejours courts et ADR explosent',
+      concertConfirmed: 'Concert confirme',
+      signals: 'signaux',
+      concertLiveDetected: 'Concerts / live shows detectes',
+      sportsMajorDetected: 'Evenements sportifs majeurs detectes (F1, rugby, tennis, football, NFL...)',
+      matchSignals: 'signaux matchs',
+      businessConference: 'Salon / conference',
+      businessInCity: 'Salon / conference en ville',
+      localActivityHigh: 'Activite locale tres forte',
+      localActivityUp: 'Activite locale en hausse',
+      articlesDetectedToday: 'articles detectes ce jour',
+      geopoliticalHigh: 'Risque geopolitique eleve',
+      geopoliticalMedium: 'Risque geopolitique modere',
+      conflictSignalsDemandDown: 'signaux conflit (demande touristique en baisse)',
+      conflictSignalsDemandPressure: 'signaux conflit (demande sous pression)',
+      geopoliticalTension: 'Tension geopolitique detectee',
+      signalSingle: 'signal',
+      weatherAlert: 'Alerte meteo locale',
+      heatWave: 'Chaleur soutenue',
+      skiCold: 'Conditions froides favorables au ski',
+      weekendImpactedBy: 'Week-end impacte par',
+      weekendEffect: 'Effet week-end (hausse naturelle de la demande)',
+      localContextDynamic: 'Contexte local global tres dynamique',
+      recentArticles: 'articles recents',
+      worldSignalLive: 'Signal monde en direct',
+      activitiesDetected: 'activites detectees',
+      standardDemand: 'Demande standard',
+      increasePricesBy: 'Augmentez vos prix de',
+      lowerPricesBy: 'Baissez vos prix de',
+      summaryIntro: 'Pour {month} a {address}, la pression de demande est estimee a {high} jours forts, {medium} jours en hausse et {low} jours standards.',
+      summarySchool:
+        'Les vacances scolaires impactent la demande sur une partie du mois, avec des effets plus marques autour des week-ends.',
+      summaryEvents:
+        'Des signaux evenementiels sont detectes ({events}), ce qui peut accelerer les reservations de derniere minute.',
+      summaryWeather:
+        'La meteo en temps reel influence certains jours (chaleur/alerte), ce qui ajuste le niveau de prix recommande.',
+      summaryGeo:
+        'Un risque geopolitique est detecte sur certains jours: la recommandation privilegie la prudence tarifaire sur ces dates.',
+      summaryTip:
+        'Conseil: conservez une strategie dynamique, avec hausses ciblees sur les pics confirmes et ajustements moderes sur les jours sans convergence forte de signaux.',
+      summaryEventsConcerts: 'concerts/shows',
+      summaryEventsSports: 'sports majeurs',
+      and: ' et ',
+    },
+    en: {
+      matchOf: 'Match',
+      officialHoliday: 'Official holiday',
+      priceLabsSignal: 'Live PriceLabs signal: priority adjustment applied',
+      confirmedEvent: 'Confirmed event',
+      schoolHolidaysActive: 'School holidays active',
+      schoolHolidayPeriodActive: 'school holiday period active',
+      threeDayWeekend: '3-day weekend: strong demand acceleration',
+      coastalSummer: 'Coastal summer market: major booking peak (ADR and occupancy rising sharply)',
+      skiWinter: 'Ski market in winter: occupancy, short stays, and ADR surge',
+      concertConfirmed: 'Confirmed concert',
+      signals: 'signals',
+      concertLiveDetected: 'Concerts / live shows detected',
+      sportsMajorDetected: 'Major sports events detected (F1, rugby, tennis, football, NFL...)',
+      matchSignals: 'match signals',
+      businessConference: 'Expo / conference',
+      businessInCity: 'Expo / conference in the city',
+      localActivityHigh: 'Very strong local activity',
+      localActivityUp: 'Local activity rising',
+      articlesDetectedToday: 'articles detected today',
+      geopoliticalHigh: 'High geopolitical risk',
+      geopoliticalMedium: 'Moderate geopolitical risk',
+      conflictSignalsDemandDown: 'conflict signals (tourism demand decreasing)',
+      conflictSignalsDemandPressure: 'conflict signals (demand under pressure)',
+      geopoliticalTension: 'Geopolitical tension detected',
+      signalSingle: 'signal',
+      weatherAlert: 'Local weather alert',
+      heatWave: 'Sustained heat',
+      skiCold: 'Cold conditions favorable for ski demand',
+      weekendImpactedBy: 'Weekend impacted by',
+      weekendEffect: 'Weekend effect (natural demand increase)',
+      localContextDynamic: 'Overall local context is very dynamic',
+      recentArticles: 'recent articles',
+      worldSignalLive: 'Live global signal',
+      activitiesDetected: 'activities detected',
+      standardDemand: 'Standard demand',
+      increasePricesBy: 'Increase your prices by',
+      lowerPricesBy: 'Lower your prices by',
+      summaryIntro: 'For {month} in {address}, demand pressure is estimated at {high} high days, {medium} rising days, and {low} standard days.',
+      summarySchool: 'School holidays impact demand during part of the month, with stronger effects around weekends.',
+      summaryEvents: 'Event signals are detected ({events}), which can accelerate last-minute bookings.',
+      summaryWeather: 'Real-time weather affects some days (heat/alert), which adjusts the recommended price level.',
+      summaryGeo: 'Geopolitical risk is detected on some days: pricing guidance stays cautious on these dates.',
+      summaryTip:
+        'Tip: keep a dynamic strategy, with targeted increases on confirmed peaks and moderate adjustments on days without strong signal convergence.',
+      summaryEventsConcerts: 'concerts/shows',
+      summaryEventsSports: 'major sports',
+      and: ' and ',
+    },
+  }[locale === 'fr' || locale === 'en' ? locale : 'en']
 
   const [query, setQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
@@ -606,7 +790,7 @@ export function DashboardIntelPage() {
     normalizedAddress.includes('road')
   const analysisPrecisionMessage =
     isBroadCityAnalysis || !isPreciseAddress
-      ? 'Analyse large sur la ville. Ajouter une adresse precise nous aidera a mieux vous conseiller.'
+      ? copy.analysisPrecisionMessage
       : ''
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'long' })
   const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -870,10 +1054,10 @@ export function DashboardIntelPage() {
             if (!typedSignals[iso].sources.includes('TheSportsDB')) typedSignals[iso].sources.push('TheSportsDB')
             const versusLabel =
               event.strHomeTeam && event.strAwayTeam
-                ? `Match de ${event.strHomeTeam} vs ${event.strAwayTeam}`
+                ? `${runtimeText.matchOf} ${event.strHomeTeam} vs ${event.strAwayTeam}`
                 : event.strEvent
-                  ? `Match de ${event.strEvent}`
-                  : 'Match majeur detecte'
+                  ? `${runtimeText.matchOf} ${event.strEvent}`
+                  : `${runtimeText.matchOf} major detected`
             if (typedSignals[iso].sportsLabels.length < 5) typedSignals[iso].sportsLabels.push(versusLabel)
           }
         }
@@ -895,7 +1079,8 @@ export function DashboardIntelPage() {
               if (category.includes('sport')) {
                 typedSignals[iso].sports += 2
                 if (!typedSignals[iso].sources.includes('Ticketmaster')) typedSignals[iso].sources.push('Ticketmaster')
-                if (eventName && typedSignals[iso].sportsLabels.length < 6) typedSignals[iso].sportsLabels.push(`Match de ${eventName}`)
+                if (eventName && typedSignals[iso].sportsLabels.length < 6)
+                  typedSignals[iso].sportsLabels.push(`${runtimeText.matchOf} ${eventName}`)
               } else if (category.includes('music')) {
                 typedSignals[iso].concerts += 2
                 if (!typedSignals[iso].sources.includes('Ticketmaster')) typedSignals[iso].sources.push('Ticketmaster')
@@ -928,7 +1113,8 @@ export function DashboardIntelPage() {
               if (type.includes('sport')) {
                 typedSignals[date].sports += 2
                 if (!typedSignals[date].sources.includes('SeatGeek')) typedSignals[date].sources.push('SeatGeek')
-                if (title && typedSignals[date].sportsLabels.length < 6) typedSignals[date].sportsLabels.push(`Match de ${title}`)
+                if (title && typedSignals[date].sportsLabels.length < 6)
+                  typedSignals[date].sportsLabels.push(`${runtimeText.matchOf} ${title}`)
               } else if (type.includes('concert') || type.includes('music')) {
                 typedSignals[date].concerts += 2
                 if (!typedSignals[date].sources.includes('SeatGeek')) typedSignals[date].sources.push('SeatGeek')
@@ -961,7 +1147,8 @@ export function DashboardIntelPage() {
               if (category.includes('sports')) {
                 typedSignals[date].sports += 2
                 if (!typedSignals[date].sources.includes('PredictHQ')) typedSignals[date].sources.push('PredictHQ')
-                if (title && typedSignals[date].sportsLabels.length < 6) typedSignals[date].sportsLabels.push(`Match de ${title}`)
+                if (title && typedSignals[date].sportsLabels.length < 6)
+                  typedSignals[date].sportsLabels.push(`${runtimeText.matchOf} ${title}`)
               } else if (category.includes('concerts') || category.includes('performing-arts')) {
                 typedSignals[date].concerts += 2
                 if (!typedSignals[date].sources.includes('PredictHQ')) typedSignals[date].sources.push('PredictHQ')
@@ -1187,7 +1374,8 @@ export function DashboardIntelPage() {
 
               if (eventType.includes('sport')) {
                 typedSignals[iso].sports += demandBoost
-                if (name && typedSignals[iso].sportsLabels.length < 8) typedSignals[iso].sportsLabels.push(`Match de ${name}`)
+                if (name && typedSignals[iso].sportsLabels.length < 8)
+                  typedSignals[iso].sportsLabels.push(`${runtimeText.matchOf} ${name}`)
               } else if (eventType.includes('concert') || eventType.includes('music')) {
                 typedSignals[iso].concerts += demandBoost
                 if (name && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(name)
@@ -1328,45 +1516,45 @@ export function DashboardIntelPage() {
         let eventDrivenBump = 0
 
         if (holiday) {
-          reasons.push(`Jour ferie officiel: ${holiday.localName || holiday.name}`)
+          reasons.push(`${runtimeText.officialHoliday}: ${holiday.localName || holiday.name}`)
           bump += 8
           eventDrivenBump += 8
         }
         if (hasPriceLabsSignal) {
-          reasons.push('Signal PriceLabs live: ajustement prioritaire applique')
+          reasons.push(runtimeText.priceLabsSignal)
           bump += 4
           eventDrivenBump += 4
         }
         if (namedEvent) {
-          reasons.push(`Evenement confirme: ${namedEvent.label}`)
+          reasons.push(`${runtimeText.confirmedEvent}: ${namedEvent.label}`)
           bump += 7
           eventDrivenBump += 7
         }
         if (hasSchoolHoliday) {
-          reasons.push(`Vacances scolaires actives: ${schoolHolidayRange?.label ?? 'periode scolaire active'}`)
+          reasons.push(`${runtimeText.schoolHolidaysActive}: ${schoolHolidayRange?.label ?? runtimeText.schoolHolidayPeriodActive}`)
           bump += 5
           structuralBump += 5
         }
         if (isLongWeekend) {
-          reasons.push('Week-end de 3 jours: forte acceleration de la demande')
+          reasons.push(runtimeText.threeDayWeekend)
           bump += 8
           eventDrivenBump += 8
         }
         if (isCoastalMarket && isSummer) {
-          reasons.push('Bord de mer en ete: pic massif de reservations (ADR et occupation en forte hausse)')
+          reasons.push(runtimeText.coastalSummer)
           bump += isWeekend ? 9 : 6
           structuralBump += isWeekend ? 9 : 6
         }
         if (isSkiMarket && isWinter) {
-          reasons.push('Station de ski en hiver: occupation, sejours courts et ADR explosent')
+          reasons.push(runtimeText.skiWinter)
           bump += hasSchoolHoliday || isWeekend ? 10 : 6
           structuralBump += hasSchoolHoliday || isWeekend ? 10 : 6
         }
         if (liveSignals.concerts >= 3) {
           reasons.push(
             liveSignals.concertLabels[0]
-              ? `Concert confirme: ${liveSignals.concertLabels[0]} (${liveSignals.concerts} signaux)`
-              : `Concerts / live shows detectes (${liveSignals.concerts} signaux)`,
+              ? `${runtimeText.concertConfirmed}: ${liveSignals.concertLabels[0]} (${liveSignals.concerts} ${runtimeText.signals})`
+              : `${runtimeText.concertLiveDetected} (${liveSignals.concerts} ${runtimeText.signals})`,
           )
           bump += 7
           eventDrivenBump += 7
@@ -1374,8 +1562,8 @@ export function DashboardIntelPage() {
         if (liveSignals.sports >= 3) {
           reasons.push(
             liveSignals.sportsLabels[0]
-              ? `${liveSignals.sportsLabels[0]} (${liveSignals.sports} signaux matchs)`
-              : `Evenements sportifs majeurs detectes (F1, rugby, tennis, football, NFL...) - ${liveSignals.sports} signaux`,
+              ? `${liveSignals.sportsLabels[0]} (${liveSignals.sports} ${runtimeText.matchSignals})`
+              : `${runtimeText.sportsMajorDetected} - ${liveSignals.sports} ${runtimeText.signals}`,
           )
           bump += 6
           eventDrivenBump += 6
@@ -1383,76 +1571,76 @@ export function DashboardIntelPage() {
         if (liveSignals.business >= 3) {
           reasons.push(
             liveSignals.businessLabels[0]
-              ? `Salon / conference: ${liveSignals.businessLabels[0]} (${liveSignals.business} signaux)`
-              : `Salon / conference en ville (${liveSignals.business} signaux)`,
+              ? `${runtimeText.businessConference}: ${liveSignals.businessLabels[0]} (${liveSignals.business} ${runtimeText.signals})`
+              : `${runtimeText.businessInCity} (${liveSignals.business} ${runtimeText.signals})`,
           )
           bump += 4
           eventDrivenBump += 4
         }
         if (liveNewsCount >= 8) {
-          reasons.push(`Activite locale tres forte: ${liveNewsCount} articles detectes ce jour`)
+          reasons.push(`${runtimeText.localActivityHigh}: ${liveNewsCount} ${runtimeText.articlesDetectedToday}`)
           bump += 5
           eventDrivenBump += 5
         } else if (liveNewsCount >= 4) {
-          reasons.push(`Activite locale en hausse: ${liveNewsCount} articles detectes ce jour`)
+          reasons.push(`${runtimeText.localActivityUp}: ${liveNewsCount} ${runtimeText.articlesDetectedToday}`)
           bump += 3
           eventDrivenBump += 3
         }
         if (liveConflictCount >= 6) {
-          reasons.push(`Risque geopolitique eleve: ${liveConflictCount} signaux conflit (demande touristique en baisse)`)
+          reasons.push(`${runtimeText.geopoliticalHigh}: ${liveConflictCount} ${runtimeText.conflictSignalsDemandDown}`)
           bump -= 14
         } else if (liveConflictCount >= 3) {
-          reasons.push(`Risque geopolitique modere: ${liveConflictCount} signaux conflit (demande sous pression)`)
+          reasons.push(`${runtimeText.geopoliticalMedium}: ${liveConflictCount} ${runtimeText.conflictSignalsDemandPressure}`)
           bump -= 8
         } else if (liveConflictCount >= 1) {
-          reasons.push(`Tension geopolitique detectee: ${liveConflictCount} signal`)
+          reasons.push(`${runtimeText.geopoliticalTension}: ${liveConflictCount} ${runtimeText.signalSingle}`)
           bump -= 3
         }
         if (severeWeather) {
           reasons.push(
-            `Alerte meteo locale: code ${weather?.weatherCode ?? 'N/A'} / max ${Math.round(weather?.tempMax ?? 0)}C`,
+            `${runtimeText.weatherAlert}: code ${weather?.weatherCode ?? 'N/A'} / max ${Math.round(weather?.tempMax ?? 0)}C`,
           )
           bump += 2
           eventDrivenBump += 2
         } else if (heatWave) {
-          reasons.push(`Chaleur soutenue: ${Math.round(weather?.tempMax ?? 0)}C max`)
+          reasons.push(`${runtimeText.heatWave}: ${Math.round(weather?.tempMax ?? 0)}C max`)
           bump += 2
           structuralBump += 2
         }
         if (isSkiMarket && isWinter && weather && weather.tempMax <= 1) {
-          reasons.push(`Conditions froides favorables au ski: ${Math.round(weather.tempMax)}C max`)
+          reasons.push(`${runtimeText.skiCold}: ${Math.round(weather.tempMax)}C max`)
           bump += 4
           structuralBump += 4
         }
         if (isPeakWeekend || isWeekendLift) {
           if (namedEvent) {
-            reasons.push(`Week-end impacte par: ${namedEvent.label}`)
+            reasons.push(`${runtimeText.weekendImpactedBy}: ${namedEvent.label}`)
             bump += 4
             eventDrivenBump += 4
           } else if (liveSignals.concertLabels[0]) {
-            reasons.push(`Week-end impacte par: ${liveSignals.concertLabels[0]}`)
+            reasons.push(`${runtimeText.weekendImpactedBy}: ${liveSignals.concertLabels[0]}`)
             bump += 4
             eventDrivenBump += 4
           } else if (liveSignals.sportsLabels[0]) {
-            reasons.push(`Week-end impacte par: ${liveSignals.sportsLabels[0]}`)
+            reasons.push(`${runtimeText.weekendImpactedBy}: ${liveSignals.sportsLabels[0]}`)
             bump += 4
             eventDrivenBump += 4
           } else {
-            reasons.push('Effet week-end (hausse naturelle de la demande)')
+            reasons.push(runtimeText.weekendEffect)
             bump += 3
             structuralBump += 3
           }
         }
         if (newsHotspotScore >= 60 && (seed + day + monthIndex) % 5 === 0) {
-          reasons.push(`Contexte local global tres dynamique (${newsHotspotScore} articles recents)`)
+          reasons.push(`${runtimeText.localContextDynamic} (${newsHotspotScore} ${runtimeText.recentArticles})`)
           bump += 2
           eventDrivenBump += 2
         }
         if (globalLive.worldAlerts >= 10) {
           reasons.push(
             globalLive.labels[0]
-              ? `Signal monde en direct: ${globalLive.labels[0]}`
-              : `Signal monde en direct: ${globalLive.worldAlerts} activites detectees`,
+              ? `${runtimeText.worldSignalLive}: ${globalLive.labels[0]}`
+              : `${runtimeText.worldSignalLive}: ${globalLive.worldAlerts} ${runtimeText.activitiesDetected}`,
           )
           bump += 3
           eventDrivenBump += 3
@@ -1473,9 +1661,9 @@ export function DashboardIntelPage() {
             : cappedBump >= (pricingMode === 'ultra' ? 10 : 7)
               ? 'medium'
               : 'low'
-        const reasonsLabel = reasons.length > 0 ? reasons.join(' | ') : 'Demande standard'
+        const reasonsLabel = reasons.length > 0 ? reasons.join(' | ') : runtimeText.standardDemand
         const sourceLabel = liveSignals.sources.length > 0 ? ` [sources: ${liveSignals.sources.join(', ')}]` : ''
-        const actionLabel = cappedBump >= 0 ? 'Augmentez vos prix de' : 'Baissez vos prix de'
+        const actionLabel = cappedBump >= 0 ? runtimeText.increasePricesBy : runtimeText.lowerPricesBy
         const event = `${reasonsLabel} - ${activeLocationAddress} - ${actionLabel} ${Math.abs(cappedBump)}%${sourceLabel}`
         cells.push({ day, isoDate, level, event })
       }
@@ -1489,6 +1677,7 @@ export function DashboardIntelPage() {
   }, [
     activeLocationAddress,
     activeLocationLabel,
+    locale,
     liveHolidays,
     liveSignalsByDate,
     monthFormatter,
@@ -1534,27 +1723,52 @@ export function DashboardIntelPage() {
 
     const lines: string[] = []
     lines.push(
-      `Pour ${displayedMonth.monthName} a ${displayedAnalyzedAddress}, la pression de demande est estimee a ${highDays} jours forts, ${mediumDays} jours en hausse et ${lowDays} jours standards.`,
+      runtimeText.summaryIntro
+        .replace('{month}', displayedMonth.monthName)
+        .replace('{address}', displayedAnalyzedAddress)
+        .replace('{high}', String(highDays))
+        .replace('{medium}', String(mediumDays))
+        .replace('{low}', String(lowDays)),
     )
     if (hasSchoolHoliday) {
-      lines.push('Les vacances scolaires impactent la demande sur une partie du mois, avec des effets plus marqués autour des week-ends.')
+      lines.push(runtimeText.summarySchool)
     }
     if (hasConcert || hasSports) {
+      const eventsLabel = `${hasConcert ? runtimeText.summaryEventsConcerts : ''}${hasConcert && hasSports ? runtimeText.and : ''}${hasSports ? runtimeText.summaryEventsSports : ''}`
       lines.push(
-        `Des signaux evenementiels sont detectes (${hasConcert ? 'concerts/shows' : ''}${hasConcert && hasSports ? ' et ' : ''}${hasSports ? 'sports majeurs' : ''}), ce qui peut accelerer les réservations de dernière minute.`,
+        runtimeText.summaryEvents.replace('{events}', eventsLabel),
       )
     }
     if (hasStrongWeather) {
-      lines.push('La météo en temps réel influence certains jours (chaleur/alerte), ce qui ajuste le niveau de prix recommandé.')
+      lines.push(runtimeText.summaryWeather)
     }
     if (hasConflictRisk) {
-      lines.push('Un risque géopolitique est détecté sur certains jours: la recommandation privilégie la prudence tarifaire sur ces dates.')
+      lines.push(runtimeText.summaryGeo)
     }
-    lines.push(
-      'Conseil: conservez une stratégie dynamique, avec hausses ciblées sur les pics confirmés et ajustements modérés sur les jours sans convergence forte de signaux.',
-    )
+    lines.push(runtimeText.summaryTip)
     return lines
-  }, [displayedMonth, displayedAnalyzedAddress])
+  }, [displayedMonth, displayedAnalyzedAddress, locale])
+
+  useEffect(() => {
+    const cells = displayedMonth.cells.filter(
+      (cell): cell is { day: number; isoDate: string; level: 'low' | 'medium' | 'high'; event: string } => Boolean(cell),
+    )
+    const highEvents = cells
+      .filter((cell) => cell.level === 'high')
+      .slice(0, 8)
+      .map((cell) => ({
+        date: cell.isoDate,
+        event: cell.event,
+      }))
+    const payload = {
+      updatedAtIso: new Date().toISOString(),
+      monthLabel: displayedMonth.monthName,
+      analyzedAddress: displayedAnalyzedAddress,
+      summaryLines: monthlyWatchSummary,
+      highEvents,
+    }
+    localStorage.setItem(LS_WATCH_INTEL_SUMMARY, JSON.stringify(payload))
+  }, [displayedAnalyzedAddress, displayedMonth, monthlyWatchSummary])
 
   const onSearch = async (e: FormEvent) => {
     e.preventDefault()
@@ -1880,7 +2094,9 @@ export function DashboardIntelPage() {
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3.5">
             <h3 className="text-sm font-bold text-zinc-900">{copy.calendarTitle}</h3>
             <p className="mt-1 text-xs text-zinc-600">{copy.calendarSubtitle}</p>
-            <p className="mt-1 text-xs font-semibold text-zinc-800">Adresse analysee: {displayedAnalyzedAddress}</p>
+            <p className="mt-1 text-xs font-semibold text-zinc-800">
+              {copy.analyzedAddressLabel}: {displayedAnalyzedAddress}
+            </p>
             {analysisPrecisionMessage ? <p className="mt-1 text-[11px] text-zinc-600">{analysisPrecisionMessage}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
@@ -1888,14 +2104,14 @@ export function DashboardIntelPage() {
                 onClick={() => setCalendarViewMode('month')}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'month' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
               >
-                Mois
+                {copy.calendarMonth}
               </button>
               <button
                 type="button"
                 onClick={() => setCalendarViewMode('custom')}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'custom' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
               >
-                Date personnalisee
+                {copy.calendarCustomRange}
               </button>
               {calendarViewMode === 'month' ? (
                 <select
@@ -1946,7 +2162,7 @@ export function DashboardIntelPage() {
             {calendarViewMode === 'month' ? (
               <div className="mt-3 w-full rounded-xl border border-zinc-200 bg-white p-3">
                 <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-zinc-500">
-                  {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((w) => (
+                  {copy.weekdayLabels.map((w) => (
                     <div key={w} className="py-1">{w}</div>
                   ))}
                 </div>

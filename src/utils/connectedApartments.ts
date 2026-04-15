@@ -1,3 +1,6 @@
+import type { OfficialChannelOtaLinks } from './officialChannelData'
+import { readOfficialChannelSyncData } from './officialChannelData'
+
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
 export type ConnectedApartment = {
@@ -5,6 +8,7 @@ export type ConnectedApartment = {
   platform: ChannelKey
   name: string
   address: string
+  channelLinks?: OfficialChannelOtaLinks
 }
 
 const CHANNEL_STORAGE_KEY = 'staypilot_connected_channels'
@@ -53,6 +57,17 @@ function guessNameFromIcal(ical: string, platform: ChannelKey) {
 
 export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
   try {
+    const official = readOfficialChannelSyncData()
+    if (official && official.properties.length > 0) {
+      return official.properties.map((prop) => ({
+        id: `channelManager:${prop.id}`,
+        platform: 'channelManager',
+        name: prop.name,
+        address: prop.address || '',
+        channelLinks: prop.channelLinks,
+      }))
+    }
+
     const channelsRaw = localStorage.getItem(CHANNEL_STORAGE_KEY)
     const accessRaw = localStorage.getItem(ACCESS_STORAGE_KEY)
     const namesRaw = localStorage.getItem(APARTMENT_NAME_KEY)

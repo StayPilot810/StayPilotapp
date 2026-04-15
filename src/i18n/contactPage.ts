@@ -1,7 +1,7 @@
 import type { Locale } from './navbar'
 
 /** Adresse support unique (alignée centre d’aide / carrières). */
-export const CONTACT_EMAIL = 'contail@staypilot.fr'
+export const CONTACT_EMAIL = 'support@staypilot.fr'
 
 export type ContactPageCopy = {
   contactBackLink: string

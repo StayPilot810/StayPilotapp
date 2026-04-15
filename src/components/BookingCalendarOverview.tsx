@@ -8,13 +8,6 @@ import {
   BookingReservationPopover,
   type CalendarReservationDetail,
 } from './BookingReservationPopover'
-import {
-  DEMO_APARTMENT_ROW_COUNT,
-  DEMO_MONTH_INDEX,
-  DEMO_YEAR,
-  DAYS_IN_MONTH,
-  MOCK_BOOKINGS,
-} from '../data/demoCalendarBookings'
 
 const brandBlue = '#4f86f7'
 const airbnbRed = '#ef4444'
@@ -27,6 +20,251 @@ const BCP47: Record<Locale, string> = {
   de: 'de-DE',
   it: 'it-IT',
 }
+
+/** Avril 2026 — données de démo (sans logique métier). */
+const DEMO_YEAR = 2026
+const DEMO_MONTH_INDEX = 3
+const DAYS_IN_MONTH = 30
+
+/**
+ * Ordres de grandeur pour la démo (les contrats réels varient fortement) :
+ * - Airbnb : ici ~14–15 % sur (prix voyageur + ménage), proche de ce que beaucoup d’hôtes voient
+ *   comme « frais plateforme » sur l’ensemble du séjour ; en réalité Airbnb mélange souvent un petit
+ *   % côté hôte et un plus gros % côté voyageur selon le pays et le type de tarif.
+ * - Booking.com : commission hébergement courante ~15–16 %.
+ * - Genius : surcoût typique ~+3 points vs le taux de base.
+ */
+const MOCK_BOOKINGS: CalendarReservationDetail[] = [
+  {
+    apt: 0,
+    channel: 'airbnb',
+    start: 2,
+    end: 6,
+    guest: 'Sarah Johnson',
+    nights: 5,
+    reservationId: 'HMA2B9XK4L',
+    totalGuestEur: 612,
+    cleaningEur: 58,
+    platformFeePercent: 14.2,
+    platformFeeEur: 95,
+    netPayoutEur: 575,
+  },
+  {
+    apt: 0,
+    channel: 'booking',
+    start: 14,
+    end: 18,
+    guest: 'Lucas Martin',
+    nights: 5,
+    reservationId: '4287193560',
+    bookingGenius: true,
+    totalGuestEur: 765,
+    cleaningEur: 62,
+    platformFeePercent: 19.0,
+    platformFeeEur: 157,
+    netPayoutEur: 670,
+  },
+  {
+    apt: 0,
+    channel: 'airbnb',
+    start: 25,
+    end: 28,
+    guest: 'Alex Turner',
+    nights: 4,
+    reservationId: 'ZQP8WNR3TJ',
+    totalGuestEur: 498,
+    cleaningEur: 52,
+    platformFeePercent: 14.5,
+    platformFeeEur: 80,
+    netPayoutEur: 470,
+  },
+  {
+    apt: 1,
+    channel: 'booking',
+    start: 4,
+    end: 9,
+    guest: 'Emma Dubois',
+    nights: 6,
+    reservationId: '5912837465',
+    totalGuestEur: 720,
+    cleaningEur: 60,
+    platformFeePercent: 15.5,
+    platformFeeEur: 121,
+    netPayoutEur: 659,
+  },
+  {
+    apt: 1,
+    channel: 'airbnb',
+    start: 20,
+    end: 24,
+    guest: 'James Wilson',
+    nights: 5,
+    reservationId: 'BVN7M4K2CX',
+    totalGuestEur: 540,
+    cleaningEur: 55,
+    platformFeePercent: 14.8,
+    platformFeeEur: 88,
+    netPayoutEur: 507,
+  },
+  {
+    apt: 1,
+    channel: 'booking',
+    start: 26,
+    end: 30,
+    guest: 'Sofia Rossi',
+    nights: 5,
+    reservationId: '8839201746',
+    bookingGenius: true,
+    totalGuestEur: 931,
+    cleaningEur: 70,
+    platformFeePercent: 19.5,
+    platformFeeEur: 195,
+    netPayoutEur: 806,
+  },
+  {
+    apt: 2,
+    channel: 'airbnb',
+    start: 1,
+    end: 4,
+    guest: 'Marie Laurent',
+    nights: 4,
+    reservationId: 'LKJ9HGF3QW',
+    totalGuestEur: 420,
+    cleaningEur: 48,
+    platformFeePercent: 15.1,
+    platformFeeEur: 71,
+    netPayoutEur: 397,
+  },
+  {
+    apt: 2,
+    channel: 'airbnb',
+    start: 12,
+    end: 15,
+    guest: 'Paul Klein',
+    nights: 4,
+    reservationId: 'RTY5UIO0PA',
+    totalGuestEur: 380,
+    cleaningEur: 45,
+    platformFeePercent: 14.3,
+    platformFeeEur: 61,
+    netPayoutEur: 364,
+  },
+  {
+    apt: 2,
+    channel: 'booking',
+    start: 17,
+    end: 21,
+    guest: 'Nina Patel',
+    nights: 5,
+    reservationId: '1928374650',
+    totalGuestEur: 610,
+    cleaningEur: 58,
+    platformFeePercent: 16.0,
+    platformFeeEur: 107,
+    netPayoutEur: 561,
+  },
+  {
+    apt: 2,
+    channel: 'airbnb',
+    start: 23,
+    end: 27,
+    guest: 'Tom Hansen',
+    nights: 5,
+    reservationId: 'ZXCV8BNM1Q',
+    totalGuestEur: 550,
+    cleaningEur: 52,
+    platformFeePercent: 15.0,
+    platformFeeEur: 90,
+    netPayoutEur: 512,
+  },
+  {
+    apt: 3,
+    channel: 'booking',
+    start: 6,
+    end: 11,
+    guest: 'Oliver Smith',
+    nights: 6,
+    reservationId: '7463528190',
+    totalGuestEur: 680,
+    cleaningEur: 62,
+    platformFeePercent: 15.5,
+    platformFeeEur: 115,
+    netPayoutEur: 627,
+  },
+  {
+    apt: 3,
+    channel: 'airbnb',
+    start: 16,
+    end: 22,
+    guest: 'Clara Müller',
+    nights: 7,
+    reservationId: 'ASDF6GHJKL',
+    totalGuestEur: 890,
+    cleaningEur: 72,
+    platformFeePercent: 14.6,
+    platformFeeEur: 140,
+    netPayoutEur: 822,
+  },
+  {
+    apt: 3,
+    channel: 'booking',
+    start: 3,
+    end: 5,
+    guest: 'Léa Bernard',
+    nights: 3,
+    reservationId: '3849201756',
+    bookingGenius: true,
+    totalGuestEur: 672,
+    cleaningEur: 60,
+    platformFeePercent: 18.5,
+    platformFeeEur: 135,
+    netPayoutEur: 597,
+  },
+  {
+    apt: 3,
+    channel: 'airbnb',
+    start: 28,
+    end: 30,
+    guest: 'Chris Lee',
+    nights: 3,
+    reservationId: 'QWER4TYUI1',
+    totalGuestEur: 310,
+    cleaningEur: 40,
+    platformFeePercent: 14.4,
+    platformFeeEur: 50,
+    netPayoutEur: 300,
+  },
+  {
+    apt: 1,
+    channel: 'airbnb',
+    start: 11,
+    end: 13,
+    guest: 'Julia Novak',
+    nights: 3,
+    reservationId: 'PLM9OKN2IJ',
+    totalGuestEur: 290,
+    cleaningEur: 38,
+    platformFeePercent: 15.2,
+    platformFeeEur: 50,
+    netPayoutEur: 278,
+  },
+  {
+    apt: 0,
+    channel: 'booking',
+    start: 8,
+    end: 11,
+    guest: 'Marc Dubois',
+    nights: 4,
+    reservationId: '5729183046',
+    totalGuestEur: 505,
+    cleaningEur: 50,
+    platformFeePercent: 16.0,
+    platformFeeEur: 89,
+    netPayoutEur: 466,
+  },
+]
+
+const DEMO_APARTMENT_ROW_COUNT = 1 + MOCK_BOOKINGS.reduce((max, b) => Math.max(max, b.apt), 0)
 
 type PeriodTab = 'this' | 'last' | 'next'
 type ModalKind = 'option' | 'action'
@@ -454,15 +692,18 @@ export function BookingCalendarOverview() {
         </div>
 
         {!hasConnectedListings ? (
-          <div className="px-4 pt-5 sm:px-6 sm:pt-6">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-center sm:px-6">
+          <div className="px-4 py-8 sm:px-6 sm:py-10">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-5 text-center sm:px-6 sm:py-6">
               <p className="text-sm font-semibold text-zinc-900">
-                Apercu de demonstration affiche. Connectez vos logements pour voir vos donnees reelles.
+                Veuillez connecter vos logements pour afficher le calendrier des reservations et l'analyse detaillee.
+              </p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Une fois connectes, vous retrouverez ici la meme vue interactive que sur la page d accueil.
               </p>
             </div>
           </div>
-        ) : null}
-        <>
+        ) : (
+          <>
         <div className="-mx-px overflow-x-auto overscroll-x-contain touch-pan-x">
           <div className="min-w-[720px] px-4 pb-2 pt-3 sm:px-6 sm:pt-4">
             <div
@@ -573,7 +814,8 @@ export function BookingCalendarOverview() {
             </span>
           </div>
         </div>
-        </>
+          </>
+        )}
       </div>
     </div>
   )

@@ -8,6 +8,8 @@ export function DashboardPage() {
   const { t } = useLanguage()
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
   const [testModeEnabled, setTestModeState] = useState<boolean>(() => isTestModeEnabled())
+  const currentRole = (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
+  const isCleanerSession = currentRole === 'cleaner'
 
   useEffect(() => {
     const localizePlanLabel = (plan: string) => {
@@ -38,22 +40,24 @@ export function DashboardPage() {
     if (currentAccount?.plan) setActivePlanLabel(localizePlanLabel(currentAccount.plan))
   }, [t.planFreeLabel, t.proName, t.scaleName, t.starterName])
 
-  const tabs = [
-    t.dashboardTabConnect,
-    t.dashboardTabCalendar,
-    t.dashboardTabStats,
-    t.dashboardTabIntel,
-    t.dashboardTabCleaning,
-    t.dashboardTabCompany,
-    t.dashboardTabExpenses,
-    t.dashboardTabSupplies,
-    t.dashboardTabWhatsApp,
-    t.dashboardTabEarlyAccess,
-  ]
-  const primaryTab = tabs[0]
+  const tabs = isCleanerSession
+    ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
+    : [
+        t.dashboardTabConnect,
+        t.dashboardTabCalendar,
+        t.dashboardTabStats,
+        t.dashboardTabIntel,
+        t.dashboardTabCleaning,
+        t.dashboardTabCompany,
+        t.dashboardTabExpenses,
+        t.dashboardTabSupplies,
+        t.dashboardTabWhatsApp,
+        t.dashboardTabEarlyAccess,
+      ]
+  const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
-  const rowOneTabs = [tabs[1], primaryTab, tabs[2], tabs[3]]
-  const rowTwoTabs = [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8], tabs[9]]
+  const rowOneTabs = isCleanerSession ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies] : [tabs[1], primaryTab, tabs[2], tabs[3]]
+  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8], tabs[9]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
@@ -96,23 +100,25 @@ export function DashboardPage() {
         </div>
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
-        <div className="mt-3 flex justify-center">
-          <button
-            type="button"
-            onClick={() => {
-              const next = !testModeEnabled
-              setTestModeState(next)
-              setTestModeEnabled(next)
-            }}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              testModeEnabled
-                ? 'border border-emerald-300 bg-emerald-50 text-emerald-700'
-                : 'border border-zinc-300 bg-white text-zinc-700'
-            }`}
-          >
-            {testModeEnabled ? 'Mode test actif (desactiver)' : 'Activer mode test (acces complet)'}
-          </button>
-        </div>
+        {!isCleanerSession ? (
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !testModeEnabled
+                setTestModeState(next)
+                setTestModeEnabled(next)
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                testModeEnabled
+                  ? 'border border-emerald-300 bg-emerald-50 text-emerald-700'
+                  : 'border border-zinc-300 bg-white text-zinc-700'
+              }`}
+            >
+              {testModeEnabled ? 'Mode test actif (desactiver)' : 'Activer mode test (acces complet)'}
+            </button>
+          </div>
+        ) : null}
 
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">
           <div className="flex items-stretch justify-center gap-4">
@@ -152,7 +158,7 @@ export function DashboardPage() {
             })}
           </div>
 
-          <div className="flex items-stretch justify-center gap-4">
+          {rowTwoTabs.length > 0 ? <div className="flex items-stretch justify-center gap-4">
             {rowTwoTabs.map((tab) => {
               const isScaleOnly = scaleOnlyTabs.has(tab)
               return (
@@ -184,7 +190,7 @@ export function DashboardPage() {
                 </button>
               )
             })}
-          </div>
+          </div> : null}
         </div>
 
         <div className="mx-auto mt-6 grid w-full max-w-[980px] grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden">

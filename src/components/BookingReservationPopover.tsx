@@ -45,6 +45,7 @@ type Props = {
   locale: Locale
   apartmentLabel: (n: number) => string
   nightsLabel: (n: number) => string
+  restrictedView?: boolean
   onMouseEnter: () => void
   onMouseLeave: () => void
 }
@@ -56,6 +57,7 @@ export function BookingReservationPopover({
   locale,
   apartmentLabel,
   nightsLabel,
+  restrictedView = false,
   onMouseEnter,
   onMouseLeave,
 }: Props) {
@@ -87,7 +89,7 @@ export function BookingReservationPopover({
       onMouseLeave={onMouseLeave}
       role="tooltip"
     >
-      <div className="flex items-start justify-between gap-2">
+      {restrictedView ? null : <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#a1a1aa]">
             {t.reservationNumberLabel}
@@ -100,7 +102,7 @@ export function BookingReservationPopover({
           <Check className="h-3 w-3" strokeWidth={2.5} />
           {t.popoverStatusConfirmed}
         </span>
-      </div>
+      </div>}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <h4 className="text-lg font-bold leading-tight text-[#1a1a1a]">{booking.guest}</h4>
@@ -144,12 +146,12 @@ export function BookingReservationPopover({
         <span className="font-bold text-[#1a1a1a]">{nightsLabel(booking.nights)}</span>
       </p>
 
-      <hr className="my-3 border-gray-100" />
+      {restrictedView ? null : <hr className="my-3 border-gray-100" />}
 
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#a1a1aa]">
+      {restrictedView ? null : <p className="text-[10px] font-semibold uppercase tracking-wider text-[#a1a1aa]">
         {t.popoverFinancialTitle}
-      </p>
-      <ul className="mt-2 space-y-2 text-sm">
+      </p>}
+      {restrictedView ? null : <ul className="mt-2 space-y-2 text-sm">
         <li className="flex justify-between gap-2">
           <span className="text-[#71717a]">{t.popoverTotalGuestPrice}</span>
           <span className="font-semibold text-[#1a1a1a]">{fmtEur.format(booking.totalGuestEur)}</span>
@@ -166,23 +168,23 @@ export function BookingReservationPopover({
             −{fmtEur.format(booking.platformFeeEur)}
           </span>
         </li>
-      </ul>
+      </ul>}
 
-      {booking.channel === 'booking' && booking.bookingGenius ? (
+      {!restrictedView && booking.channel === 'booking' && booking.bookingGenius ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-medium leading-snug text-amber-950">
           <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" />
           {t.popoverGeniusBanner}
         </div>
       ) : null}
 
-      <hr className="my-3 border-gray-100" />
+      {restrictedView ? null : <hr className="my-3 border-gray-100" />}
 
-      <div className="flex items-center justify-between gap-2">
+      {restrictedView ? null : <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-bold text-[#1a1a1a]">{t.popoverNetPayout}</span>
         <span className="text-lg font-bold" style={{ color: payoutGreen }}>
           {fmtEur.format(booking.netPayoutEur)}
         </span>
-      </div>
+      </div>}
     </div>
   )
 

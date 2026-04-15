@@ -1,13 +1,24 @@
 export type StoredAccount = {
   id: string
   plan: string
+  role?: 'host' | 'cleaner'
+  hostUsername?: string
+  clientType?: 'b2b' | 'b2c'
+  countryCode?: string
+  vatNumber?: string
+  vatVerified?: boolean
   firstName: string
   lastName: string
   username: string
   email: string
+  /** Set when the signup email was confirmed with a one-time code. */
+  emailVerified?: boolean
   password: string
   company?: string
   phone?: string
+  /** Optional promotional code entered at signup (hosts). */
+  promoCode?: string
+  preferredLocale?: 'fr' | 'en' | 'es' | 'de' | 'it'
   createdAt: string
 }
 

@@ -1,15 +1,16 @@
-import { ClipboardList, FileText, ImagePlus, Inbox, ListChecks, Receipt, Send, Wallet, X } from 'lucide-react'
+import { ClipboardList, Copy, FileText, ImagePlus, Inbox, Link2, ListChecks, Receipt, Send, Wallet, X } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEMO_APARTMENT_ROW_COUNT, DEMO_MONTH_INDEX, DEMO_YEAR } from '../data/demoCalendarBookings'
 import { useLanguage } from '../hooks/useLanguage'
+import type { Locale } from '../i18n/navbar'
+import { getStoredAccounts } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
 import { isTestModeEnabled } from '../utils/testMode'
 import { getDemoCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
 
 type InvoiceDirection = 'received' | 'sent'
-type InvoiceStatus = 'pending' | 'paid'
-type CleaningPanel = 'overview' | 'invoices' | 'chat' | 'tasks' | 'suivi'
+type CleaningPanel = 'overview' | 'providers' | 'invoices' | 'chat' | 'tasks' | 'suivi'
 type TaskFrequency = 'weekly' | 'monthly'
 
 type CleaningInvoice = {
@@ -17,9 +18,10 @@ type CleaningInvoice = {
   direction: InvoiceDirection
   label: string
   provider: string
+  ownerUsername?: string
+  counterpartyUsername?: string
   month: string
   amountEur: number
-  status: InvoiceStatus
   fileName: string
   note: string
   createdAt: string
@@ -32,6 +34,12 @@ type CleaningChatMessage = {
   text: string
   imageDataUrl?: string
   createdAt: string
+}
+
+const VAT_RATE_BY_COUNTRY: Record<string, number> = {
+  FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
+  SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
+  SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
 }
 
 type CleaningTaskItem = {
@@ -55,7 +63,215 @@ type CleaningTaskBoard = {
 const STORAGE_KEY = 'staypilot_cleaning_invoices_v1'
 const CHAT_STORAGE_KEY = 'staypilot_cleaning_chat_v1'
 const TASK_BOARDS_KEY = 'staypilot_cleaning_task_boards_v1'
+const CLEANER_INVITES_KEY = 'staypilot_cleaner_invites_v1'
+const PROVIDER_ASSIGNMENTS_KEY = 'staypilot_cleaning_provider_assignments_v1'
+const LS_CURRENT_USER = 'staypilot_current_user'
+const LS_CURRENT_ROLE = 'staypilot_current_role'
+const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
 const MAX_CHAT_IMAGE_DATA_URL_LEN = 500_000
+
+const cleaningCopy: Record<
+  Locale,
+  {
+    invoicesTitle: string
+    invoicesSubtitle: string
+    invoicesAddTitle: string
+    invoicesDirectionHint: string
+    invoicesReceived: string
+    invoicesSent: string
+    label: string
+    provider: string
+    selectProvider: string
+    noProvider: string
+    month: string
+    amountEur: string
+    invoiceFileOptional: string
+    noteOptional: string
+    sendTo: string
+    addInvoice: string
+    total: string
+    shownMonth: string
+    previous: string
+    next: string
+    allProviders: string
+    noInvoiceYet: string
+    delete: string
+    importantInfo: string
+    importantInfoBody: string
+    backToCleaningTools: string
+  }
+> = {
+  fr: {
+    invoicesTitle: 'Gérer les factures',
+    invoicesSubtitle: 'Créez, suivez et exportez en PDF vos factures de ménage (reçues ou émises).',
+    invoicesAddTitle: 'Ajouter une facture',
+    invoicesDirectionHint: 'Choisissez si la facture est reçue du prestataire ménage ou envoyée par vous.',
+    invoicesReceived: 'Factures reçues',
+    invoicesSent: 'Factures envoyées',
+    label: 'Libellé',
+    provider: 'Prestataire ménage',
+    selectProvider: 'Sélectionner un prestataire',
+    noProvider: 'Aucun prestataire enregistré',
+    month: 'Mois',
+    amountEur: 'Montant TTC (EUR)',
+    invoiceFileOptional: 'Fichier facture (optionnel)',
+    noteOptional: 'Note (optionnel)',
+    sendTo: 'Envoyer à :',
+    addInvoice: 'Ajouter la facture',
+    total: 'Total',
+    shownMonth: 'Mois affiché',
+    previous: '← Précédent',
+    next: 'Suivant →',
+    allProviders: 'Tous les prestataires',
+    noInvoiceYet: "Aucune facture pour l'instant.",
+    delete: 'Supprimer',
+    importantInfo: 'Information importante',
+    importantInfoBody:
+      'Cet espace sert à créer, centraliser et suivre vos factures de ménage (mois, prestataire, PDF). Le règlement financier n’est pas géré dans StayPilot : le paiement doit être effectué hors plateforme (virement, espèces ou autre moyen convenu entre vous).',
+    backToCleaningTools: '← Retour aux outils prestataire ménage',
+  },
+  en: {
+    invoicesTitle: 'Manage invoices',
+    invoicesSubtitle: 'Create, track and export your cleaning invoices to PDF (received or sent).',
+    invoicesAddTitle: 'Add invoice',
+    invoicesDirectionHint: 'Choose whether the invoice is received from the cleaner or sent by you.',
+    invoicesReceived: 'Received invoices',
+    invoicesSent: 'Sent invoices',
+    label: 'Label',
+    provider: 'Cleaning provider',
+    selectProvider: 'Select a provider',
+    noProvider: 'No provider registered',
+    month: 'Month',
+    amountEur: 'Amount incl. VAT (EUR)',
+    invoiceFileOptional: 'Invoice file (optional)',
+    noteOptional: 'Note (optional)',
+    sendTo: 'Send to:',
+    addInvoice: 'Add invoice',
+    total: 'Total',
+    shownMonth: 'Displayed month',
+    previous: '← Previous',
+    next: 'Next →',
+    allProviders: 'All providers',
+    noInvoiceYet: 'No invoices yet.',
+    delete: 'Delete',
+    importantInfo: 'Important information',
+    importantInfoBody:
+      'This area is used to create, centralize and track your cleaning invoices (month, provider, PDF). Financial transfer is not handled in StayPilot: payment must be made outside the platform (bank transfer, cash, or any method agreed between you).',
+    backToCleaningTools: '← Back to cleaning tools',
+  },
+  es: {
+    invoicesTitle: 'Gestionar facturas',
+    invoicesSubtitle: 'Crea, sigue y exporta en PDF tus facturas de limpieza (recibidas o enviadas).',
+    invoicesAddTitle: 'Añadir factura',
+    invoicesDirectionHint: 'Elige si la factura es recibida del proveedor de limpieza o enviada por ti.',
+    invoicesReceived: 'Facturas recibidas',
+    invoicesSent: 'Facturas enviadas',
+    label: 'Concepto',
+    provider: 'Proveedor de limpieza',
+    selectProvider: 'Seleccionar proveedor',
+    noProvider: 'Ningún proveedor registrado',
+    month: 'Mes',
+    amountEur: 'Importe con IVA (EUR)',
+    invoiceFileOptional: 'Archivo de factura (opcional)',
+    noteOptional: 'Nota (opcional)',
+    sendTo: 'Enviar a:',
+    addInvoice: 'Añadir factura',
+    total: 'Total',
+    shownMonth: 'Mes mostrado',
+    previous: '← Anterior',
+    next: 'Siguiente →',
+    allProviders: 'Todos los proveedores',
+    noInvoiceYet: 'Todavía no hay facturas.',
+    delete: 'Eliminar',
+    importantInfo: 'Información importante',
+    importantInfoBody:
+      'Este espacio sirve para crear, centralizar y seguir tus facturas de limpieza (mes, proveedor, PDF). El pago no se gestiona en StayPilot: debe realizarse fuera de la plataforma (transferencia, efectivo u otro medio acordado entre vosotros).',
+    backToCleaningTools: '← Volver a herramientas de limpieza',
+  },
+  de: {
+    invoicesTitle: 'Rechnungen verwalten',
+    invoicesSubtitle: 'Erstellen, verfolgen und exportieren Sie Ihre Reinigungsrechnungen als PDF (eingehend oder gesendet).',
+    invoicesAddTitle: 'Rechnung hinzufügen',
+    invoicesDirectionHint: 'Wählen Sie, ob die Rechnung vom Reinigungsdienst empfangen oder von Ihnen gesendet wird.',
+    invoicesReceived: 'Eingehende Rechnungen',
+    invoicesSent: 'Gesendete Rechnungen',
+    label: 'Bezeichnung',
+    provider: 'Reinigungsdienst',
+    selectProvider: 'Dienstleister auswählen',
+    noProvider: 'Kein Dienstleister registriert',
+    month: 'Monat',
+    amountEur: 'Betrag inkl. MwSt. (EUR)',
+    invoiceFileOptional: 'Rechnungsdatei (optional)',
+    noteOptional: 'Notiz (optional)',
+    sendTo: 'Senden an:',
+    addInvoice: 'Rechnung hinzufügen',
+    total: 'Gesamt',
+    shownMonth: 'Angezeigter Monat',
+    previous: '← Zurück',
+    next: 'Weiter →',
+    allProviders: 'Alle Dienstleister',
+    noInvoiceYet: 'Noch keine Rechnungen.',
+    delete: 'Löschen',
+    importantInfo: 'Wichtige Information',
+    importantInfoBody:
+      'Dieser Bereich dient zum Erstellen, Zentralisieren und Verfolgen Ihrer Reinigungsrechnungen (Monat, Dienstleister, PDF). Die Zahlung wird nicht von StayPilot abgewickelt: sie muss außerhalb der Plattform erfolgen (Überweisung, Bargeld oder andere zwischen Ihnen vereinbarte Methode).',
+    backToCleaningTools: '← Zurück zu Reinigungs-Tools',
+  },
+  it: {
+    invoicesTitle: 'Gestisci fatture',
+    invoicesSubtitle: 'Crea, monitora ed esporta in PDF le tue fatture di pulizia (ricevute o inviate).',
+    invoicesAddTitle: 'Aggiungi fattura',
+    invoicesDirectionHint: 'Scegli se la fattura è ricevuta dal fornitore pulizie o inviata da te.',
+    invoicesReceived: 'Fatture ricevute',
+    invoicesSent: 'Fatture inviate',
+    label: 'Descrizione',
+    provider: 'Fornitore pulizie',
+    selectProvider: 'Seleziona fornitore',
+    noProvider: 'Nessun fornitore registrato',
+    month: 'Mese',
+    amountEur: 'Importo IVA inclusa (EUR)',
+    invoiceFileOptional: 'File fattura (opzionale)',
+    noteOptional: 'Nota (opzionale)',
+    sendTo: 'Invia a:',
+    addInvoice: 'Aggiungi fattura',
+    total: 'Totale',
+    shownMonth: 'Mese visualizzato',
+    previous: '← Precedente',
+    next: 'Successivo →',
+    allProviders: 'Tutti i fornitori',
+    noInvoiceYet: 'Nessuna fattura al momento.',
+    delete: 'Elimina',
+    importantInfo: 'Informazione importante',
+    importantInfoBody:
+      'Questo spazio serve per creare, centralizzare e monitorare le tue fatture di pulizia (mese, fornitore, PDF). Il pagamento non è gestito da StayPilot: deve essere effettuato fuori piattaforma (bonifico, contanti o altro metodo concordato tra voi).',
+    backToCleaningTools: '← Torna agli strumenti pulizie',
+  },
+}
+
+type CleanerInvite = {
+  code: string
+  hostUsername: string
+  createdAt: string
+}
+
+function readCleanerInvites(): CleanerInvite[] {
+  try {
+    const raw = localStorage.getItem(CLEANER_INVITES_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as CleanerInvite[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveCleanerInvites(invites: CleanerInvite[]) {
+  localStorage.setItem(CLEANER_INVITES_KEY, JSON.stringify(invites))
+}
+
+function createInviteCode() {
+  return `SPM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+}
 
 async function compressImageToJpegDataUrl(file: File): Promise<string> {
   const url = URL.createObjectURL(file)
@@ -96,6 +312,28 @@ function formatChatMessageTime(iso: string): string {
 function formatChatMessageTitle(iso: string): string {
   try {
     return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
+  } catch {
+    return ''
+  }
+}
+
+function chatDayKey(iso: string): string {
+  try {
+    const d = new Date(iso)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  } catch {
+    return ''
+  }
+}
+
+function formatChatDayLabel(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(
+      new Date(iso),
+    )
   } catch {
     return ''
   }
@@ -229,6 +467,26 @@ function saveTaskBoards(boards: CleaningTaskBoard[]) {
   localStorage.setItem(TASK_BOARDS_KEY, JSON.stringify(boards))
 }
 
+function readProviderAssignments(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(PROVIDER_ASSIGNMENTS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string> = {}
+    Object.entries(parsed).forEach(([apartmentId, provider]) => {
+      if (typeof apartmentId === 'string' && typeof provider === 'string') out[apartmentId] = provider
+    })
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveProviderAssignments(map: Record<string, string>) {
+  localStorage.setItem(PROVIDER_ASSIGNMENTS_KEY, JSON.stringify(map))
+}
+
 type SuiviMenageReport = {
   note: string
   photosBefore: string[]
@@ -318,13 +576,15 @@ function suiviEventStatus(event: SuiviCheckoutEvent, report?: SuiviMenageReport)
   }
 }
 
-function downloadInvoicePdf(invoice: CleaningInvoice) {
+function downloadInvoicePdf(invoice: CleaningInvoice, vatRate: number) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const createdLabel = new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(invoice.createdAt))
-  const amount = `${invoice.amountEur.toFixed(2)} EUR`
+  const ttc = invoice.amountEur
+  const ht = ttc / (1 + vatRate / 100)
+  const vat = ttc - ht
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(18)
@@ -337,12 +597,12 @@ function downloadInvoicePdf(invoice: CleaningInvoice) {
   doc.text(`Mois: ${invoice.month}`, 16, 42)
   doc.text(`Prestataire: ${invoice.provider}`, 16, 48)
   doc.text(`Libelle: ${invoice.label}`, 16, 54)
-  doc.text(`Montant: ${amount}`, 16, 60)
-  doc.text(`Statut: ${invoice.status === 'paid' ? 'Payée' : 'En attente'}`, 16, 66)
-
+  doc.text(`Montant TTC: ${ttc.toFixed(2)} EUR`, 16, 60)
+  doc.text(`TVA (${vatRate}%): ${vat.toFixed(2)} EUR`, 16, 66)
+  doc.text(`Montant HT: ${ht.toFixed(2)} EUR`, 16, 72)
   if (invoice.note) {
     const wrapped = doc.splitTextToSize(`Note: ${invoice.note}`, 178)
-    doc.text(wrapped, 16, 74)
+    doc.text(wrapped, 16, 82)
   }
 
   const outName = `${invoice.fileName || `facture-menage-${invoice.month}-${invoice.id}`}.pdf`
@@ -350,10 +610,11 @@ function downloadInvoicePdf(invoice: CleaningInvoice) {
 }
 
 export function DashboardCleaningPage() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const cc = cleaningCopy[locale] || cleaningCopy.fr
   const [activePanel, setActivePanel] = useState<CleaningPanel>('overview')
   const [invoices, setInvoices] = useState<CleaningInvoice[]>(() => readInvoices())
-  const [tab, setTab] = useState<InvoiceDirection>('received')
+  const [listTab, setListTab] = useState<InvoiceDirection>('received')
   const [monthFilter, setMonthFilter] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -365,7 +626,6 @@ export function DashboardCleaningPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [amountEur, setAmountEur] = useState('')
-  const [status, setStatus] = useState<InvoiceStatus>('pending')
   const [note, setNote] = useState('')
   const [fileName, setFileName] = useState('')
   const [providerFilter, setProviderFilter] = useState('all')
@@ -404,21 +664,155 @@ export function DashboardCleaningPage() {
   const [suiviHorizonTab, setSuiviHorizonTab] = useState<'past' | 'upcoming'>('upcoming')
   const suiviBeforeRef = useRef<HTMLInputElement>(null)
   const suiviAfterRef = useRef<HTMLInputElement>(null)
+  const [cleanerInviteCode, setCleanerInviteCode] = useState('')
+  const [providerAssignments, setProviderAssignments] = useState<Record<string, string>>(() => readProviderAssignments())
+  const [selectedProviderLink, setSelectedProviderLink] = useState('')
+  const [selectedApartmentLink, setSelectedApartmentLink] = useState('')
+  const [providerLinkMsg, setProviderLinkMsg] = useState('')
+
+  const currentUser =
+    (
+      typeof window !== 'undefined'
+        ? localStorage.getItem(LS_CURRENT_USER) || localStorage.getItem(LS_LOGIN_IDENTIFIER)
+        : ''
+    )?.trim() || ''
+  const currentRole = ((typeof window !== 'undefined' ? localStorage.getItem(LS_CURRENT_ROLE) : '') || 'host').trim().toLowerCase()
+  const isHostSession = currentRole !== 'cleaner'
+  const currentAccount = useMemo(() => {
+    const identifier = currentUser.trim().toLowerCase()
+    if (!identifier) return undefined
+    return getStoredAccounts().find(
+      (a) => a.email.trim().toLowerCase() === identifier || a.username.trim().toLowerCase() === identifier,
+    )
+  }, [currentUser])
+  const currentVatRate = useMemo(
+    () => VAT_RATE_BY_COUNTRY[(currentAccount?.countryCode || 'FR').trim().toUpperCase()] ?? 20,
+    [currentAccount?.countryCode],
+  )
+  const cleanerDisplayName = useMemo(() => {
+    if (!currentAccount) return ''
+    const full = `${currentAccount.firstName || ''} ${currentAccount.lastName || ''}`.trim()
+    return full || currentAccount.username || ''
+  }, [currentAccount])
+  const cleanerAssignedApartmentNames = useMemo(() => {
+    if (isHostSession || !cleanerDisplayName) return []
+    return apartments
+      .filter((a) => (providerAssignments[a.id] || '').trim().toLowerCase() === cleanerDisplayName.trim().toLowerCase())
+      .map((a) => a.name)
+  }, [apartments, providerAssignments, isHostSession, cleanerDisplayName])
+  const cleanerHostLabel = useMemo(() => {
+    const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
+    if (!hostUsername) return 'Votre hôte'
+    const host = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === hostUsername)
+    if (!host) return `Votre hôte ${currentAccount?.hostUsername}`
+    const full = `${host.firstName || ''} ${host.lastName || ''}`.trim()
+    return full ? `Votre hôte ${full}` : `Votre hôte ${host.username}`
+  }, [currentAccount])
+  const cleanerInviteLink = cleanerInviteCode
+    ? `${window.location.origin}/inscription?role=cleaner&inviteCode=${encodeURIComponent(cleanerInviteCode)}`
+    : ''
+
+  function refreshCleanerInviteState(hostUsername: string) {
+    const invites = readCleanerInvites()
+    const hostInvite = invites
+      .filter((i) => i.hostUsername.trim().toLowerCase() === hostUsername.trim().toLowerCase())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+    setCleanerInviteCode(hostInvite?.code || '')
+  }
+
+  function ensureCleanerInvite(hostUsername: string) {
+    const invites = readCleanerInvites()
+    const existing = invites.find(
+      (i) => i.hostUsername.trim().toLowerCase() === hostUsername.trim().toLowerCase(),
+    )
+    if (existing) {
+      setCleanerInviteCode(existing.code)
+      return
+    }
+    const created: CleanerInvite = {
+      code: createInviteCode(),
+      hostUsername,
+      createdAt: new Date().toISOString(),
+    }
+    saveCleanerInvites([...invites, created])
+    setCleanerInviteCode(created.code)
+  }
 
   const providerOptions = useMemo(() => {
-    const uniq = Array.from(new Set(invoices.map((i) => i.provider.trim()).filter(Boolean)))
+    const fromInvoices = invoices.map((i) => i.provider.trim()).filter(Boolean)
+    const fromAccounts = getStoredAccounts()
+      .filter((a) => (a.role || 'host') === 'cleaner')
+      .map((a) => `${a.firstName} ${a.lastName}`.trim() || a.username.trim())
+      .filter(Boolean)
+    const uniq = Array.from(new Set([...fromInvoices, ...fromAccounts]))
     return uniq.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
   }, [invoices])
   const hasRegisteredProviders = providerOptions.length > 0
   const chatProviderOptions = providerOptions
+  const cleanerInvoiceProviderName = cleanerDisplayName.trim() || currentAccount?.username?.trim() || ''
+  const effectiveInvoiceProvider = isHostSession ? provider.trim() : cleanerInvoiceProviderName
+  const currentUsername = (currentAccount?.username || currentUser || '').trim().toLowerCase()
+  const hostCleanerAccounts = useMemo(() => {
+    if (!isHostSession || !currentUsername) return []
+    return getStoredAccounts().filter(
+      (a) => (a.role || 'host') === 'cleaner' && (a.hostUsername || '').trim().toLowerCase() === currentUsername,
+    )
+  }, [isHostSession, currentUsername])
+  const hostCleanerOptions = useMemo(() => {
+    return hostCleanerAccounts
+      .map((a) => ({
+        username: a.username.trim(),
+        label: `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.username.trim(),
+      }))
+      .filter((r) => r.username && r.label)
+  }, [hostCleanerAccounts])
+  const hostDisplayName = useMemo(() => {
+    const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
+    if (!hostUsername) return ''
+    const host = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === hostUsername)
+    if (!host) return currentAccount?.hostUsername || ''
+    return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
+  }, [currentAccount])
+  const usernameLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    getStoredAccounts().forEach((a) => {
+      const key = (a.username || '').trim().toLowerCase()
+      if (!key) return
+      const label = `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.username
+      map.set(key, label)
+    })
+    return map
+  }, [])
+  function labelForUsername(raw: string) {
+    const key = (raw || '').trim().toLowerCase()
+    if (!key) return ''
+    return usernameLabelMap.get(key) || raw
+  }
+  const canSendInvoice = useMemo(() => {
+    if (isHostSession) {
+      if (!effectiveInvoiceProvider) return false
+      return hostCleanerOptions.some((o) => o.label === provider.trim())
+    }
+    return Boolean(effectiveInvoiceProvider && (currentAccount?.hostUsername || '').trim())
+  }, [isHostSession, effectiveInvoiceProvider, hostCleanerOptions, provider, currentAccount])
 
   const filtered = useMemo(() => {
     return invoices
-      .filter((i) => i.direction === tab)
+      .filter((i) => {
+        const owner = (i.ownerUsername || '').trim().toLowerCase()
+        if (!owner || !currentUsername) return true
+        return owner === currentUsername
+      })
+      .filter((i) => i.direction === listTab)
       .filter((i) => i.month === monthFilter)
+      .filter((i) =>
+        isHostSession
+          ? true
+          : i.provider.trim().toLowerCase() === cleanerInvoiceProviderName.trim().toLowerCase(),
+      )
       .filter((i) => (providerFilter === 'all' ? true : i.provider === providerFilter))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [invoices, tab, monthFilter, providerFilter])
+  }, [invoices, listTab, monthFilter, providerFilter, isHostSession, cleanerInvoiceProviderName, currentUsername])
 
   const selectedChatProvider = chatProvider || chatProviderOptions[0] || ''
 
@@ -474,6 +868,16 @@ export function DashboardCleaningPage() {
   }, [])
 
   useEffect(() => {
+    if (!currentUser || !isHostSession) return
+    ensureCleanerInvite(currentUser)
+    refreshCleanerInviteState(currentUser)
+  }, [currentUser, isHostSession])
+
+  useEffect(() => {
+    saveProviderAssignments(providerAssignments)
+  }, [providerAssignments])
+
+  useEffect(() => {
     setApartments(getConnectedApartmentsFromStorage())
     const sync = () => setApartments(getConnectedApartmentsFromStorage())
     window.addEventListener('storage', sync)
@@ -492,16 +896,26 @@ export function DashboardCleaningPage() {
 
   const canProviderToggleTasks = useMemo(() => {
     if (!currentTaskBoard || taskViewerRole !== 'provider') return false
-    const a = taskViewerProvider.trim().toLowerCase()
+    const a = (isHostSession ? taskViewerProvider : cleanerDisplayName).trim().toLowerCase()
     const b = currentTaskBoard.provider.trim().toLowerCase()
     return Boolean(a && b && a === b)
-  }, [currentTaskBoard, taskViewerRole, taskViewerProvider])
+  }, [currentTaskBoard, taskViewerRole, taskViewerProvider, isHostSession, cleanerDisplayName])
+  const canOwnerManageTasks = isHostSession && taskViewerRole === 'owner'
 
   useEffect(() => {
     if (currentTaskBoard) setTaskAssignedProvider(currentTaskBoard.provider)
   }, [currentTaskBoard?.id])
+  useEffect(() => {
+    if (isHostSession) {
+      setTaskViewerRole('owner')
+      return
+    }
+    if (cleanerDisplayName) setTaskViewerProvider(cleanerDisplayName)
+    setTaskViewerRole('provider')
+  }, [isHostSession, cleanerDisplayName])
 
   function saveTaskBoardConfig() {
+    if (!canOwnerManageTasks) return
     const apt = apartments.find((a) => a.id === effectiveTaskApartmentId)
     if (!apt || !taskMonth.trim() || !taskAssignedProvider.trim()) return
     const idx = taskBoards.findIndex(
@@ -527,7 +941,7 @@ export function DashboardCleaningPage() {
   }
 
   function addTaskRow() {
-    if (!currentTaskBoard || taskViewerRole !== 'owner') return
+    if (!currentTaskBoard || !canOwnerManageTasks) return
     const label = taskNewLabel.trim()
     if (!label) return
     const nextBoards = taskBoards.map((b) =>
@@ -545,7 +959,7 @@ export function DashboardCleaningPage() {
   }
 
   function removeTaskRow(taskId: string) {
-    if (!currentTaskBoard || taskViewerRole !== 'owner') return
+    if (!currentTaskBoard || !canOwnerManageTasks) return
     const nextBoards = taskBoards.map((b) =>
       b.id === currentTaskBoard.id
         ? {
@@ -596,38 +1010,53 @@ export function DashboardCleaningPage() {
 
   function addInvoice() {
     const parsedAmount = Number(amountEur.replace(',', '.'))
-    if (!label.trim() || !provider.trim() || !month || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return
-    const next: CleaningInvoice = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      direction: tab,
+    if (!label.trim() || !canSendInvoice || !month || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return
+    const senderUsername = currentUsername
+    if (!senderUsername) return
+    const hostRecipient = currentAccount?.hostUsername?.trim() || ''
+    const selectedCleaner = hostCleanerOptions.find((o) => o.label === provider.trim())
+    const recipientUsername = isHostSession ? (selectedCleaner?.username || '').trim() : hostRecipient
+    if (!recipientUsername) return
+    const recipientDisplayName = isHostSession ? (provider.trim() || effectiveInvoiceProvider) : hostDisplayName || hostRecipient
+    const senderDisplayName = isHostSession
+      ? `${currentAccount?.firstName || ''} ${currentAccount?.lastName || ''}`.trim() || currentAccount?.username || 'Hôte'
+      : cleanerInvoiceProviderName
+    const confirmTarget = recipientDisplayName || recipientUsername
+    const ok = window.confirm(`Confirmez-vous l'envoi de cette facture à ${confirmTarget} ?`)
+    if (!ok) return
+    const baseId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const sentInvoice: CleaningInvoice = {
+      id: `${baseId}_sent`,
+      direction: 'sent',
       label: label.trim(),
-      provider: provider.trim(),
+      provider: isHostSession ? effectiveInvoiceProvider : cleanerInvoiceProviderName,
+      ownerUsername: senderUsername,
+      counterpartyUsername: recipientUsername,
       month,
       amountEur: Math.round(parsedAmount * 100) / 100,
-      status,
       fileName: fileName.trim().replace(/\.[^.]+$/, ''),
       note: note.trim(),
       createdAt: new Date().toISOString(),
     }
-    const merged = [next, ...invoices]
+    const receivedInvoice: CleaningInvoice = {
+      ...sentInvoice,
+      id: `${baseId}_received`,
+      direction: 'received',
+      provider: senderDisplayName || effectiveInvoiceProvider,
+      ownerUsername: recipientUsername.trim().toLowerCase(),
+      counterpartyUsername: senderUsername,
+    }
+    const merged = [sentInvoice, receivedInvoice, ...invoices]
     setInvoices(merged)
     saveInvoices(merged)
     setLabel('')
-    setProvider('')
+    if (isHostSession) setProvider('')
     setMonth('')
     setAmountEur('')
-    setStatus('pending')
     setFileName('')
     setNote('')
-    downloadInvoicePdf(next)
-  }
-
-  function togglePaid(id: string) {
-    const next = invoices.map((inv) =>
-      inv.id === id ? { ...inv, status: inv.status === 'paid' ? 'pending' : 'paid' } : inv,
-    )
-    setInvoices(next)
-    saveInvoices(next)
+    const vatRate = VAT_RATE_BY_COUNTRY[(currentAccount?.countryCode || 'FR').trim().toUpperCase()] ?? 20
+    downloadInvoicePdf(sentInvoice, vatRate)
   }
 
   function removeInvoice(id: string) {
@@ -828,6 +1257,36 @@ export function DashboardCleaningPage() {
     return raw.charAt(0).toUpperCase() + raw.slice(1)
   }, [])
 
+  function linkProviderToApartment() {
+    if (!selectedProviderLink.trim()) {
+      setProviderLinkMsg("Sélectionnez d'abord un prestataire ménage.")
+      return
+    }
+    if (!selectedApartmentLink.trim()) {
+      setProviderLinkMsg('Selectionnez ensuite un logement.')
+      return
+    }
+    setProviderAssignments((prev) => ({ ...prev, [selectedApartmentLink]: selectedProviderLink.trim() }))
+    const apt = apartments.find((a) => a.id === selectedApartmentLink)
+    setProviderLinkMsg(
+      `Attribution enregistrée : ${selectedProviderLink.trim()} sur ${apt?.name || 'ce logement'}.`,
+    )
+  }
+
+  function unlinkProviderFromApartment() {
+    if (!selectedApartmentLink.trim()) {
+      setProviderLinkMsg("Sélectionnez d'abord le logement à désattribuer.")
+      return
+    }
+    setProviderAssignments((prev) => {
+      const next = { ...prev }
+      delete next[selectedApartmentLink]
+      return next
+    })
+    const apt = apartments.find((a) => a.id === selectedApartmentLink)
+    setProviderLinkMsg(`Attribution supprimee pour ${apt?.name || 'ce logement'}.`)
+  }
+
   return (
     <section className="min-h-screen flex-1 bg-[#f8fafc] px-4 py-6 sm:px-6">
       <a
@@ -844,8 +1303,10 @@ export function DashboardCleaningPage() {
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
               {activePanel === 'overview'
                 ? 'Espace prestataire ménage'
+                : activePanel === 'providers'
+                  ? 'Prestataire ménage'
                 : activePanel === 'invoices'
-                  ? 'Gérer les factures'
+                  ? cc.invoicesTitle
                   : activePanel === 'chat'
                     ? 'Tchat prestataire ménage'
                     : activePanel === 'tasks'
@@ -855,8 +1316,10 @@ export function DashboardCleaningPage() {
             <p className="mt-2 text-sm text-zinc-700">
               {activePanel === 'overview'
                 ? 'Retrouvez ici les outils liés au ménage : commencez par la vue d’ensemble, puis ouvrez l’onglet factures quand vous en avez besoin.'
+                : activePanel === 'providers'
+                  ? 'Étape 1 : sélectionnez le prestataire ménage. Étape 2 : sélectionnez le logement à lui attribuer.'
                 : activePanel === 'invoices'
-                  ? 'Créez, suivez et exportez en PDF vos factures de ménage (reçues ou émises).'
+                  ? cc.invoicesSubtitle
                   : activePanel === 'chat'
                     ? 'Discutez avec votre prestataire et sélectionnez le nom du prestataire ménage si vous en avez plusieurs.'
                     : activePanel === 'tasks'
@@ -867,7 +1330,43 @@ export function DashboardCleaningPage() {
 
           {activePanel === 'overview' ? (
             <div className="px-5 py-6 sm:px-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {isHostSession ? (
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('providers')}
+                  className="group w-full rounded-2xl border border-zinc-200/80 bg-white p-4 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <ClipboardList className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-base font-semibold text-zinc-900">Prestataire ménage</p>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        D'abord choisir le prestataire, puis choisir le logement à lui attribuer.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div className="w-full rounded-2xl border border-zinc-200/80 bg-white p-4 text-left shadow-pm-sm">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <ClipboardList className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-base font-semibold text-zinc-900">
+                        {cleanerHostLabel} vous a attribué à :{' '}
+                        {cleanerAssignedApartmentNames.length > 0
+                          ? cleanerAssignedApartmentNames.join(', ')
+                          : 'Aucun logement pour le moment'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setActivePanel('invoices')}
@@ -878,7 +1377,7 @@ export function DashboardCleaningPage() {
                   </span>
                   <p className="text-base font-semibold text-zinc-900">Gérer les factures</p>
                   <p className="mt-1 text-sm text-zinc-600">
-                    Ajouter, filtrer par mois/prestataire, suivre les statuts et exporter en PDF.
+                    Ajouter, filtrer par mois/prestataire et exporter en PDF.
                   </p>
                 </button>
 
@@ -926,15 +1425,132 @@ export function DashboardCleaningPage() {
               </div>
 
               <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3">
-                <p className="text-sm font-semibold text-zinc-800">Information importante</p>
+                {isHostSession ? (
+                  <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-900">
+                          <Link2 className="h-4 w-4" aria-hidden />
+                          Lien d&apos;inscription prestataire ménage
+                        </p>
+                        <p className="mt-1 break-all text-xs text-sky-800">
+                          {cleanerInviteLink ||
+                            "Impossible de générer le lien : connectez-vous avec un compte hôte enregistré."}
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-700">
+                          Code hote unique: <strong>{cleanerInviteCode || '...'}</strong> (le meme code peut servir
+                          a inviter plusieurs prestataires menage)
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!cleanerInviteLink) return
+                            void navigator.clipboard.writeText(cleanerInviteLink)
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100"
+                        >
+                          <Copy className="h-3.5 w-3.5" aria-hidden />
+                          Copier
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <p className="text-sm font-semibold text-zinc-800">{cc.importantInfo}</p>
                 <p className="mt-1 text-sm leading-relaxed text-zinc-700">
-                  Cet espace sert à créer, centraliser et suivre vos factures de ménage (statut, mois, prestataire,
-                  PDF). Le règlement financier n’est pas géré dans StayPilot : le paiement doit être effectué hors
-                  plateforme (virement, espèces ou autre moyen convenu entre vous).
+                  {cc.importantInfoBody}
                 </p>
               </div>
             </div>
           ) : null}
+
+          <div
+            className={
+              activePanel !== 'providers' ? 'hidden px-5 py-5 sm:px-6 sm:py-6' : 'px-5 py-5 sm:px-6 sm:py-6'
+            }
+          >
+            <button
+              type="button"
+              onClick={() => setActivePanel('overview')}
+              className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+            >
+              ← Retour aux outils prestataire ménage
+            </button>
+
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
+              <p className="text-sm font-semibold text-zinc-900">Étape 1 : sélectionner le prestataire ménage</p>
+              <select
+                value={selectedProviderLink}
+                onChange={(e) => setSelectedProviderLink(e.target.value)}
+                className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="">{hasRegisteredProviders ? 'Choisir un prestataire' : 'Aucun prestataire enregistré'}</option>
+                {providerOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+                <p className="mt-4 text-sm font-semibold text-zinc-900">Étape 2 : sélectionner le logement</p>
+              <select
+                value={selectedApartmentLink}
+                onChange={(e) => setSelectedApartmentLink(e.target.value)}
+                disabled={!apartments.length}
+                className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
+              >
+                {apartments.length === 0 ? (
+                  <option value="">Aucun logement connecté</option>
+                ) : (
+                  <>
+                    <option value="">Choisir un logement</option>
+                    {apartments.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+
+              <button
+                type="button"
+                onClick={linkProviderToApartment}
+                className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+              >
+                Enregistrer l attribution
+              </button>
+              <button
+                type="button"
+                onClick={unlinkProviderFromApartment}
+                disabled={!selectedApartmentLink || !providerAssignments[selectedApartmentLink]}
+                className="mt-4 ml-2 inline-flex rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Supprimer l attribution
+              </button>
+
+              {providerLinkMsg ? (
+                <p className="mt-2 text-xs font-semibold text-zinc-700">{providerLinkMsg}</p>
+              ) : null}
+
+              <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
+                <p className="text-xs font-semibold text-zinc-900">Attributions actuelles</p>
+                {apartments.length === 0 ? (
+                  <p className="mt-1 text-xs text-zinc-600">Aucun logement connecté pour le moment.</p>
+                ) : (
+                  <ul className="mt-2 space-y-1 text-xs text-zinc-700">
+                    {apartments.map((a) => (
+                      <li key={`assign-${a.id}`}>
+                        {a.name}: <strong>{providerAssignments[a.id] || 'Aucune prestataire assignée'}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div
             className={`grid gap-6 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1.1fr_1fr] ${
@@ -947,45 +1563,25 @@ export function DashboardCleaningPage() {
                 onClick={() => setActivePanel('overview')}
                 className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
               >
-                ← Retour aux outils prestataire ménage
+                {cc.backToCleaningTools}
               </button>
             </div>
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
-              <p className="text-sm font-semibold text-zinc-900">Ajouter une facture</p>
+              <p className="text-sm font-semibold text-zinc-900">{cc.invoicesAddTitle}</p>
               <p className="mt-1 text-xs text-zinc-600">
-                Choisissez si la facture est reçue du prestataire ménage ou envoyée par vous.
+                {cc.invoicesDirectionHint}
               </p>
 
               <div className="mt-4 inline-flex rounded-lg border border-zinc-200 bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => setTab('received')}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                    tab === 'received' ? 'bg-sky-100 text-sky-700' : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Inbox className="h-3.5 w-3.5" aria-hidden />
-                    Factures reçues
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab('sent')}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                    tab === 'sent' ? 'bg-sky-100 text-sky-700' : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Send className="h-3.5 w-3.5" aria-hidden />
-                    Factures envoyées
-                  </span>
-                </button>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-700">
+                  <Send className="h-3.5 w-3.5" aria-hidden />
+                  {cc.invoicesSent}
+                </span>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-sm text-zinc-700">
-                  Libellé
+                  {cc.label}
                   <input
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
@@ -994,31 +1590,30 @@ export function DashboardCleaningPage() {
                   />
                 </label>
                 <label className="text-sm text-zinc-700">
-                  Prestataire ménage
-                  {hasRegisteredProviders ? (
+                  {cc.provider}
+                  {isHostSession ? (
                     <select
                       value={provider}
                       onChange={(e) => setProvider(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     >
-                      <option value="">Sélectionner un prestataire</option>
-                      {providerOptions.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
+                      <option value="">{hostCleanerOptions.length > 0 ? cc.selectProvider : cc.noProvider}</option>
+                      {hostCleanerOptions.map((row) => (
+                        <option key={row.username} value={row.label}>
+                          {row.label}
                         </option>
                       ))}
                     </select>
                   ) : (
                     <input
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                      placeholder="Nom du prestataire"
-                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                      value={cleanerInvoiceProviderName || 'Prestataire ménage'}
+                      readOnly
+                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
                     />
                   )}
                 </label>
                 <label className="text-sm text-zinc-700">
-                  Mois
+                  {cc.month}
                   <select
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
@@ -1032,7 +1627,7 @@ export function DashboardCleaningPage() {
                   </select>
                 </label>
                 <label className="text-sm text-zinc-700">
-                  Montant (EUR)
+                  {cc.amountEur}
                   <input
                     value={amountEur}
                     onChange={(e) => setAmountEur(e.target.value)}
@@ -1041,18 +1636,7 @@ export function DashboardCleaningPage() {
                   />
                 </label>
                 <label className="text-sm text-zinc-700">
-                  Statut
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as InvoiceStatus)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  >
-                    <option value="pending">En attente</option>
-                    <option value="paid">Payée</option>
-                  </select>
-                </label>
-                <label className="text-sm text-zinc-700">
-                  Fichier facture (optionnel)
+                  {cc.invoiceFileOptional}
                   <input
                     type="file"
                     accept=".pdf,image/*"
@@ -1063,7 +1647,7 @@ export function DashboardCleaningPage() {
               </div>
 
               <label className="mt-3 block text-sm text-zinc-700">
-                Note (optionnel)
+                {cc.noteOptional}
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -1073,46 +1657,57 @@ export function DashboardCleaningPage() {
                 />
               </label>
 
-              {tab === 'sent' ? (
-                <button
-                  type="button"
-                  onClick={addInvoice}
-                  disabled={!provider.trim()}
-                  className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
-                >
-                  Envoyer à : {provider.trim() || (hasRegisteredProviders ? 'Sélectionner un prestataire' : 'Indiquer le prestataire')}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={addInvoice}
-                  disabled={!provider.trim()}
-                  className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
-                >
-                  Ajouter la facture
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={addInvoice}
+                disabled={!canSendInvoice}
+                className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+              >
+                {isHostSession
+                  ? `${cc.sendTo} ${provider.trim() || (hostCleanerOptions.length > 0 ? cc.selectProvider : cc.noProvider)}`
+                  : `Envoyer à : ${hostDisplayName || 'mon hôte'}`}
+              </button>
             </div>
 
             <div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-zinc-900">
-                  {tab === 'received' ? 'Factures reçues' : 'Factures envoyées'}
+                  {listTab === 'received' ? cc.invoicesReceived : cc.invoicesSent}
                 </p>
                 <p className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-600">
                   <Wallet className="h-3.5 w-3.5" aria-hidden />
-                  Total: {totalAmount.toFixed(2)} EUR
+                  {cc.total}: {totalAmount.toFixed(2)} EUR
                 </p>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <label className="text-xs font-semibold text-zinc-600">Mois affiché</label>
+                <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-1">
+                  <button
+                    type="button"
+                    onClick={() => setListTab('received')}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      listTab === 'received' ? 'bg-sky-100 text-sky-700' : 'text-zinc-600 hover:text-zinc-900'
+                    }`}
+                  >
+                    {cc.invoicesReceived}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListTab('sent')}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      listTab === 'sent' ? 'bg-sky-100 text-sky-700' : 'text-zinc-600 hover:text-zinc-900'
+                    }`}
+                  >
+                    {cc.invoicesSent}
+                  </button>
+                </div>
+                <label className="text-xs font-semibold text-zinc-600">{cc.shownMonth}</label>
                 <button
                   type="button"
                   onClick={() => shiftMonth(-1)}
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                 >
-                  ← Précédent
+                  {cc.previous}
                 </button>
                 <select
                   value={monthFilter}
@@ -1131,31 +1726,35 @@ export function DashboardCleaningPage() {
                   disabled={monthFilter >= currentMonthValue}
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                 >
-                  Suivant →
+                  {cc.next}
                 </button>
                 <span className="text-xs font-semibold text-zinc-500">({monthLabel})</span>
 
                 <span className="mx-1 h-4 w-px bg-zinc-200" aria-hidden />
 
-                <label className="text-xs font-semibold text-zinc-600">Prestataire ménage</label>
-                <select
-                  value={providerFilter}
-                  onChange={(e) => setProviderFilter(e.target.value)}
-                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  <option value="all">Tous les prestataires</option>
-                  {providerOptions.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                {isHostSession ? (
+                  <>
+                    <label className="text-xs font-semibold text-zinc-600">{cc.provider}</label>
+                    <select
+                      value={providerFilter}
+                      onChange={(e) => setProviderFilter(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    >
+                      <option value="all">{cc.allProviders}</option>
+                      {hostCleanerOptions.map((row) => (
+                        <option key={row.username} value={row.label}>
+                          {row.label}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </div>
 
               <div className="mt-3 space-y-2">
                 {filtered.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-600">
-                    Aucune facture pour l'instant.
+                    {cc.noInvoiceYet}
                   </p>
                 ) : (
                   filtered.map((inv) => (
@@ -1164,8 +1763,19 @@ export function DashboardCleaningPage() {
                         <div>
                           <p className="text-sm font-semibold text-zinc-900">{inv.label}</p>
                           <p className="text-xs text-zinc-600">
-                            {inv.provider} • {inv.month} • {inv.amountEur.toFixed(2)} EUR
+                            {inv.provider} • {inv.month} • TTC {inv.amountEur.toFixed(2)} EUR • TVA ({currentVatRate}%){' '}
+                            {(inv.amountEur - inv.amountEur / (1 + currentVatRate / 100)).toFixed(2)} EUR
                           </p>
+                          {inv.direction === 'sent' && inv.counterpartyUsername ? (
+                            <p className="mt-1 text-[11px] font-semibold text-sky-700">
+                              À : {labelForUsername(inv.counterpartyUsername)}
+                            </p>
+                          ) : null}
+                          {inv.direction === 'received' && inv.counterpartyUsername ? (
+                            <p className="mt-1 text-[11px] font-semibold text-emerald-700">
+                              De : {labelForUsername(inv.counterpartyUsername)}
+                            </p>
+                          ) : null}
                           {inv.fileName ? (
                             <p className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-600">
                               <FileText className="h-3.5 w-3.5" aria-hidden />
@@ -1174,28 +1784,14 @@ export function DashboardCleaningPage() {
                           ) : null}
                           {inv.note ? <p className="mt-1 text-xs text-zinc-600">{inv.note}</p> : null}
                         </div>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {inv.status === 'paid' ? 'Payée' : 'En attente'}
-                        </span>
                       </div>
                       <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => togglePaid(inv.id)}
-                          className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                          {inv.status === 'paid' ? 'Marquer en attente' : 'Marquer payée'}
-                        </button>
                         <button
                           type="button"
                           onClick={() => removeInvoice(inv.id)}
                           className="rounded-md border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                         >
-                          Supprimer
+                          {cc.delete}
                         </button>
                       </div>
                     </article>
@@ -1216,63 +1812,82 @@ export function DashboardCleaningPage() {
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold text-zinc-900">Choisir le prestataire ménage</p>
-                <select
-                  value={selectedChatProvider}
-                  onChange={(e) => setChatProvider(e.target.value)}
-                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  {chatProviderOptions.length === 0 ? (
-                    <option value="">Aucun prestataire enregistré</option>
-                  ) : (
-                    chatProviderOptions.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                {isHostSession ? (
+                  <>
+                    <p className="text-sm font-semibold text-zinc-900">Choisir le prestataire ménage</p>
+                    <select
+                      value={selectedChatProvider}
+                      onChange={(e) => setChatProvider(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    >
+                      {chatProviderOptions.length === 0 ? (
+                        <option value="">Aucun prestataire enregistré</option>
+                      ) : (
+                        chatProviderOptions.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </>
+                ) : (
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Conversation avec votre hôte : {cleanerHostLabel.replace('Votre hôte ', '')}
+                  </p>
+                )}
               </div>
 
               <div className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-3">
                 {selectedChatProvider ? (
                   filteredChatMessages.length > 0 ? (
-                    filteredChatMessages.map((msg) => (
-                      <article
-                        key={msg.id}
-                        title={formatChatMessageTitle(msg.createdAt)}
-                        className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
-                          msg.sender === 'manager'
-                            ? 'ml-auto bg-sky-100 text-sky-900'
-                            : 'mr-auto bg-zinc-100 text-zinc-800'
-                        }`}
-                      >
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="font-semibold">{msg.sender === 'manager' ? 'Vous' : selectedChatProvider}</p>
+                  filteredChatMessages.map((msg, idx) => {
+                    const prev = idx > 0 ? filteredChatMessages[idx - 1] : null
+                    const showDaySeparator = !prev || chatDayKey(prev.createdAt) !== chatDayKey(msg.createdAt)
+                    const senderName = msg.sender === 'manager' ? 'Vous' : selectedChatProvider
+                    return (
+                      <div key={msg.id}>
+                        {showDaySeparator ? (
+                          <div className="my-2 flex items-center gap-2">
+                            <span className="h-px flex-1 bg-zinc-200" />
+                            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-600">
+                              {formatChatDayLabel(msg.createdAt)}
+                            </span>
+                            <span className="h-px flex-1 bg-zinc-200" />
+                          </div>
+                        ) : null}
+                        <article
+                          title={formatChatMessageTitle(msg.createdAt)}
+                          className={`max-w-[90%] rounded-2xl border px-3 py-2 text-sm shadow-sm ${
+                            msg.sender === 'manager'
+                              ? 'ml-auto border-sky-200 bg-sky-100 text-sky-900'
+                              : 'mr-auto border-zinc-200 bg-white text-zinc-800'
+                          }`}
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{senderName}</p>
+                          {msg.imageDataUrl ? (
+                            <img
+                              src={msg.imageDataUrl}
+                              alt=""
+                              className="mt-2 max-h-56 w-full max-w-xs rounded-md border border-black/10 object-contain"
+                            />
+                          ) : null}
+                          {msg.text ? <p className={msg.imageDataUrl ? 'mt-1.5' : 'mt-1'}>{msg.text}</p> : null}
                           <time
                             dateTime={msg.createdAt}
-                            className="shrink-0 text-[11px] font-medium tabular-nums opacity-75"
+                            className="mt-1.5 block text-right text-[11px] font-medium tabular-nums opacity-70"
                           >
                             {formatChatMessageTime(msg.createdAt)}
                           </time>
-                        </div>
-                        {msg.imageDataUrl ? (
-                          <img
-                            src={msg.imageDataUrl}
-                            alt=""
-                            className="mt-2 max-h-48 w-full max-w-xs rounded-md border border-black/10 object-contain"
-                          />
-                        ) : null}
-                        {msg.text ? <p className={msg.imageDataUrl ? 'mt-1.5' : 'mt-0.5'}>{msg.text}</p> : null}
-                      </article>
-                    ))
+                        </article>
+                      </div>
+                    )
+                  })
                   ) : (
                     <p className="text-sm text-zinc-600">Aucun message pour l’instant avec ce prestataire.</p>
                   )
-                ) : (
-                  <p className="text-sm text-zinc-600">
-                    Ajoutez d’abord un prestataire via les factures pour ouvrir le tchat.
-                  </p>
+                ) : isHostSession ? null : (
+                  <p className="text-sm text-zinc-600">Aucun message pour l’instant avec votre hôte.</p>
                 )}
               </div>
 
@@ -1347,14 +1962,6 @@ export function DashboardCleaningPage() {
                   >
                     Envoyer (vous)
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => sendChatMessage('provider')}
-                    disabled={!canSendChat}
-                    className="inline-flex rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-                  >
-                    Simuler réponse prestataire
-                  </button>
                 </div>
               </div>
             </div>
@@ -1374,32 +1981,13 @@ export function DashboardCleaningPage() {
             </button>
 
             <div className="mt-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTaskViewerRole('owner')}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    taskViewerRole === 'owner'
-                      ? 'bg-sky-600 text-white'
-                      : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
-                  }`}
-                >
-                  Propriétaire (configuration)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTaskViewerRole('provider')}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    taskViewerRole === 'provider'
-                      ? 'bg-sky-600 text-white'
-                      : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
-                  }`}
-                >
-                  Prestataire (cocher les tâches)
-                </button>
+              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+                {isHostSession
+                  ? 'Vue hôte : configuration des tâches'
+                  : 'Vue prestataire : cochez les tâches réalisées'}
               </div>
 
-              {taskViewerRole === 'provider' ? (
+              {taskViewerRole === 'provider' && isHostSession ? (
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
                   <p className="text-sm font-semibold text-zinc-900">Qui consulte la checklist ?</p>
                   <p className="mt-1 text-xs text-zinc-600">
@@ -1476,7 +2064,7 @@ export function DashboardCleaningPage() {
                     <option value="monthly">Mensuel</option>
                   </select>
                 </label>
-                {taskViewerRole === 'owner' ? (
+                {canOwnerManageTasks ? (
                   <label className="text-sm text-zinc-700 sm:col-span-2 lg:col-span-1">
                     Prestataire assignée à ce logement
                     {hasRegisteredProviders ? (
@@ -1506,15 +2094,21 @@ export function DashboardCleaningPage() {
 
               {apartments.length === 0 ? (
                 <p className="text-sm text-amber-800">
-                  Connectez d’abord un logement dans{' '}
-                  <a href="/dashboard/connecter-logements" className="font-semibold underline">
-                    Connecter vos logements
-                  </a>
-                  .
+                  {isHostSession ? (
+                    <>
+                      Connectez d’abord un logement dans{' '}
+                      <a href="/dashboard/connecter-logements" className="font-semibold underline">
+                        Connecter vos logements
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    'Votre hôte ne vous a pas encore attribué de logement.'
+                  )}
                 </p>
               ) : null}
 
-              {taskViewerRole === 'owner' ? (
+              {canOwnerManageTasks ? (
                 <button
                   type="button"
                   onClick={saveTaskBoardConfig}
@@ -1532,7 +2126,7 @@ export function DashboardCleaningPage() {
                 </p>
               ) : null}
 
-              {currentTaskBoard && taskViewerRole === 'owner' ? (
+              {currentTaskBoard && canOwnerManageTasks ? (
                 <p className="text-xs text-zinc-600">
                   Les coches sont réservées à la prestataire (mode Prestataire). Vous pouvez modifier la liste
                   ci-dessous.
@@ -1563,7 +2157,7 @@ export function DashboardCleaningPage() {
                           </p>
                         ) : null}
                       </div>
-                      {taskViewerRole === 'owner' ? (
+                      {canOwnerManageTasks ? (
                         <button
                           type="button"
                           onClick={() => removeTaskRow(item.id)}
@@ -1577,12 +2171,13 @@ export function DashboardCleaningPage() {
                 </ul>
               ) : (
                 <p className="text-sm text-zinc-600">
-                  Aucune checklist pour ce logement, ce mois et cette fréquence. Passez en mode Propriétaire et cliquez
-                  sur « Créer la checklist ».
+                  {isHostSession
+                    ? 'Aucune checklist pour ce logement, ce mois et cette fréquence. Configurez les options hôte pour créer la checklist.'
+                    : "Votre hôte n'a pas encore mis ces options en place pour ce logement."}
                 </p>
               )}
 
-              {taskViewerRole === 'owner' && currentTaskBoard ? (
+              {canOwnerManageTasks && currentTaskBoard ? (
                 <div className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3">
                   <label className="min-w-[200px] flex-1 text-sm text-zinc-700">
                     Ajouter une tâche
@@ -1680,6 +2275,11 @@ export function DashboardCleaningPage() {
 
               <label className="block text-sm font-semibold text-zinc-900">
                 Check-out à traiter
+                {!isHostSession ? (
+                  <p className="mt-0.5 text-xs font-medium text-zinc-600">
+                    Vue prestataire : les détails de réservation sont masqués.
+                  </p>
+                ) : null}
                 <select
                   value={selectedSuiviEventId}
                   onChange={(e) => setSelectedSuiviEventId(e.target.value)}
@@ -1705,9 +2305,12 @@ export function DashboardCleaningPage() {
                             ? '🔴 '
                             : '⚪️ '}
                         {formatSuiviCheckoutLabel(ev.checkoutIso)}
-                        {suiviLogementTab === 'all' ? ` — ${suiviApartmentLabel(ev.aptIndex)}` : ''} — {ev.guest} (
-                        {ev.channel === 'airbnb' ? 'Airbnb' : 'Booking'}) — {ev.reservationId} — [
-                        {suiviEventStatus(ev, suiviReports[ev.id]).label}]
+                        {suiviLogementTab === 'all' ? ` — ${suiviApartmentLabel(ev.aptIndex)}` : ''}
+                        {isHostSession
+                          ? ` — ${ev.guest} (${ev.channel === 'airbnb' ? 'Airbnb' : 'Booking'}) — ${ev.reservationId}`
+                          : ''}
+                        {' — '}
+                        [{suiviEventStatus(ev, suiviReports[ev.id]).label}]
                       </option>
                     ))
                   )}

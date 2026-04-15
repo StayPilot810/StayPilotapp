@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { findAccountForLogin, getStoredAccounts } from '../lib/accounts'
+import { findAccountForLogin, getStoredAccounts, saveStoredAccounts } from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
 
 const LS_REMEMBER = 'staypilot_remember_me'
@@ -7,16 +7,28 @@ const LS_IDENTIFIER = 'staypilot_login_identifier'
 const LS_SESSION_ACTIVE = 'staypilot_session_active'
 const LS_CURRENT_PLAN = 'staypilot_current_plan'
 const LS_CURRENT_USER = 'staypilot_current_user'
+const LS_CURRENT_ROLE = 'staypilot_current_role'
+const LS_PASSWORD_OTP_PREFIX = 'staypilot_password_otp_v1_'
 
 export function LoginPage() {
   const { t } = useLanguage()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'host' | 'cleaner'>('host')
   const [rememberMe, setRememberMe] = useState(false)
   const [autoConnected, setAutoConnected] = useState(false)
   const [connected, setConnected] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [accountsCount, setAccountsCount] = useState(0)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotIdentifier, setForgotIdentifier] = useState('')
+  const [forgotCodeInput, setForgotCodeInput] = useState('')
+  const [forgotCodeValidated, setForgotCodeValidated] = useState(false)
+  const [forgotNewPassword, setForgotNewPassword] = useState('')
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
+  const [forgotSendingCode, setForgotSendingCode] = useState(false)
+  const [forgotResetting, setForgotResetting] = useState(false)
+  const [forgotMessage, setForgotMessage] = useState('')
 
   useEffect(() => {
     const accounts = getStoredAccounts()
@@ -49,12 +61,21 @@ export function LoginPage() {
       setLoginError(t.loginError)
       return
     }
+    const accountRole = account.role || 'host'
+    if (accountRole !== role) {
+      setConnected(false)
+      setAutoConnected(false)
+      setLoginError("Le rôle sélectionné ne correspond pas à ce compte. Vérifiez 'Hôte' ou 'Prestataire ménage'.")
+      return
+    }
     setLoginError('')
 
     localStorage.setItem(LS_SESSION_ACTIVE, 'true')
     localStorage.setItem(LS_CURRENT_PLAN, account.plan || 'Pro')
     localStorage.setItem(LS_CURRENT_USER, account.username.trim())
+    localStorage.setItem(LS_CURRENT_ROLE, accountRole)
     localStorage.setItem(LS_IDENTIFIER, account.username.trim())
+    if (account.preferredLocale) localStorage.setItem('staypilot_locale', account.preferredLocale)
     if (rememberMe) {
       localStorage.setItem(LS_REMEMBER, 'true')
     } else {
@@ -65,6 +86,159 @@ export function LoginPage() {
     setConnected(true)
     setAutoConnected(false)
     window.location.href = '/dashboard'
+  }
+
+  function normalize(value: string) {
+    return value.trim().toLowerCase()
+  }
+
+  function findAccountByIdentifier(rawIdentifier: string) {
+    const idNorm = normalize(rawIdentifier)
+    return getStoredAccounts().find(
+      (a) => normalize(a.email) === idNorm || normalize(a.username) === idNorm,
+    )
+  }
+
+  function otpStorageKeyForEmail(targetEmail: string) {
+    return `${LS_PASSWORD_OTP_PREFIX}${targetEmail.trim().toLowerCase()}`
+  }
+
+  function createSixDigitCode() {
+    return String(Math.floor(100000 + Math.random() * 900000))
+  }
+
+  function storeOtpForEmail(targetEmail: string, code: string) {
+    localStorage.setItem(
+      otpStorageKeyForEmail(targetEmail),
+      JSON.stringify({
+        code,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+      }),
+    )
+  }
+
+  function verifyOtpForEmail(targetEmail: string, codeInput: string) {
+    const raw = localStorage.getItem(otpStorageKeyForEmail(targetEmail))
+    if (!raw) return false
+    try {
+      const parsed = JSON.parse(raw) as { code?: string; expiresAt?: number }
+      if (!parsed.code || !parsed.expiresAt) return false
+      if (Date.now() > parsed.expiresAt) return false
+      return parsed.code === codeInput.trim()
+    } catch {
+      return false
+    }
+  }
+
+  function clearOtpForEmail(targetEmail: string) {
+    localStorage.removeItem(otpStorageKeyForEmail(targetEmail))
+  }
+
+  async function sendForgotPasswordCode() {
+    const account = findAccountByIdentifier(forgotIdentifier)
+    if (!account) {
+      setForgotMessage('Compte introuvable avec cet e-mail / identifiant.')
+      return
+    }
+    setForgotSendingCode(true)
+    setForgotMessage('')
+    const code = createSixDigitCode()
+    try {
+      const res = await fetch('/api/cancel-subscription-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'password_verification_code',
+          to: account.email,
+          firstName: account.firstName || '',
+          locale: account.preferredLocale || 'fr',
+          code,
+        }),
+      })
+      if (!res.ok) {
+        setForgotMessage("Impossible d'envoyer le code pour le moment.")
+        return
+      }
+      storeOtpForEmail(account.email, code)
+      setForgotCodeValidated(false)
+      setForgotMessage(`Code envoye a ${account.email}.`)
+    } catch {
+      setForgotMessage("Impossible d'envoyer le code pour le moment.")
+    } finally {
+      setForgotSendingCode(false)
+    }
+  }
+
+  async function resetForgotPassword() {
+    const account = findAccountByIdentifier(forgotIdentifier)
+    if (!account) {
+      setForgotMessage('Compte introuvable avec cet e-mail / identifiant.')
+      return
+    }
+    if (!forgotCodeValidated) {
+      setForgotMessage('Veuillez valider le code a 6 chiffres avant de modifier le mot de passe.')
+      return
+    }
+    if (forgotNewPassword.length < 8) {
+      setForgotMessage('Le nouveau mot de passe doit contenir au moins 8 caracteres.')
+      return
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotMessage('La confirmation du nouveau mot de passe ne correspond pas.')
+      return
+    }
+    setForgotResetting(true)
+    const accounts = getStoredAccounts()
+    const nextAccounts = accounts.map((a) =>
+      a.id === account.id ? { ...a, password: forgotNewPassword } : a,
+    )
+    saveStoredAccounts(nextAccounts)
+    clearOtpForEmail(account.email)
+    let mailSent = false
+    try {
+      const res = await fetch('/api/cancel-subscription-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'password_reset_confirmation',
+          to: account.email,
+          firstName: account.firstName || '',
+          locale: account.preferredLocale || 'fr',
+          resetAtIso: new Date().toISOString(),
+        }),
+      })
+      mailSent = res.ok
+    } catch {
+      mailSent = false
+    } finally {
+      setForgotResetting(false)
+    }
+    setForgotCodeInput('')
+    setForgotNewPassword('')
+    setForgotConfirmPassword('')
+    setForgotMessage(
+      mailSent
+        ? `Mot de passe reinitialise. Confirmation envoyee a ${account.email}.`
+        : 'Mot de passe reinitialise. Envoi e-mail de confirmation indisponible.',
+    )
+  }
+
+  function validateForgotPasswordCode() {
+    const account = findAccountByIdentifier(forgotIdentifier)
+    if (!account) {
+      setForgotMessage('Compte introuvable avec cet e-mail / identifiant.')
+      return
+    }
+    if (!/^\d{6}$/.test(forgotCodeInput.trim())) {
+      setForgotMessage('Veuillez saisir un code a 6 chiffres.')
+      return
+    }
+    if (!verifyOtpForEmail(account.email, forgotCodeInput)) {
+      setForgotMessage('Code invalide ou expire. Demandez un nouveau code.')
+      return
+    }
+    setForgotCodeValidated(true)
+    setForgotMessage('Code valide. Vous pouvez maintenant reinitialiser le mot de passe.')
   }
 
   return (
@@ -144,6 +318,20 @@ export function LoginPage() {
                 autoComplete="current-password"
               />
             </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-zinc-800" htmlFor="role">
+                Vous etes
+              </label>
+              <select
+                id="role"
+                value={role}
+                onChange={(e) => setRole((e.target.value as 'host' | 'cleaner') || 'host')}
+                className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+              >
+                <option value="host">Hôte</option>
+                <option value="cleaner">Prestataire ménage</option>
+              </select>
+            </div>
 
             <label className="flex select-none items-center gap-2.5 text-sm font-medium text-zinc-700">
               <input
@@ -155,12 +343,99 @@ export function LoginPage() {
               {t.loginRemember}
             </label>
 
-            <a
-              href="#"
-              className="block text-center text-sm font-semibold text-[#4a86f7] transition-colors hover:text-[#3c78ee]"
+            <button
+              type="button"
+              onClick={() => {
+                setForgotOpen((v) => !v)
+                setForgotMessage('')
+              }}
+              className="block w-full text-center text-sm font-semibold text-[#4a86f7] transition-colors hover:text-[#3c78ee]"
             >
               {t.loginForgot}
-            </a>
+            </button>
+            {forgotOpen ? (
+              <div className="space-y-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                <p className="text-xs text-zinc-600">
+                  Verification securisee : recevez un code 6 chiffres par e-mail avant reinitialisation.
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className={`rounded-md border px-2 py-1 text-center font-semibold ${forgotIdentifier.trim() ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-zinc-200 bg-white text-zinc-500'}`}>
+                    1. Identifiant
+                  </div>
+                  <div className={`rounded-md border px-2 py-1 text-center font-semibold ${forgotCodeValidated ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-500'}`}>
+                    2. Code valide
+                  </div>
+                  <div className={`rounded-md border px-2 py-1 text-center font-semibold ${forgotCodeValidated ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-500'}`}>
+                    3. Nouveau mot de passe
+                  </div>
+                </div>
+                <input
+                  value={forgotIdentifier}
+                  onChange={(e) => {
+                    setForgotIdentifier(e.target.value)
+                    setForgotCodeValidated(false)
+                  }}
+                  placeholder="Votre e-mail ou identifiant"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void sendForgotPasswordCode()}
+                    disabled={forgotSendingCode}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {forgotSendingCode ? 'Envoi code...' : 'Envoyer le code'}
+                  </button>
+                  <input
+                    value={forgotCodeInput}
+                    onChange={(e) => {
+                      setForgotCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))
+                      setForgotCodeValidated(false)
+                    }}
+                    placeholder="Code 6 chiffres"
+                    className="w-36 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={validateForgotPasswordCode}
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Valider le code
+                  </button>
+                </div>
+                {forgotCodeValidated ? (
+                  <p className="text-xs font-semibold text-emerald-700">Code valide: etape 3 debloquee.</p>
+                ) : (
+                  <p className="text-xs font-medium text-zinc-500">Validez le code pour debloquer le changement de mot de passe.</p>
+                )}
+                <input
+                  type="password"
+                  value={forgotNewPassword}
+                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                  disabled={!forgotCodeValidated}
+                  placeholder="Nouveau mot de passe"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <input
+                  type="password"
+                  value={forgotConfirmPassword}
+                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                  disabled={!forgotCodeValidated}
+                  placeholder="Confirmer le nouveau mot de passe"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => void resetForgotPassword()}
+                  disabled={forgotResetting || !forgotCodeValidated}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {forgotResetting ? 'Reinitialisation...' : 'Reinitialiser le mot de passe'}
+                </button>
+                {forgotMessage ? <p className="text-xs font-medium text-zinc-700">{forgotMessage}</p> : null}
+              </div>
+            ) : null}
 
             <button
               type="submit"
@@ -174,6 +449,7 @@ export function LoginPage() {
               onClick={() => {
                 localStorage.setItem(LS_SESSION_ACTIVE, 'true')
                 localStorage.setItem(LS_CURRENT_PLAN, 'Gratuit')
+                localStorage.setItem(LS_CURRENT_ROLE, role)
                 localStorage.removeItem(LS_CURRENT_USER)
                 window.dispatchEvent(new Event('staypilot-session-changed'))
                 window.location.href = '/dashboard'

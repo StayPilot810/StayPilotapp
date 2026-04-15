@@ -4,12 +4,15 @@ import { useLanguage } from '../hooks/useLanguage'
 import { useAppPathname } from '../hooks/useAppPathname'
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { CONTACT_EMAIL } from '../i18n/contactPage'
+import { getStoredAccounts } from '../lib/accounts'
 
 type ChatTurn =
   | { role: 'assistant'; content: string }
   | { role: 'user'; content: string; imageDataUrl?: string }
 
 const CHAT_PATH = '/api/chat'
+const LS_CURRENT_USER = 'staypilot_current_user'
+const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
 
 async function compressImageToJpegDataUrl(file: File): Promise<string> {
   const url = URL.createObjectURL(file)
@@ -69,6 +72,22 @@ export function AiChatWidget() {
   const listRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const initialized = useRef(false)
+  const sessionKeyRef = useRef('')
+
+  const currentUserKey =
+    typeof window !== 'undefined'
+      ? (localStorage.getItem(LS_CURRENT_USER) ?? localStorage.getItem(LS_LOGIN_IDENTIFIER) ?? '').trim().toLowerCase()
+      : ''
+  const activeAccount =
+    currentUserKey && typeof window !== 'undefined'
+      ? getStoredAccounts().find(
+          (a) =>
+            a.username.trim().toLowerCase() === currentUserKey || a.email.trim().toLowerCase() === currentUserKey,
+        )
+      : undefined
+  const customerFirstName = activeAccount?.firstName?.trim() || ''
+  const isIdentifiedSession = sessionLoggedIn && currentUserKey.length > 0
+  const storageKey = isIdentifiedSession ? `staypilot_ai_chat_history_${currentUserKey}` : ''
 
   const disabledByEnv = import.meta.env.VITE_AI_CHAT_ENABLED === 'false'
   const hideOnAuth = pathname === '/connexion' || pathname === '/inscription'
@@ -95,8 +114,32 @@ export function AiChatWidget() {
   useEffect(() => {
     if (!open || initialized.current) return
     initialized.current = true
-    setMessages([{ role: 'assistant', content: t.aiChatWelcome }])
-  }, [open, t.aiChatWelcome])
+    sessionKeyRef.current = storageKey
+    if (isIdentifiedSession && storageKey) {
+      try {
+        const raw = localStorage.getItem(storageKey)
+        if (raw) {
+          const parsed = JSON.parse(raw) as ChatTurn[]
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed.slice(-24))
+            return
+          }
+        }
+      } catch {
+        // ignore corrupted storage
+      }
+    }
+    const welcome =
+      isIdentifiedSession && customerFirstName.length > 0
+        ? `${t.aiChatWelcome}\n\nRavi de vous retrouver ${customerFirstName}.`
+        : t.aiChatWelcome
+    setMessages([{ role: 'assistant', content: welcome }])
+  }, [open, storageKey, t.aiChatWelcome, customerFirstName, isIdentifiedSession])
+
+  useEffect(() => {
+    if (!open || !isIdentifiedSession || !sessionKeyRef.current) return
+    localStorage.setItem(sessionKeyRef.current, JSON.stringify(messages.slice(-24)))
+  }, [messages, open, isIdentifiedSession])
 
   useEffect(() => {
     if (!listRef.current) return
@@ -122,6 +165,7 @@ export function AiChatWidget() {
     try {
       const payload = {
         locale,
+        customerFirstName: isIdentifiedSession ? customerFirstName : '',
         messages: mapTurnsToApiPayload(history),
       }
       const res = await fetch(CHAT_PATH, {
@@ -165,6 +209,8 @@ export function AiChatWidget() {
     t.aiChatErrorGeneric,
     t.aiChatErrorUnavailable,
     t.aiChatImageOnlyPrompt,
+    customerFirstName,
+    isIdentifiedSession,
   ])
 
   const canSend = !loading && (input.trim().length > 0 || Boolean(pendingImage))

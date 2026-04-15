@@ -1,7 +1,8 @@
 import type { Locale } from './navbar'
 
 export type ReviewEntry = {
-  stars: 4 | 5
+  /** 1–5 : les avis statiques utilisent surtout 4–5 ; les avis hôtes publiés peuvent utiliser toute l’échelle. */
+  stars: 1 | 2 | 3 | 4 | 5
   quote: string
   name: string
   role: string

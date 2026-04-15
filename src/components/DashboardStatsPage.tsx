@@ -3,7 +3,7 @@ import { Crown } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
-import { isTestModeEnabled } from '../utils/testMode'
+import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 
 function hasRealConnectedListings() {
   try {
@@ -16,17 +16,6 @@ function hasRealConnectedListings() {
 }
 const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 
-type RevenueSource = 'airbnb' | 'booking' | 'channel_manager'
-
-type RevenueEntry = {
-  apartment: string
-  year: number
-  month: number
-  source: RevenueSource
-  netRevenue: number
-  occupiedNights: number
-  availableNights: number
-}
 type ReservationStatus = 'reserved' | 'cancelled'
 
 type ReservationEvent = {
@@ -41,17 +30,53 @@ type ParsedIcalEvent = {
   end: Date
   status: ReservationStatus
 }
-type AccessConfig = {
-  ical?: string
-  apiToken?: string
-  accountId?: string
-  nightlyRate?: string
-  commissionRate?: string
-}
+type AccessConfig = { ical?: string }
 
 const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Dec']
 type DateFilterMode = 'month' | 'custom'
 type ChartOrderMode = 'revenue-first' | 'occupancy-first'
+type RevenueSource = 'airbnb' | 'booking' | 'channel_manager'
+type DemoMonthlyMetric = {
+  month: number
+  airbnbRevenue: number
+  bookingRevenue: number
+  channelRevenue: number
+  airbnbOcc: number
+  bookingOcc: number
+  channelOcc: number
+  reservedCount: number
+  cancelledCount: number
+}
+
+const DEMO_APARTMENTS = ['Loft Centre Ville', 'Studio Port', 'Villa Jardin']
+const DEMO_RESERVATION_EVENTS: ReservationEvent[] = [
+  { apartment: 'Loft Centre Ville', date: '2026-04-03', status: 'reserved', nights: 3 },
+  { apartment: 'Loft Centre Ville', date: '2026-04-10', status: 'reserved', nights: 4 },
+  { apartment: 'Studio Port', date: '2026-04-05', status: 'reserved', nights: 2 },
+  { apartment: 'Studio Port', date: '2026-04-12', status: 'cancelled', nights: 2 },
+  { apartment: 'Villa Jardin', date: '2026-04-08', status: 'reserved', nights: 5 },
+  { apartment: 'Villa Jardin', date: '2026-04-18', status: 'reserved', nights: 4 },
+  { apartment: 'Villa Jardin', date: '2026-04-24', status: 'reserved', nights: 3 },
+]
+const DEMO_MONTHLY_METRICS: DemoMonthlyMetric[] = [
+  { month: 1, airbnbRevenue: 3245.8, bookingRevenue: 2589.4, channelRevenue: 1132.7, airbnbOcc: 61.2, bookingOcc: 54.7, channelOcc: 49.3, reservedCount: 34, cancelledCount: 4 },
+  { month: 2, airbnbRevenue: 3478.2, bookingRevenue: 2812.5, channelRevenue: 1218.3, airbnbOcc: 64.1, bookingOcc: 57.6, channelOcc: 52.8, reservedCount: 37, cancelledCount: 4 },
+  { month: 3, airbnbRevenue: 3926.9, bookingRevenue: 3234.7, channelRevenue: 1365.6, airbnbOcc: 69.4, bookingOcc: 63.2, channelOcc: 58.5, reservedCount: 42, cancelledCount: 5 },
+  { month: 4, airbnbRevenue: 4688.4, bookingRevenue: 3691.9, channelRevenue: 1522.1, airbnbOcc: 76.3, bookingOcc: 68.9, channelOcc: 63.4, reservedCount: 49, cancelledCount: 5 },
+  { month: 5, airbnbRevenue: 5144.1, bookingRevenue: 4058.8, channelRevenue: 1716.4, airbnbOcc: 81.5, bookingOcc: 71.8, channelOcc: 66.7, reservedCount: 53, cancelledCount: 6 },
+  { month: 6, airbnbRevenue: 5662.7, bookingRevenue: 4412.3, channelRevenue: 1891.6, airbnbOcc: 84.2, bookingOcc: 74.6, channelOcc: 69.8, reservedCount: 58, cancelledCount: 6 },
+  { month: 7, airbnbRevenue: 6125.5, bookingRevenue: 4764.2, channelRevenue: 2075.9, airbnbOcc: 88.1, bookingOcc: 79.4, channelOcc: 73.2, reservedCount: 64, cancelledCount: 7 },
+  { month: 8, airbnbRevenue: 5968.3, bookingRevenue: 4598.6, channelRevenue: 1996.2, airbnbOcc: 86.4, bookingOcc: 77.3, channelOcc: 72.1, reservedCount: 61, cancelledCount: 7 },
+  { month: 9, airbnbRevenue: 5267.6, bookingRevenue: 4146.9, channelRevenue: 1781.5, airbnbOcc: 79.6, bookingOcc: 70.8, channelOcc: 65.3, reservedCount: 54, cancelledCount: 6 },
+  { month: 10, airbnbRevenue: 4748.9, bookingRevenue: 3852.4, channelRevenue: 1633.2, airbnbOcc: 74.2, bookingOcc: 66.5, channelOcc: 61.7, reservedCount: 48, cancelledCount: 5 },
+  { month: 11, airbnbRevenue: 4286.4, bookingRevenue: 3524.2, channelRevenue: 1492.9, airbnbOcc: 70.3, bookingOcc: 62.9, channelOcc: 58.4, reservedCount: 43, cancelledCount: 5 },
+  { month: 12, airbnbRevenue: 5038.1, bookingRevenue: 4016.8, channelRevenue: 1703.6, airbnbOcc: 78.4, bookingOcc: 69.7, channelOcc: 64.6, reservedCount: 52, cancelledCount: 6 },
+]
+const DEMO_BOOKINGS_BY_APARTMENT = [
+  { apartment: 'Loft Centre Ville', reservations: 171, cancellations: 17 },
+  { apartment: 'Studio Port', reservations: 154, cancellations: 19 },
+  { apartment: 'Villa Jardin', reservations: 170, cancellations: 24 },
+]
 
 function isYearMonthInRange(year: number, month: number, start: Date, end: Date) {
   const monthStart = new Date(year, month - 1, 1)
@@ -90,18 +115,6 @@ function nightsBetween(start: Date, end: Date) {
   return Math.max(0, Math.round(diff / 86400000))
 }
 
-function defaultNightlyRate(platform: ChannelKey) {
-  if (platform === 'airbnb') return 120
-  if (platform === 'booking') return 110
-  return 100
-}
-
-function defaultCommissionRate(platform: ChannelKey) {
-  if (platform === 'airbnb') return 14
-  if (platform === 'booking') return 17
-  return 12
-}
-
 export function DashboardStatsPage() {
   const { t } = useLanguage()
   const [selectedPeriod, setSelectedPeriod] = useState(() => {
@@ -114,7 +127,6 @@ export function DashboardStatsPage() {
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [reservationEvents, setReservationEvents] = useState<ReservationEvent[]>([])
-  const [revenueEntries, setRevenueEntries] = useState<RevenueEntry[]>([])
   const [connectionsRefreshKey, setConnectionsRefreshKey] = useState(0)
   const [statsLoadError, setStatsLoadError] = useState('')
   useEffect(() => {
@@ -129,17 +141,65 @@ export function DashboardStatsPage() {
     }
   }, [])
   const hasRealConnected = useMemo(() => hasRealConnectedListings(), [connectionsRefreshKey])
-  const connected = useMemo(() => hasRealConnected || isTestModeEnabled(), [hasRealConnected])
+  const connected = useMemo(() => hasRealConnected, [hasRealConnected])
   const apartmentNames = useMemo(() => {
     return getConnectedApartmentsFromStorage().map((apt) => apt.name)
   }, [connectionsRefreshKey])
   const apartmentsForFilters = useMemo(() => {
-    if (apartmentNames.length > 0) return apartmentNames
-    return ['Logement test 1', 'Logement test 2']
+    return apartmentNames.length > 0 ? apartmentNames : DEMO_APARTMENTS
   }, [apartmentNames])
+  const usingDemoData = reservationEvents.length === 0
+  const effectiveReservationEvents = useMemo(
+    () => (reservationEvents.length > 0 ? reservationEvents : DEMO_RESERVATION_EVENTS),
+    [reservationEvents],
+  )
+  const moneyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('fr-FR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    [],
+  )
+  const percentFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('fr-FR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }),
+    [],
+  )
 
   useEffect(() => {
     const connectedApartments = getConnectedApartmentsFromStorage()
+    const official = readOfficialChannelSyncData()
+    if (official && official.bookings.length > 0) {
+      const propertyIdToApartment = new Map<string, string>()
+      connectedApartments.forEach((apt) => {
+        const parts = String(apt.id).split(':')
+        const propId = parts.length > 1 ? parts.slice(1).join(':') : apt.id
+        propertyIdToApartment.set(propId, apt.name)
+      })
+      setReservationEvents(
+        official.bookings
+          .map((b) => {
+            const apartment = propertyIdToApartment.get(String(b.propertyId))
+            if (!apartment) return null
+            const checkIn = new Date(`${b.checkIn}T00:00:00`)
+            const checkOut = new Date(`${b.checkOut}T00:00:00`)
+            if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) return null
+            return {
+              apartment,
+              date: b.checkIn,
+              status: b.status === 'cancelled' ? 'cancelled' : 'reserved',
+              nights: nightsBetween(checkIn, checkOut),
+            } as ReservationEvent
+          })
+          .filter((x): x is ReservationEvent => Boolean(x)),
+      )
+      setStatsLoadError('')
+      return
+    }
     const accessRaw = localStorage.getItem('staypilot_reservation_access')
     const access = accessRaw ? (JSON.parse(accessRaw) as Partial<Record<ChannelKey, AccessConfig>>) : {}
     let cancelled = false
@@ -171,41 +231,10 @@ export function DashboardStatsPage() {
           })),
         )
 
-        const byMonthMap = new Map<string, RevenueEntry>()
-        flat.forEach((evt) => {
-          const month = evt.start.getMonth() + 1
-          const year = evt.start.getFullYear()
-          const source: RevenueSource = evt.source === 'channelManager' ? 'channel_manager' : evt.source
-          const key = `${evt.apartment}|${year}|${month}|${source}`
-          const accessForSource = access[evt.source]
-          const nightlyRate = Number(accessForSource?.nightlyRate || defaultNightlyRate(evt.source))
-          const commissionRate = Number(accessForSource?.commissionRate || defaultCommissionRate(evt.source))
-          const existing =
-            byMonthMap.get(key) ??
-            {
-              apartment: evt.apartment,
-              year,
-              month,
-              source,
-              netRevenue: 0,
-              occupiedNights: 0,
-              availableNights: new Date(year, month, 0).getDate(),
-            }
-          if (evt.status === 'reserved') {
-            const nights = nightsBetween(evt.start, evt.end)
-            existing.occupiedNights += nights
-            const gross = nights * nightlyRate
-            const net = gross * (1 - Math.max(0, Math.min(100, commissionRate)) / 100)
-            existing.netRevenue += net
-          }
-          byMonthMap.set(key, existing)
-        })
-        setRevenueEntries(Array.from(byMonthMap.values()))
         setStatsLoadError('')
       } catch {
         if (!cancelled) {
           setReservationEvents([])
-          setRevenueEntries([])
           setStatsLoadError("Impossible de charger les donnees iCal connectees.")
         }
       }
@@ -230,8 +259,8 @@ export function DashboardStatsPage() {
     const selectedApartment =
       selectedApartmentFilter === 'all' ? null : apartmentsForFilters.find((name) => name === selectedApartmentFilter) ?? null
     const byApartment = selectedApartment
-      ? reservationEvents.filter((event) => event.apartment === selectedApartment)
-      : reservationEvents
+      ? effectiveReservationEvents.filter((event) => event.apartment === selectedApartment)
+      : effectiveReservationEvents
 
     if (dateFilterMode === 'month') {
       return byApartment.filter((event) => {
@@ -253,15 +282,28 @@ export function DashboardStatsPage() {
     customRangeError,
     customStartDate,
     dateFilterMode,
-    reservationEvents,
+    effectiveReservationEvents,
     selectedApartmentFilter,
     selectedPeriod.month,
     selectedPeriod.year,
   ])
 
+  const selectedDemoMetrics = useMemo(() => {
+    if (dateFilterMode === 'month') {
+      return DEMO_MONTHLY_METRICS.filter((row) => row.month === selectedPeriod.month)
+    }
+    if (!customStartDate || !customEndDate || customRangeError) return DEMO_MONTHLY_METRICS
+    const start = new Date(`${customStartDate}T00:00:00`)
+    const end = new Date(`${customEndDate}T23:59:59`)
+    return DEMO_MONTHLY_METRICS.filter((row) => isYearMonthInRange(selectedPeriod.year, row.month, start, end))
+  }, [customEndDate, customRangeError, customStartDate, dateFilterMode, selectedPeriod.month, selectedPeriod.year])
   const reservationAndCancellation = useMemo(() => {
-    const reservedCount = filteredReservationEvents.filter((event) => event.status === 'reserved').length
-    const cancelledCount = filteredReservationEvents.filter((event) => event.status === 'cancelled').length
+    const reservedCount = usingDemoData
+      ? selectedDemoMetrics.reduce((sum, row) => sum + row.reservedCount, 0)
+      : filteredReservationEvents.filter((event) => event.status === 'reserved').length
+    const cancelledCount = usingDemoData
+      ? selectedDemoMetrics.reduce((sum, row) => sum + row.cancelledCount, 0)
+      : filteredReservationEvents.filter((event) => event.status === 'cancelled').length
     const total = reservedCount + cancelledCount
     const reservationRate = total > 0 ? (reservedCount / total) * 100 : 0
     const cancellationRate = total > 0 ? (cancelledCount / total) * 100 : 0
@@ -275,8 +317,8 @@ export function DashboardStatsPage() {
         { name: "Taux d'annulation", value: Number(cancellationRate.toFixed(1)), color: '#ef4444' },
       ],
     }
-  }, [filteredReservationEvents])
-  const hasReservationData = filteredReservationEvents.length > 0
+  }, [filteredReservationEvents, selectedDemoMetrics, usingDemoData])
+  const hasReservationData = usingDemoData ? true : filteredReservationEvents.length > 0
   const pieDataForDisplay = hasReservationData
     ? reservationAndCancellation.pieData
     : [{ name: 'Aucune donnee', value: 100, color: '#e5e7eb' }]
@@ -325,36 +367,15 @@ export function DashboardStatsPage() {
 
   const globalOccupancy = totals.totalNights > 0 ? (totals.occupiedNights / totals.totalNights) * 100 : 0
   const bookingsByApartment = useMemo(() => {
+    if (usingDemoData) return DEMO_BOOKINGS_BY_APARTMENT
     return apartmentsForFilters.map((apartment) => ({
       apartment,
-      reservations: reservationEvents.filter((event) => event.apartment === apartment && event.status === 'reserved').length,
-      cancellations: reservationEvents.filter((event) => event.apartment === apartment && event.status === 'cancelled').length,
+      reservations: effectiveReservationEvents.filter((event) => event.apartment === apartment && event.status === 'reserved').length,
+      cancellations: effectiveReservationEvents.filter((event) => event.apartment === apartment && event.status === 'cancelled').length,
     }))
-  }, [apartmentsForFilters, reservationEvents])
+  }, [apartmentsForFilters, effectiveReservationEvents, usingDemoData])
 
-  const filteredRevenueEntries = useMemo(() => {
-    const byApartment = selectedApartment
-      ? revenueEntries.filter((row) => row.apartment === selectedApartment)
-      : revenueEntries
-
-    if (dateFilterMode === 'month') {
-      return byApartment.filter((row) => row.year === selectedPeriod.year && row.month === selectedPeriod.month)
-    }
-
-    if (!customStartDate || !customEndDate || customRangeError) return byApartment
-    const start = new Date(`${customStartDate}T00:00:00`)
-    const end = new Date(`${customEndDate}T23:59:59`)
-    return byApartment.filter((row) => isYearMonthInRange(row.year, row.month, start, end))
-  }, [
-    customEndDate,
-    customRangeError,
-    customStartDate,
-    dateFilterMode,
-    revenueEntries,
-    selectedApartment,
-    selectedPeriod.month,
-    selectedPeriod.year,
-  ])
+  const filteredRevenueEntries = useMemo(() => [], [])
 
   const activeDateFilterLabel =
     dateFilterMode === 'month'
@@ -365,26 +386,39 @@ export function DashboardStatsPage() {
   const activeFilterLabel = `${activeDateFilterLabel} | ${
     selectedApartment ? `Logement: ${selectedApartment}` : 'Logement: Tous les logements'
   }`
-  const hasRevenueData = filteredRevenueEntries.length > 0
+  const hasRevenueData = true
+  const demoGlobalOccupancy = useMemo(() => {
+    if (selectedDemoMetrics.length === 0) return 0
+    const avg =
+      selectedDemoMetrics.reduce((sum, row) => sum + (row.airbnbOcc + row.bookingOcc + row.channelOcc) / 3, 0) /
+      selectedDemoMetrics.length
+    return Number(avg.toFixed(1))
+  }, [selectedDemoMetrics])
 
   const chartData = useMemo(() => {
+    const demoMap = new Map(DEMO_MONTHLY_METRICS.map((row) => [row.month, row]))
     return MONTH_LABELS.map((label, index) => {
       const month = index + 1
       const monthRows = filteredRevenueEntries.filter((row) => row.month === month)
       const airbnb = monthRows.filter((r) => r.source === 'airbnb').reduce((sum, r) => sum + r.netRevenue, 0)
       const booking = monthRows.filter((r) => r.source === 'booking').reduce((sum, r) => sum + r.netRevenue, 0)
       const channelManager = monthRows.filter((r) => r.source === 'channel_manager').reduce((sum, r) => sum + r.netRevenue, 0)
+      const demo = demoMap.get(month)
+      const finalAirbnb = airbnb > 0 ? airbnb : (demo?.airbnbRevenue ?? 0)
+      const finalBooking = booking > 0 ? booking : (demo?.bookingRevenue ?? 0)
+      const finalChannel = channelManager > 0 ? channelManager : (demo?.channelRevenue ?? 0)
       return {
         month: label,
-        airbnb,
-        booking,
-        channelManager,
-        total: airbnb + booking + channelManager,
+        airbnb: finalAirbnb,
+        booking: finalBooking,
+        channelManager: finalChannel,
+        total: finalAirbnb + finalBooking + finalChannel,
       }
     })
   }, [filteredRevenueEntries])
 
   const occupancyChartData = useMemo(() => {
+    const demoMap = new Map(DEMO_MONTHLY_METRICS.map((row) => [row.month, row]))
     return MONTH_LABELS.map((label, index) => {
       const month = index + 1
       const monthRows = filteredRevenueEntries.filter((row) => row.month === month)
@@ -397,14 +431,29 @@ export function DashboardStatsPage() {
       const airbnb = sourceRate('airbnb')
       const booking = sourceRate('booking')
       const channelManager = sourceRate('channel_manager')
+      const demo = demoMap.get(month)
       return {
         month: label,
-        airbnb,
-        booking,
-        channelManager,
+        airbnb: airbnb > 0 ? airbnb : (demo?.airbnbOcc ?? 0),
+        booking: booking > 0 ? booking : (demo?.bookingOcc ?? 0),
+        channelManager: channelManager > 0 ? channelManager : (demo?.channelOcc ?? 0),
       }
     })
   }, [filteredRevenueEntries])
+  const netRevenueDisplay = useMemo(() => {
+    if (dateFilterMode === 'month') {
+      const current = chartData[selectedPeriod.month - 1]
+      return current ? current.total : 0
+    }
+    if (!customStartDate || !customEndDate || customRangeError) return chartData.reduce((sum, row) => sum + row.total, 0)
+    const start = new Date(`${customStartDate}T00:00:00`)
+    const end = new Date(`${customEndDate}T23:59:59`)
+    return chartData.reduce((sum, row, idx) => {
+      const month = idx + 1
+      return isYearMonthInRange(selectedPeriod.year, month, start, end) ? sum + row.total : sum
+    }, 0)
+  }, [chartData, customEndDate, customRangeError, customStartDate, dateFilterMode, selectedPeriod.month, selectedPeriod.year])
+  const globalOccupancyDisplay = usingDemoData ? demoGlobalOccupancy : globalOccupancy
 
   const yearOptions = useMemo(() => {
     const nowYear = new Date().getFullYear()
@@ -581,7 +630,7 @@ export function DashboardStatsPage() {
             </div>
             {!hasRealConnected ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Aucun logement réel connecté: aucune donnée Airbnb/Booking/Channel Manager n'est affichée.
+                Mode démo réaliste activé : les chiffres affichés sont simulés pour illustrer un portefeuille connecté.
               </div>
             ) : null}
             {statsLoadError ? (
@@ -592,16 +641,18 @@ export function DashboardStatsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Encaissement net</p>
-                <p className="mt-2 text-2xl font-bold text-zinc-900">{hasRevenueData ? `${totals.netRevenue.toFixed(2)} EUR` : '--'}</p>
+                <p className="mt-2 text-2xl font-bold text-zinc-900">{hasRevenueData ? `${moneyFormatter.format(netRevenueDisplay)} EUR` : '--'}</p>
                 <p className="mt-1 text-sm text-zinc-600">
                   {hasRevenueData
-                    ? 'Somme des revenus nets encaissés du mois en cours.'
+                    ? dateFilterMode === 'month'
+                      ? 'Somme des revenus nets sur le mois sélectionné.'
+                      : 'Somme des revenus nets sur la période personnalisée.'
                     : 'Les prix ne sont pas disponibles via iCal seul (Airbnb/Booking).'}
                 </p>
               </article>
               <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Taux d'occupation global</p>
-                <p className="mt-2 text-2xl font-bold text-zinc-900">{globalOccupancy.toFixed(1)} %</p>
+                <p className="mt-2 text-2xl font-bold text-zinc-900">{percentFormatter.format(globalOccupancyDisplay)} %</p>
                 <p className="mt-1 text-sm text-zinc-600">Calculé sur l'ensemble des logements affichés.</p>
               </article>
             </div>
@@ -631,7 +682,7 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${value.toFixed(0)} EUR`, key]}
+                          formatter={(value: number, key: string) => [`${moneyFormatter.format(value)} EUR`, key]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -652,7 +703,7 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis domain={[0, 100]} tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${value.toFixed(1)} %`, key]}
+                          formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -675,7 +726,7 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis domain={[0, 100]} tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${value.toFixed(1)} %`, key]}
+                          formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -696,7 +747,7 @@ export function DashboardStatsPage() {
                         <XAxis dataKey="month" tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <YAxis tick={{ fill: '#3f3f46', fontSize: 12 }} />
                         <Tooltip
-                          formatter={(value: number, key: string) => [`${value.toFixed(0)} EUR`, key]}
+                          formatter={(value: number, key: string) => [`${moneyFormatter.format(value)} EUR`, key]}
                           contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                         />
                         <Bar dataKey="airbnb" name="Airbnb" fill="#ff006e" radius={[6, 6, 0, 0]} />
@@ -723,13 +774,13 @@ export function DashboardStatsPage() {
                 <article className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Taux de réservation</p>
                   <p className="mt-1 text-2xl font-bold text-emerald-600">
-                    {hasReservationData ? `${reservationAndCancellation.reservationRate.toFixed(1)} %` : '--'}
+                    {hasReservationData ? `${percentFormatter.format(reservationAndCancellation.reservationRate)} %` : '--'}
                   </p>
                 </article>
                 <article className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Taux d'annulation</p>
                   <p className="mt-1 text-2xl font-bold text-rose-600">
-                    {hasReservationData ? `${reservationAndCancellation.cancellationRate.toFixed(1)} %` : '--'}
+                    {hasReservationData ? `${percentFormatter.format(reservationAndCancellation.cancellationRate)} %` : '--'}
                   </p>
                 </article>
                 <article className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
@@ -743,7 +794,7 @@ export function DashboardStatsPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Tooltip
-                      formatter={(value: number, key: string) => [`${value.toFixed(1)} %`, key]}
+                      formatter={(value: number, key: string) => [`${percentFormatter.format(value)} %`, key]}
                       contentStyle={{ borderRadius: 12, borderColor: '#e4e4e7' }}
                     />
                     <Pie

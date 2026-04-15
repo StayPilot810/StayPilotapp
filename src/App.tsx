@@ -33,12 +33,32 @@ import { WhyStayPilotPage } from './components/WhyStayPilotPage'
 import { LegalPage } from './components/LegalPage'
 import { PrivacyPage } from './components/PrivacyPage'
 import { TermsPage } from './components/TermsPage'
+import { SupportPage } from './components/SupportPage'
+import { BookCallPage } from './components/BookCallPage'
 import { AiChatWidget } from './components/AiChatWidget'
 import { ProfilePage } from './components/ProfilePage'
+import { FeaturesVideoPage } from './components/FeaturesVideoPage'
 import { useAppPathname } from './hooks/useAppPathname'
 
 export default function App() {
   const pathname = useAppPathname()
+  const currentRoleRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_role') : null
+  const isCleanerSession = (currentRoleRaw || '').trim().toLowerCase() === 'cleaner'
+  const cleanerAllowedDashboardPaths = new Set([
+    '/dashboard',
+    '/dashboard/calendrier',
+    '/dashboard/prestataire-menage',
+    '/dashboard/consommables',
+  ])
+  const cleanerDashboardAllowed = cleanerAllowedDashboardPaths.has(pathname)
+  const billingRecoveryRaw =
+    typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_billing_recovery_v1') : null
+  let billingSuspended = false
+  try {
+    billingSuspended = Boolean(billingRecoveryRaw ? JSON.parse(billingRecoveryRaw)?.suspended : false)
+  } catch {
+    billingSuspended = false
+  }
   const isLoginPage = pathname === '/connexion'
   const isSignupPage = pathname === '/inscription'
   const isAboutPage = pathname === '/a-propos'
@@ -51,6 +71,9 @@ export default function App() {
   const isTermsPage = pathname === '/cgu'
   const isHelpCenterPage = pathname === '/centre-aide'
   const isContactPage = pathname === '/contact'
+  const isSupportPage = pathname === '/support'
+  const isFeaturesPage = pathname === '/fonctionnalites'
+  const isBookCallPage = pathname === '/reserver-un-appel'
   const isProfilePage = pathname === '/profil'
   const isDashboardPage = pathname === '/dashboard'
   const isDashboardConnectPage = pathname === '/dashboard/connecter-logements'
@@ -126,32 +149,91 @@ export default function App() {
               <ContactPage />
               <SiteFooter />
             </>
+          ) : isSupportPage ? (
+            <>
+              <SupportPage />
+              <SiteFooter />
+            </>
+          ) : isFeaturesPage ? (
+            <FeaturesVideoPage />
+          ) : isBookCallPage ? (
+            <BookCallPage />
           ) : isProfilePage ? (
             <ProfilePage />
-          ) : isDashboardPage ? (
-            <DashboardPage />
-          ) : isDashboardConnectPage ? (
-            <DashboardConnectPage />
-          ) : isDashboardIntelPage ? (
-            <DashboardIntelPage />
-          ) : isDashboardCalendarPage ? (
-            <DashboardCalendarPage />
-          ) : isDashboardSuppliesPage ? (
-            <DashboardSuppliesPage />
-          ) : isDashboardStatsPage ? (
-            <DashboardStatsPage />
-          ) : isDashboardCleaningPage ? (
-            <DashboardCleaningPage />
-          ) : isDashboardWhatsAppPage ? (
-            <DashboardWhatsAppPage />
-          ) : isDashboardEarlyAccessPage ? (
-            <DashboardEarlyAccessPage />
-          ) : isDashboardExpensesPage ? (
-            <DashboardExpensesPage />
-          ) : isDashboardCompanyPage ? (
-            <DashboardCompanyPage />
-          ) : isDashboardSubPage ? (
+          ) : (isDashboardPage || isDashboardSubPage) && isCleanerSession && !cleanerDashboardAllowed ? (
             <DashboardBlankPage />
+          ) : isDashboardPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardPage />
+            )
+          ) : isDashboardConnectPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardConnectPage />
+            )
+          ) : isDashboardIntelPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardIntelPage />
+            )
+          ) : isDashboardCalendarPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardCalendarPage />
+            )
+          ) : isDashboardSuppliesPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardSuppliesPage />
+            )
+          ) : isDashboardStatsPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardStatsPage />
+            )
+          ) : isDashboardCleaningPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardCleaningPage />
+            )
+          ) : isDashboardWhatsAppPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardWhatsAppPage />
+            )
+          ) : isDashboardEarlyAccessPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardEarlyAccessPage />
+            )
+          ) : isDashboardExpensesPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardExpensesPage />
+            )
+          ) : isDashboardCompanyPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardCompanyPage />
+            )
+          ) : isDashboardSubPage ? (
+            billingSuspended ? (
+              <ProfilePage />
+            ) : (
+            <DashboardBlankPage />
+            )
           ) : (
             <>
               <Hero />

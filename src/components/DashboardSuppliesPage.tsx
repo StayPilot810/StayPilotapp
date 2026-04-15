@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
+import { getStoredAccounts } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { isTestModeEnabled } from '../utils/testMode'
 
@@ -10,12 +11,26 @@ type SupplyRow = {
   category: string
   stock: number
   minStock: number
-  unit: string
-  status: 'OK' | 'A reapprovisionner' | 'Rupture'
+  status: 'En stock' | 'À réapprovisionner' | 'Rupture'
   updatedAt: string
 }
 
 const STORAGE_ROWS_KEY = 'staypilot_supplies_rows_v1'
+const LS_CURRENT_ROLE = 'staypilot_current_role'
+const LS_CURRENT_USER = 'staypilot_current_user'
+const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
+
+function todayFrDate() {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`
+}
+
+function computeSupplyStatus(stock: number, minStock: number): SupplyRow['status'] {
+  if (stock <= 0) return 'Rupture'
+  if (stock <= minStock) return 'À réapprovisionner'
+  return 'En stock'
+}
 
 function getApartmentOptionsFromConnections() {
   const fromConnected = getConnectedApartmentsFromStorage().map((apt) => apt.name)
@@ -32,8 +47,7 @@ const SUPPLIES_V1: SupplyRow[] = [
     category: 'Hygiene',
     stock: 8,
     minStock: 6,
-    unit: 'rouleaux',
-    status: 'OK',
+    status: 'En stock',
     updatedAt: '13/04/2026',
   },
   {
@@ -43,8 +57,7 @@ const SUPPLIES_V1: SupplyRow[] = [
     category: 'Cuisine',
     stock: 12,
     minStock: 10,
-    unit: 'capsules',
-    status: 'OK',
+    status: 'En stock',
     updatedAt: '13/04/2026',
   },
   {
@@ -54,8 +67,7 @@ const SUPPLIES_V1: SupplyRow[] = [
     category: 'Hygiene',
     stock: 2,
     minStock: 4,
-    unit: 'flacons',
-    status: 'A reapprovisionner',
+    status: 'À réapprovisionner',
     updatedAt: '12/04/2026',
   },
   {
@@ -65,8 +77,7 @@ const SUPPLIES_V1: SupplyRow[] = [
     category: 'Entretien',
     stock: 1,
     minStock: 3,
-    unit: 'paquets',
-    status: 'A reapprovisionner',
+    status: 'À réapprovisionner',
     updatedAt: '12/04/2026',
   },
   {
@@ -76,17 +87,34 @@ const SUPPLIES_V1: SupplyRow[] = [
     category: 'Cuisine',
     stock: 3,
     minStock: 2,
-    unit: 'flacons',
-    status: 'OK',
+    status: 'En stock',
     updatedAt: '11/04/2026',
   },
 ]
 
 export function DashboardSuppliesPage() {
   const { t } = useLanguage()
+  const isCleanerSession = (() => {
+    const explicitRole = (localStorage.getItem(LS_CURRENT_ROLE) || '').trim().toLowerCase()
+    if (explicitRole === 'cleaner' || explicitRole === 'host') return explicitRole === 'cleaner'
+    const identifier = (
+      localStorage.getItem(LS_CURRENT_USER) || localStorage.getItem(LS_LOGIN_IDENTIFIER) || ''
+    )
+      .trim()
+      .toLowerCase()
+    if (!identifier) return false
+    const account = getStoredAccounts().find(
+      (a) =>
+        a.email.trim().toLowerCase() === identifier || a.username.trim().toLowerCase() === identifier,
+    )
+    return (account?.role || 'host') === 'cleaner'
+  })()
   const [apartmentOptions] = useState<string[]>(() => getApartmentOptionsFromConnections())
+  const [testViewWithoutApartment, setTestViewWithoutApartment] = useState(false)
   const hasConnectedApartments = apartmentOptions.length > 0
-  const [selectedApartment, setSelectedApartment] = useState<string>(() => apartmentOptions[0] ?? '')
+  const effectiveApartmentOptions =
+    hasConnectedApartments || testViewWithoutApartment ? (apartmentOptions.length > 0 ? apartmentOptions : ['Logement test']) : []
+  const [selectedApartment, setSelectedApartment] = useState<string>(() => apartmentOptions[0] ?? 'Logement test')
   const [rows, setRows] = useState<SupplyRow[]>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_ROWS_KEY)
@@ -111,6 +139,12 @@ export function DashboardSuppliesPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!effectiveApartmentOptions.includes(selectedApartment)) {
+      setSelectedApartment(effectiveApartmentOptions[0] ?? '')
+    }
+  }, [effectiveApartmentOptions, selectedApartment])
+
   const currentSnapshot = JSON.stringify({ rows })
   const isDirty = hasPendingChanges || currentSnapshot !== savedSnapshot
 
@@ -126,23 +160,29 @@ export function DashboardSuppliesPage() {
 
   const updateRow = (id: string, patch: Partial<SupplyRow>) => {
     setHasPendingChanges(true)
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? (() => {
+              const nextRow = { ...row, ...patch }
+              return {
+                ...nextRow,
+                status: computeSupplyStatus(Number(nextRow.stock) || 0, Number(nextRow.minStock) || 0),
+                updatedAt: todayFrDate(),
+              }
+            })()
+          : row,
+      ),
+    )
   }
 
   const addRow = () => {
-    if (apartmentOptions.length === 0) return
+    if (effectiveApartmentOptions.length === 0) return
     setHasPendingChanges(true)
-    const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const today = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`
+    const today = todayFrDate()
     const id = String(Date.now())
     setRows((prev) => {
-      const apartmentCounts = apartmentOptions.map((name) => ({
-        name,
-        count: prev.filter((row) => row.apartment === name).length,
-      }))
-      apartmentCounts.sort((a, b) => a.count - b.count)
-      const nextApartment = apartmentCounts[0]?.name ?? apartmentOptions[0]
+      const nextApartment = selectedApartment || effectiveApartmentOptions[0]
       return [
         ...prev,
         {
@@ -152,8 +192,7 @@ export function DashboardSuppliesPage() {
           category: '',
           stock: 0,
           minStock: 0,
-          unit: '',
-          status: 'OK',
+          status: computeSupplyStatus(0, 0),
           updatedAt: today,
         },
       ]
@@ -166,8 +205,8 @@ export function DashboardSuppliesPage() {
   }
 
   const badgeClass: Record<SupplyRow['status'], string> = {
-    OK: 'bg-emerald-100 text-emerald-700',
-    'A reapprovisionner': 'bg-amber-100 text-amber-700',
+    'En stock': 'bg-emerald-100 text-emerald-700',
+    'À réapprovisionner': 'bg-amber-100 text-amber-700',
     Rupture: 'bg-rose-100 text-rose-700',
   }
 
@@ -197,15 +236,24 @@ export function DashboardSuppliesPage() {
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTabSupplies}</h1>
         <p className="mt-2 text-sm text-zinc-600">V1 editable: toutes les cellules sont modifiables.</p>
 
-        {!hasConnectedApartments ? (
+        {!hasConnectedApartments && !testViewWithoutApartment ? (
           <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-5">
             <p className="text-sm font-semibold text-zinc-900">Connecte d'abord tes logements pour accéder à la liste des consommables.</p>
-            <a
-              href="/dashboard/connecter-logements"
-              className="mt-3 inline-flex rounded-lg bg-[#4a86f7] px-3.5 py-2 text-sm font-semibold text-white transition hover:brightness-95"
-            >
-              Connecter mes logements
-            </a>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href="/dashboard/connecter-logements"
+                className="inline-flex rounded-lg bg-[#4a86f7] px-3.5 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+              >
+                Connecter mes logements
+              </a>
+              <button
+                type="button"
+                onClick={() => setTestViewWithoutApartment(true)}
+                className="inline-flex rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
+              >
+                Ouvrir en mode test sans logement
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -213,6 +261,7 @@ export function DashboardSuppliesPage() {
           <button
             type="button"
             onClick={addRow}
+            disabled={isCleanerSession}
             className="rounded-xl bg-[#4a86f7] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
           >
             Ajouter un consommable
@@ -220,6 +269,7 @@ export function DashboardSuppliesPage() {
           <button
             type="button"
             onClick={saveAll}
+            disabled={isCleanerSession}
             className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
           >
             Enregistrer tout
@@ -234,7 +284,7 @@ export function DashboardSuppliesPage() {
               onChange={(e) => setSelectedApartment(e.target.value)}
               className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-700 outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
             >
-              {apartmentOptions.map((name) => (
+              {effectiveApartmentOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>
@@ -252,7 +302,6 @@ export function DashboardSuppliesPage() {
                   <th className="px-4 py-3 font-semibold">Consommable</th>
                   <th className="px-4 py-3 font-semibold">Catégorie</th>
                   <th className="px-4 py-3 font-semibold">Stock</th>
-                  <th className="px-4 py-3 font-semibold">Unité</th>
                   <th className="px-4 py-3 font-semibold">Seuil min</th>
                   <th className="px-4 py-3 font-semibold">Statut</th>
                   <th className="px-4 py-3 font-semibold">Maj</th>
@@ -273,6 +322,7 @@ export function DashboardSuppliesPage() {
                           value={row.item}
                           onChange={(e) => updateRow(row.id, { item: e.target.value })}
                           rows={2}
+                          disabled={isCleanerSession}
                           className="w-full resize-none rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm whitespace-normal break-words outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                         />
                       </td>
@@ -281,6 +331,7 @@ export function DashboardSuppliesPage() {
                           value={row.category}
                           onChange={(e) => updateRow(row.id, { category: e.target.value })}
                           rows={2}
+                          disabled={isCleanerSession}
                           className="w-full resize-none rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm whitespace-normal break-words outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                         />
                       </td>
@@ -292,46 +343,34 @@ export function DashboardSuppliesPage() {
                           className="w-24 rounded-lg border border-zinc-200 px-2.5 py-1.5 outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                         />
                       </td>
-                      <td className="px-4 py-3 align-top">
-                        <textarea
-                          value={row.unit}
-                          onChange={(e) => updateRow(row.id, { unit: e.target.value })}
-                          rows={2}
-                          className="w-full resize-none rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm whitespace-normal break-words outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                        />
-                      </td>
                       <td className="px-4 py-3">
                         <input
                           type="number"
                           value={row.minStock}
                           onChange={(e) => updateRow(row.id, { minStock: Number(e.target.value) })}
+                          disabled={isCleanerSession}
                           className="w-24 rounded-lg border border-zinc-200 px-2.5 py-1.5 outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                         />
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <div className="inline-block max-w-full overflow-hidden rounded-full">
-                          <select
-                            value={row.status}
-                            onChange={(e) => updateRow(row.id, { status: e.target.value as SupplyRow['status'] })}
-                            className={`w-full max-w-full rounded-full px-2.5 py-1 text-xs font-semibold outline-none ${badgeClass[row.status]}`}
-                          >
-                            <option value="OK">OK</option>
-                            <option value="A reapprovisionner">A reapprovisionner</option>
-                            <option value="Rupture">Rupture</option>
-                          </select>
-                        </div>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            badgeClass[computeSupplyStatus(row.stock, row.minStock)]
+                          }`}
+                        >
+                          {computeSupplyStatus(row.stock, row.minStock)}
+                        </span>
                       </td>
                       <td className="px-4 py-3 align-top text-zinc-500">
-                        <input
-                          value={row.updatedAt}
-                          onChange={(e) => updateRow(row.id, { updatedAt: e.target.value })}
-                          className="w-full max-w-[9rem] rounded-lg border border-zinc-200 px-2.5 py-1.5 outline-none focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                        />
+                        <div className="w-full max-w-[9rem] rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm font-medium text-zinc-600">
+                          {row.updatedAt}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <button
                           type="button"
                           onClick={() => removeRow(row.id)}
+                          disabled={isCleanerSession}
                           className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
                         >
                           Supprimer
@@ -349,12 +388,17 @@ export function DashboardSuppliesPage() {
           <button
             type="button"
             onClick={addRow}
+            disabled={isCleanerSession}
             className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
             title="Ajouter une ligne"
           >
             Ajouter une ligne
           </button>
-          <p className="mt-1 text-xs text-zinc-500">Ajoute une nouvelle ligne de consommable (horizontale).</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {isCleanerSession
+              ? "Mode prestataire: vous pouvez uniquement saisir le stock restant."
+              : 'Ajoute une nouvelle ligne de consommable (horizontale).'}
+          </p>
         </div>
           </>
         )}

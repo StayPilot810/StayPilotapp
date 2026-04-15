@@ -34,6 +34,21 @@ export type AuthDashboardCopy = {
   signupPassword: string
   signupCompanyOptional: string
   signupPhone: string
+  signupPromoCodeLabel: string
+  signupPromoCodePlaceholder: string
+  signupPromoCodeHint: string
+  signupEmailVerifyTitle: string
+  signupEmailVerifyExplain: string
+  signupEmailVerifySendCode: string
+  signupEmailVerifySending: string
+  signupEmailVerifyPlaceholder: string
+  signupEmailVerifyValidate: string
+  signupEmailVerifyInvalid: string
+  signupEmailVerifySent: string
+  signupEmailVerifySendError: string
+  signupEmailVerifyValidBadge: string
+  signupEmailInvalidFormat: string
+  signupEmailAlreadyUsed: string
   signupCardTitle: string
   signupCardSubtitle: string
   signupCardHolder: string
@@ -166,6 +181,23 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     signupPassword: 'Mot de passe',
     signupCompanyOptional: 'Société (facultatif)',
     signupPhone: 'Numéro de téléphone',
+    signupPromoCodeLabel: 'Code promotionnel (facultatif)',
+    signupPromoCodePlaceholder: 'Ex. : BIENVENUE2026',
+    signupPromoCodeHint: "Code partenaire ou offre de lancement : laissez vide si vous n'en avez pas.",
+    signupEmailVerifyTitle: 'Confirmer votre adresse e-mail',
+    signupEmailVerifyExplain:
+      "Nous envoyons un code à 6 chiffres sur cette adresse pour vérifier qu'il n'y a pas de faute de frappe.",
+    signupEmailVerifySendCode: 'Envoyer le code',
+    signupEmailVerifySending: 'Envoi en cours…',
+    signupEmailVerifyPlaceholder: 'Code à 6 chiffres',
+    signupEmailVerifyValidate: 'Vérifier le code',
+    signupEmailVerifyInvalid: 'Code invalide ou expiré. Demandez un nouveau code.',
+    signupEmailVerifySent: 'Code envoyé. Vérifiez votre boîte e-mail (et les spams).',
+    signupEmailVerifySendError:
+      "Impossible d'envoyer le code pour le moment (e-mail non configuré sur le serveur ou erreur réseau).",
+    signupEmailVerifyValidBadge: 'Adresse e-mail vérifiée.',
+    signupEmailInvalidFormat: 'Renseignez une adresse e-mail valide.',
+    signupEmailAlreadyUsed: 'Cet e-mail est déjà utilisé par un compte existant.',
     signupCardTitle: 'Carte bancaire (activation après 14 jours gratuits)',
     signupCardSubtitle: "Votre carte est utilisée pour démarrer automatiquement l’abonnement à la fin de l’essai.",
     signupCardHolder: 'Nom sur la carte',
@@ -272,6 +304,12 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     signupBack: '← Back to main menu', signupTitle: 'Start optimizing your rentals', signupTrialPrefix: '14 days free then', signupTrialSuffix: 'depending on selected plan',
     signupAccountsNone: 'No account created yet', signupAccountsSome: 'account(s) already created in this app', signupPlanStarter: 'Starter plan', signupPlanPro: 'Pro plan', signupPlanScale: 'Scale plan',
     signupFirstName: 'First name', signupLastName: 'Last name', signupUsername: 'Username', signupEmail: 'Email', signupPassword: 'Password', signupCompanyOptional: 'Company (optional)', signupPhone: 'Phone number',
+    signupPromoCodeLabel: 'Promo code (optional)', signupPromoCodePlaceholder: 'e.g. WELCOME2026', signupPromoCodeHint: 'Partner or launch offer code — leave blank if none.',
+    signupEmailVerifyTitle: 'Confirm your email address', signupEmailVerifyExplain: 'We send a 6-digit code to this address to catch typos before you finish signing up.',
+    signupEmailVerifySendCode: 'Send code', signupEmailVerifySending: 'Sending…', signupEmailVerifyPlaceholder: '6-digit code', signupEmailVerifyValidate: 'Verify code',
+    signupEmailVerifyInvalid: 'Invalid or expired code. Request a new one.', signupEmailVerifySent: 'Code sent. Check your inbox (and spam).',
+    signupEmailVerifySendError: 'Could not send the code right now (SMTP not configured or network error).', signupEmailVerifyValidBadge: 'Email verified.',
+    signupEmailInvalidFormat: 'Enter a valid email address.', signupEmailAlreadyUsed: 'This email is already used by an existing account.',
     signupCardTitle: 'Card details (activation after 14-day free trial)', signupCardSubtitle: 'Your card starts billing automatically at trial end.', signupCardHolder: 'Name on card', signupCardNumber: 'Card number', signupCardExpiry: 'MM/YY', signupCardCvc: 'CVC',
     signupSubmit: 'Create my account', signupDuplicateError: 'An account already exists with this email or username.', signupAlready: 'Already have an account?', signupLoginLink: 'Sign in',
     signupAdminTitle: 'Test admin — created accounts', signupAdminReset: 'Reset page / data', signupAdminCount: 'account(s) listed for testing', signupAdminNone: 'No test account saved',
@@ -290,6 +328,12 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     loginPasswordLabel: 'Contraseña', loginPasswordPlaceholder: 'Tu contraseña', loginRemember: 'Mantener sesión', loginForgot: '¿Olvidaste la contraseña?', loginSubmit: 'Acceder a mi dashboard', loginFreeAccess: 'Acceder gratis', loginError: 'Credenciales inválidas o no existe ninguna cuenta.', loginTrust: 'Acceso seguro • Sin datos compartidos',
     signupBack: '← Volver al menú principal', signupTitle: 'Empieza a optimizar tus alquileres', signupTrialPrefix: '14 días gratis y luego', signupTrialSuffix: 'según el plan elegido', signupAccountsNone: 'Aún no hay cuentas creadas', signupAccountsSome: 'cuenta(s) ya creada(s) en esta app',
     signupPlanStarter: 'Plan Starter', signupPlanPro: 'Plan Pro', signupPlanScale: 'Plan Scale', signupFirstName: 'Nombre', signupLastName: 'Apellido', signupUsername: 'Nombre de usuario', signupEmail: 'Email', signupPassword: 'Contraseña', signupCompanyOptional: 'Empresa (opcional)', signupPhone: 'Número de teléfono',
+    signupPromoCodeLabel: 'Código promocional (opcional)', signupPromoCodePlaceholder: 'Ej.: BIENVENIDA2026', signupPromoCodeHint: 'Código de socio u oferta — déjelo vacío si no tiene.',
+    signupEmailVerifyTitle: 'Confirme su correo', signupEmailVerifyExplain: 'Enviamos un código de 6 dígitos para comprobar que el correo es correcto.',
+    signupEmailVerifySendCode: 'Enviar código', signupEmailVerifySending: 'Enviando…', signupEmailVerifyPlaceholder: 'Código de 6 dígitos', signupEmailVerifyValidate: 'Verificar código',
+    signupEmailVerifyInvalid: 'Código no válido o caducado. Solicite uno nuevo.', signupEmailVerifySent: 'Código enviado. Revise su bandeja (y spam).',
+    signupEmailVerifySendError: 'No se pudo enviar el código (SMTP no configurado o error de red).', signupEmailVerifyValidBadge: 'Correo verificado.',
+    signupEmailInvalidFormat: 'Introduzca un correo válido.', signupEmailAlreadyUsed: 'Este correo ya está en uso.',
     signupCardTitle: 'Tarjeta bancaria (activación tras 14 días gratis)', signupCardSubtitle: 'Tu tarjeta inicia el cobro automático al final de la prueba.', signupCardHolder: 'Nombre en la tarjeta', signupCardNumber: 'Número de tarjeta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
     signupSubmit: 'Crear mi cuenta', signupDuplicateError: 'Ya existe una cuenta con ese email o usuario.', signupAlready: '¿Ya tienes cuenta?', signupLoginLink: 'Iniciar sesión',
     signupAdminTitle: 'Admin test — cuentas creadas', signupAdminReset: 'Reset página / datos', signupAdminCount: 'cuenta(s) listada(s) para pruebas', signupAdminNone: 'No hay cuentas de prueba guardadas',
@@ -308,6 +352,12 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     loginRemember: 'Angemeldet bleiben', loginForgot: 'Passwort vergessen?', loginSubmit: 'Zu meinem Dashboard', loginFreeAccess: 'Kostenlos zugreifen', loginError: 'Ungültige Anmeldedaten oder kein Konto vorhanden.', loginTrust: 'Sicherer Zugang • Keine geteilten Daten',
     signupBack: '← Zurück zum Hauptmenü', signupTitle: 'Starten Sie die Optimierung Ihrer Vermietungen', signupTrialPrefix: '14 Tage gratis, danach', signupTrialSuffix: 'je nach gewähltem Plan', signupAccountsNone: 'Noch kein Konto erstellt', signupAccountsSome: 'Konto/Konten bereits in dieser App erstellt',
     signupPlanStarter: 'Starter-Plan', signupPlanPro: 'Pro-Plan', signupPlanScale: 'Scale-Plan', signupFirstName: 'Vorname', signupLastName: 'Nachname', signupUsername: 'Benutzername', signupEmail: 'E-Mail', signupPassword: 'Passwort', signupCompanyOptional: 'Unternehmen (optional)', signupPhone: 'Telefonnummer',
+    signupPromoCodeLabel: 'Aktionscode (optional)', signupPromoCodePlaceholder: 'z. B. WILLKOMMEN2026', signupPromoCodeHint: 'Partner- oder Launch-Code — leer lassen, wenn keiner.',
+    signupEmailVerifyTitle: 'E-Mail bestätigen', signupEmailVerifyExplain: 'Wir senden einen 6-stelligen Code, um Tippfehler zu vermeiden.',
+    signupEmailVerifySendCode: 'Code senden', signupEmailVerifySending: 'Wird gesendet…', signupEmailVerifyPlaceholder: '6-stelliger Code', signupEmailVerifyValidate: 'Code prüfen',
+    signupEmailVerifyInvalid: 'Ungültiger oder abgelaufener Code. Fordern Sie einen neuen an.', signupEmailVerifySent: 'Code gesendet. Posteingang prüfen (auch Spam).',
+    signupEmailVerifySendError: 'Code konnte nicht gesendet werden (SMTP nicht konfiguriert oder Netzwerkfehler).', signupEmailVerifyValidBadge: 'E-Mail bestätigt.',
+    signupEmailInvalidFormat: 'Bitte gültige E-Mail eingeben.', signupEmailAlreadyUsed: 'Diese E-Mail wird bereits verwendet.',
     signupCardTitle: 'Kreditkarte (Aktivierung nach 14 Tagen Test)', signupCardSubtitle: 'Ihre Karte startet die automatische Abrechnung nach Ablauf des Tests.', signupCardHolder: 'Name auf der Karte', signupCardNumber: 'Kartennummer', signupCardExpiry: 'MM/JJ', signupCardCvc: 'CVC',
     signupSubmit: 'Mein Konto erstellen', signupDuplicateError: 'Es existiert bereits ein Konto mit dieser E-Mail oder diesem Benutzernamen.', signupAlready: 'Bereits ein Konto?', signupLoginLink: 'Anmelden',
     signupAdminTitle: 'Test-Admin — erstellte Konten', signupAdminReset: 'Seite / Daten zurücksetzen', signupAdminCount: 'Konto/Konten für Tests gelistet', signupAdminNone: 'Kein Testkonto gespeichert',
@@ -326,6 +376,12 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     loginRemember: 'Resta connesso', loginForgot: 'Password dimenticata?', loginSubmit: 'Accedi alla mia dashboard', loginFreeAccess: 'Accedi gratis', loginError: 'Credenziali non valide o nessun account esistente.', loginTrust: 'Accesso sicuro • Nessun dato condiviso',
     signupBack: '← Torna al menu principale', signupTitle: 'Inizia a ottimizzare i tuoi affitti', signupTrialPrefix: '14 giorni gratis poi', signupTrialSuffix: 'in base al piano scelto', signupAccountsNone: 'Nessun account creato', signupAccountsSome: 'account già creato/i in questa app',
     signupPlanStarter: 'Piano Starter', signupPlanPro: 'Piano Pro', signupPlanScale: 'Piano Scale', signupFirstName: 'Nome', signupLastName: 'Cognome', signupUsername: 'Nome utente', signupEmail: 'Email', signupPassword: 'Password', signupCompanyOptional: 'Azienda (facoltativo)', signupPhone: 'Numero di telefono',
+    signupPromoCodeLabel: 'Codice promozionale (facoltativo)', signupPromoCodePlaceholder: 'Es.: BENVENUTO2026', signupPromoCodeHint: 'Codice partner o lancio — lascia vuoto se non ne hai.',
+    signupEmailVerifyTitle: 'Conferma la tua email', signupEmailVerifyExplain: "Inviamo un codice a 6 cifre per verificare che l'indirizzo sia corretto.",
+    signupEmailVerifySendCode: 'Invia codice', signupEmailVerifySending: 'Invio…', signupEmailVerifyPlaceholder: 'Codice a 6 cifre', signupEmailVerifyValidate: 'Verifica codice',
+    signupEmailVerifyInvalid: 'Codice non valido o scaduto. Richiedine uno nuovo.', signupEmailVerifySent: 'Codice inviato. Controlla la posta (e lo spam).',
+    signupEmailVerifySendError: 'Impossibile inviare il codice (SMTP non configurato o errore di rete).', signupEmailVerifyValidBadge: 'Email verificata.',
+    signupEmailInvalidFormat: 'Inserisci un indirizzo email valido.', signupEmailAlreadyUsed: 'Questa email è già in uso.',
     signupCardTitle: 'Carta bancaria (attivazione dopo 14 giorni gratis)', signupCardSubtitle: "La tua carta avvia automaticamente l'abbonamento al termine della prova.", signupCardHolder: 'Nome sulla carta', signupCardNumber: 'Numero carta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
     signupSubmit: 'Crea il mio account', signupDuplicateError: 'Esiste già un account con questa email o nome utente.', signupAlready: 'Hai già un account?', signupLoginLink: 'Accedi',
     signupAdminTitle: 'Admin test — account creati', signupAdminReset: 'Reset pagina / dati', signupAdminCount: 'account elencato/i per test', signupAdminNone: 'Nessun account di test salvato',

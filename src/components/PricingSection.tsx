@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Check } from 'lucide-react'
+import { useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
-import { easePremium, MotionAnchor, Reveal, StaggerReveal, staggerItem } from './motion'
+import { easePremium, Reveal, StaggerReveal, staggerItem } from './motion'
 
 const primary = '#4a86f7'
 const green = '#16a34a'
@@ -34,6 +35,7 @@ function FeatureRow({
 }
 
 type PlanInnerProps = {
+  planKey: 'starter' | 'pro' | 'scale'
   variant: PlanVariant
   roiBadge?: string
   popularBadge?: string
@@ -45,6 +47,13 @@ type PlanInnerProps = {
   trial: string
   features: string[]
   cta: string
+  onCheckout?: (planKey: 'starter' | 'pro' | 'scale') => void
+  loading?: boolean
+}
+
+function parseEuroAmount(label: string) {
+  const numeric = Number(label.replace(/[^\d,.-]/g, '').replace(',', '.'))
+  return Number.isFinite(numeric) ? numeric : 0
 }
 
 function PlanCardInner({
@@ -59,9 +68,14 @@ function PlanCardInner({
   trial,
   features,
   cta,
+  planKey,
+  onCheckout,
+  loading = false,
 }: PlanInnerProps) {
   const isFeatured = variant === 'featured'
   const reduceMotion = useReducedMotion()
+  const ttc = parseEuroAmount(price)
+  const ht = ttc > 0 ? ttc / 1.2 : 0
 
   return (
     <>
@@ -108,11 +122,14 @@ function PlanCardInner({
           <span
             className={`font-bold tracking-tight ${isFeatured ? 'text-4xl sm:text-[2.35rem]' : 'text-3xl sm:text-[2rem]'}`}
           >
-            {price}
+            {`${ht.toFixed(2)}€`}
           </span>
-          <span className={`text-sm font-medium ${isFeatured ? 'text-white/90' : 'text-zinc-600'}`}>
-            {priceSuffix}
+          <span className={`text-sm font-semibold ${isFeatured ? 'text-white/90' : 'text-zinc-700'}`}>
+            HT {priceSuffix}
           </span>
+        </p>
+        <p className={`mt-1 text-xs ${isFeatured ? 'text-white/80' : 'text-zinc-500'}`}>
+          {`${ttc.toFixed(2)}€ TTC`}
         </p>
         <p
           className={`mt-2 text-sm font-semibold ${isFeatured ? 'text-white' : ''}`}
@@ -127,17 +144,19 @@ function PlanCardInner({
         ))}
       </ul>
       <div className="mt-6">
-        <MotionAnchor
-          href="/inscription"
+        <button
+          type="button"
+          onClick={() => onCheckout?.(planKey)}
+          disabled={loading}
           className={`flex min-h-[48px] w-full items-center justify-center rounded-xl px-4 py-3 text-[15px] font-semibold shadow-pm-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:text-[14px] ${
             isFeatured
               ? 'bg-white text-[#4a86f7] shadow-pm-md hover:bg-zinc-50 focus-visible:ring-white/50'
               : 'border border-zinc-900/90 bg-white text-zinc-900 hover:bg-zinc-50 focus-visible:ring-[#4a86f7]/35'
-          }`}
+          } disabled:cursor-not-allowed disabled:opacity-60`}
           style={isFeatured ? { color: primary } : undefined}
         >
-          {cta}
-        </MotionAnchor>
+          {loading ? 'Redirection...' : cta}
+        </button>
       </div>
     </>
   )
@@ -146,9 +165,28 @@ function PlanCardInner({
 export function PricingSection() {
   const { t } = useLanguage()
   const reduceMotion = useReducedMotion()
+  const [loadingPlan, setLoadingPlan] = useState<null | 'starter' | 'pro' | 'scale'>(null)
+
+  async function startCheckout(planKey: 'starter' | 'pro' | 'scale') {
+    try {
+      setLoadingPlan(planKey)
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planKey }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.url) throw new Error(data?.error || 'checkout_session_failed')
+      window.location.href = data.url
+    } catch {
+      setLoadingPlan(null)
+      window.location.href = '/inscription'
+    }
+  }
 
   const plans: PlanInnerProps[] = [
     {
+      planKey: 'starter',
       variant: 'light',
       name: t.starterName,
       range: t.starterRange,
@@ -160,6 +198,7 @@ export function PricingSection() {
       cta: t.planCta,
     },
     {
+      planKey: 'pro',
       variant: 'featured',
       roiBadge: t.roiBadge,
       popularBadge: t.popularBadge,
@@ -173,6 +212,7 @@ export function PricingSection() {
       cta: t.planCta,
     },
     {
+      planKey: 'scale',
       variant: 'light',
       name: t.scaleName,
       range: t.scaleRange,
@@ -244,7 +284,11 @@ export function PricingSection() {
                 }`}
                 style={{ backgroundColor: isFeatured ? primary : undefined }}
               >
-                <PlanCardInner {...plan} />
+                <PlanCardInner
+                  {...plan}
+                  onCheckout={startCheckout}
+                  loading={loadingPlan === plan.planKey}
+                />
               </motion.div>
             )
           })}

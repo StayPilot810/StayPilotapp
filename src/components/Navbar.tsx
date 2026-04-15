@@ -159,7 +159,7 @@ function DesktopNavCenter() {
       className="flex shrink-0 items-center justify-center gap-4 xl:gap-6 2xl:gap-7"
       aria-label={t.navMainLabel}
     >
-      <a href="#fonctionnalites" className={linkGray}>
+      <a href="/fonctionnalites" className={linkGray}>
         {t.features}
       </a>
       <a href="#avis" className={linkGray}>
@@ -171,7 +171,7 @@ function DesktopNavCenter() {
       <a href="#faq" className={linkGray}>
         {t.faq}
       </a>
-      <a href="#" className={linkGray}>
+      <a href="/support" className={linkGray}>
         {t.support}
       </a>
     </nav>
@@ -184,7 +184,7 @@ function DesktopRightActions() {
   return (
     <div className="flex shrink-0 items-center gap-3 xl:gap-4 2xl:gap-5">
       <NavDivider />
-      <a href="#" className={linkBookCall}>
+      <a href="/reserver-un-appel" className={linkBookCall}>
         {t.bookCall}
       </a>
       <LanguageMenu align="right" variant="compact" className="shrink-0" />
@@ -287,7 +287,7 @@ export function Navbar() {
               <a href="#pourquoi-nous" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.whyUs}
               </a>
-              <a href="#fonctionnalites" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/fonctionnalites" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.features}
               </a>
               <a href="#avis" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
@@ -299,11 +299,11 @@ export function Navbar() {
               <a href="#faq" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.faq}
               </a>
-              <a href="#" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/support" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.support}
               </a>
               <MotionAnchor
-                href="#"
+                href="/reserver-un-appel"
                 variant="subtle"
                 onClick={closeMobile}
                 className="rounded-lg px-3 py-3.5 text-[15px] font-semibold transition-opacity duration-200 hover:opacity-90"

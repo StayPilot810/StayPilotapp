@@ -24,14 +24,14 @@ const fr: AiChatCopy = {
   aiChatSubtitle:
     'Comptes connectés — argumentaire serré, offre adaptée, prochaine étape tout de suite, dans votre langue.',
   aiChatWelcome:
-    'Ravi de vous lire — je suis là pour vous faire gagner du temps et du chiffre. Dites-moi : combien de logements, votre plus grosse friction aujourd’hui (calendrier, charges, stats, veille…) ? Je vous propose l’offre Starter, Pro ou Scale qui colle, avec un plan d’action clair — tarifs sur le site, deal sur mesure par mail à contail@staypilot.fr. C’est parti ?',
+    'Ravi de vous lire — je suis là pour vous faire gagner du temps et du chiffre. Dites-moi : combien de logements, votre plus grosse friction aujourd’hui (calendrier, charges, stats, veille…) ? Je vous propose l’offre Starter, Pro ou Scale qui colle, avec un plan d’action clair — tarifs sur le site, deal sur mesure par mail à support@staypilot.fr. C’est parti ?',
   aiChatPlaceholder: 'Votre situation, votre objectif, ou votre objection…',
   aiChatSend: 'Envoyer',
   aiChatClose: 'Fermer',
   aiChatThinking: 'Agent StayPilot prépare votre réponse…',
   aiChatErrorGeneric: 'Une erreur est survenue. Réessayez ou écrivez-nous par e-mail.',
   aiChatErrorUnavailable:
-    'Agent StayPilot n’est pas configuré sur ce serveur (clé API manquante). Écrivez-nous à contail@staypilot.fr pour être aidé.',
+    'Agent StayPilot n’est pas configuré sur ce serveur (clé API manquante). Écrivez-nous à support@staypilot.fr pour être aidé.',
   aiChatFooterHint: 'IA générative — vérifiez les informations importantes.',
   aiChatAttachPhoto: 'Joindre une photo ou une capture d’écran',
   aiChatRemovePhoto: 'Retirer l’image',
@@ -45,14 +45,14 @@ const en: AiChatCopy = {
   aiChatSubtitle:
     'Signed-in only — sharp recommendations, plan fit, and a clear next step in your language.',
   aiChatWelcome:
-    'Great to meet you — I’m here to save you time and sharpen your operations. How many listings do you run, and what’s your biggest bottleneck (calendar, costs, stats, intel…)? I’ll map you to Starter, Pro, or Scale with a concrete next move — pricing on the site; tailored terms via contail@staypilot.fr. What should we tackle first?',
+    'Great to meet you — I’m here to save you time and sharpen your operations. How many listings do you run, and what’s your biggest bottleneck (calendar, costs, stats, intel…)? I’ll map you to Starter, Pro, or Scale with a concrete next move — pricing on the site; tailored terms via support@staypilot.fr. What should we tackle first?',
   aiChatPlaceholder: 'Your context, goal, or objection…',
   aiChatSend: 'Send',
   aiChatClose: 'Close',
   aiChatThinking: 'Agent StayPilot is preparing your reply…',
   aiChatErrorGeneric: 'Something went wrong. Try again or email us.',
   aiChatErrorUnavailable:
-    'Agent StayPilot is not configured on this server (missing API key). Email contail@staypilot.fr for help.',
+    'Agent StayPilot is not configured on this server (missing API key). Email support@staypilot.fr for help.',
   aiChatFooterHint: 'Generative AI — double-check important details.',
   aiChatAttachPhoto: 'Attach a photo or screenshot',
   aiChatRemovePhoto: 'Remove image',
@@ -70,14 +70,14 @@ export const aiChatTranslations: Record<Locale, AiChatCopy> = {
     aiChatSubtitle:
       'Solo conectados — recomendaciones claras, plan adecuado y siguiente paso inmediato.',
     aiChatWelcome:
-      'Encantado — estoy para ahorrarle tiempo y ordenar su negocio. ¿Cuántos alojamientos y cuál es su mayor fricción (calendario, costes, estadísticas, inteligencia…)? Le encajo Starter, Pro o Scale con un plan de acción — precios en la web; propuestas a medida en contail@staypilot.fr. ¿Por dónde empezamos?',
+      'Encantado — estoy para ahorrarle tiempo y ordenar su negocio. ¿Cuántos alojamientos y cuál es su mayor fricción (calendario, costes, estadísticas, inteligencia…)? Le encajo Starter, Pro o Scale con un plan de acción — precios en la web; propuestas a medida en support@staypilot.fr. ¿Por dónde empezamos?',
     aiChatPlaceholder: 'Su contexto, objetivo u objeción…',
     aiChatSend: 'Enviar',
     aiChatClose: 'Cerrar',
     aiChatThinking: 'Agent StayPilot prepara su respuesta…',
     aiChatErrorGeneric: 'Ha ocurrido un error. Inténtelo de nuevo o escríbanos.',
     aiChatErrorUnavailable:
-      'Agent StayPilot no está configurado (falta clave API). Escríbanos a contail@staypilot.fr.',
+      'Agent StayPilot no está configurado (falta clave API). Escríbanos a support@staypilot.fr.',
     aiChatFooterHint: 'IA generativa — verifique lo importante.',
     aiChatAttachPhoto: 'Adjuntar foto o captura de pantalla',
     aiChatRemovePhoto: 'Quitar imagen',
@@ -91,14 +91,14 @@ export const aiChatTranslations: Record<Locale, AiChatCopy> = {
     aiChatSubtitle:
       'Nur angemeldet — klare Empfehlung, passender Tarif, sofortiger nächster Schritt.',
     aiChatWelcome:
-      'Schön, Sie zu sehen — ich helfe Ihnen, Zeit zu sparen und Ihre Vermietung zu steuern. Wie viele Unterkünfte, und wo brennt es am meisten (Kalender, Kosten, Statistiken, Monitoring…)? Ich mappe Starter, Pro oder Scale mit konkretem Next Step — Preise auf der Website; individuelle Angebote über contail@staypilot.fr. Womit starten wir?',
+      'Schön, Sie zu sehen — ich helfe Ihnen, Zeit zu sparen und Ihre Vermietung zu steuern. Wie viele Unterkünfte, und wo brennt es am meisten (Kalender, Kosten, Statistiken, Monitoring…)? Ich mappe Starter, Pro oder Scale mit konkretem Next Step — Preise auf der Website; individuelle Angebote über support@staypilot.fr. Womit starten wir?',
     aiChatPlaceholder: 'Ihr Kontext, Ziel oder Einwand…',
     aiChatSend: 'Senden',
     aiChatClose: 'Schließen',
     aiChatThinking: 'Agent StayPilot bereitet Ihre Antwort vor…',
     aiChatErrorGeneric: 'Fehler. Bitte erneut versuchen oder mailen.',
     aiChatErrorUnavailable:
-      'Agent StayPilot ist nicht konfiguriert (API-Schlüssel fehlt). Schreiben Sie an contail@staypilot.fr.',
+      'Agent StayPilot ist nicht konfiguriert (API-Schlüssel fehlt). Schreiben Sie an support@staypilot.fr.',
     aiChatFooterHint: 'Generative KI — Wichtiges bitte prüfen.',
     aiChatAttachPhoto: 'Foto oder Screenshot anhängen',
     aiChatRemovePhoto: 'Bild entfernen',
@@ -112,14 +112,14 @@ export const aiChatTranslations: Record<Locale, AiChatCopy> = {
     aiChatSubtitle:
       'Solo utenti connessi — consigli netti, piano giusto, passo successivo subito.',
     aiChatWelcome:
-      'Piacere — sono qui per farvi risparmiare tempo e dare ordine al business. Quanti alloggi e dove sentite più attrito (calendario, costi, statistiche, intelligence…)? Vi propongo Starter, Pro o Scale con un piano d’azione — prezzi sul sito; offerte su misura via contail@staypilot.fr. Da cosa iniziamo?',
+      'Piacere — sono qui per farvi risparmiare tempo e dare ordine al business. Quanti alloggi e dove sentite più attrito (calendario, costi, statistiche, intelligence…)? Vi propongo Starter, Pro o Scale con un piano d’azione — prezzi sul sito; offerte su misura via support@staypilot.fr. Da cosa iniziamo?',
     aiChatPlaceholder: 'Contesto, obiettivo o obiezione…',
     aiChatSend: 'Invia',
     aiChatClose: 'Chiudi',
     aiChatThinking: 'Agent StayPilot prepara la risposta…',
     aiChatErrorGeneric: 'Errore. Riprovate o scriveteci.',
     aiChatErrorUnavailable:
-      'Agent StayPilot non è configurato (manca chiave API). Scrivete a contail@staypilot.fr.',
+      'Agent StayPilot non è configurato (manca chiave API). Scrivete a support@staypilot.fr.',
     aiChatFooterHint: 'IA generativa — verificate le informazioni importanti.',
     aiChatAttachPhoto: 'Allega foto o screenshot',
     aiChatRemovePhoto: 'Rimuovi immagine',
