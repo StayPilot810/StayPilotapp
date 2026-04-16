@@ -13,6 +13,7 @@ import {
 const brandBlue = '#4f86f7'
 const airbnbRed = '#ef4444'
 const bookingBlue = '#006ce4'
+const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 
 const BCP47: Record<Locale, string> = {
   fr: 'fr-FR',
@@ -311,6 +312,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     anchor: DOMRect
   }>(null)
   const hidePopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [connectionsTick, setConnectionsTick] = useState(0)
 
   const bcp47 = BCP47[locale]
 
@@ -353,13 +355,13 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       ]
     }
     return []
-  }, [mode, t.apartmentLabel])
+  }, [mode, t.apartmentLabel, connectionsTick])
 
   const officialSync = useMemo(() => {
     if (mode !== 'connected') return null
     if (isTestModeEnabled()) return null
     return readOfficialChannelSyncData()
-  }, [mode])
+  }, [mode, connectionsTick])
 
   const realBookings = useMemo(() => {
     if (mode !== 'connected') return []
@@ -483,6 +485,23 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       bookingCount,
     }
   }, [visibleApartmentEntries.length, visibleBookings, daysInMonth])
+
+  // When channel manager data changes, the calendar must update immediately
+  // (otherwise it can keep stale apartments and show Appartement 3/4 even if only 2 are connected).
+  useEffect(() => {
+    if (mode !== 'connected') return
+    setApartmentFilter('all')
+    setRangeStartDay(null)
+    setRangeEndDay(null)
+    setHoverPop(null)
+  }, [mode, connectionsTick])
+
+  useEffect(() => {
+    if (mode !== 'connected') return
+    const onUpdated = () => setConnectionsTick((v) => v + 1)
+    window.addEventListener(CONNECTIONS_UPDATED_EVENT, onUpdated)
+    return () => window.removeEventListener(CONNECTIONS_UPDATED_EVENT, onUpdated)
+  }, [mode])
 
   const closeModal = useCallback(() => setModal(null), [])
 
