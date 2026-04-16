@@ -4,6 +4,7 @@ import type { Locale } from '../i18n/navbar'
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { isTestModeEnabled } from '../utils/testMode'
+import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import {
   BookingReservationPopover,
   type CalendarReservationDetail,
@@ -337,6 +338,81 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     return []
   }, [mode, t.apartmentLabel])
 
+  const officialSync = useMemo(() => {
+    if (mode !== 'connected') return null
+    if (isTestModeEnabled()) return null
+    return readOfficialChannelSyncData()
+  }, [mode])
+
+  const realBookings = useMemo(() => {
+    if (mode !== 'connected') return []
+    if (!officialSync?.bookings?.length) return []
+
+    const propertyIdToAptIndex = new Map<string, number>()
+    connectedApartments.forEach((apt, idx) => {
+      const prefix = 'channelManager:'
+      const propertyId = apt.id.startsWith(prefix) ? apt.id.slice(prefix.length) : apt.id
+      propertyIdToAptIndex.set(propertyId, idx)
+    })
+
+    const propertyIdToChannelLinks = new Map<string, any>()
+    if (Array.isArray(officialSync.properties)) {
+      officialSync.properties.forEach((p: any) => propertyIdToChannelLinks.set(String(p.id), p.channelLinks))
+    }
+
+    const msPerDay = 24 * 60 * 60 * 1000
+    const toDayIndex = (iso: string) => {
+      const d = new Date(iso)
+      if (!Number.isFinite(d.getTime())) return null
+      return d
+    }
+
+    return officialSync.bookings
+      .map((b: any) => {
+        const propertyId = String(b.propertyId ?? '')
+        const aptIndex = propertyIdToAptIndex.get(propertyId)
+        if (aptIndex == null) return null
+
+        const checkInDate = toDayIndex(String(b.checkIn ?? ''))
+        const checkOutDate = toDayIndex(String(b.checkOut ?? ''))
+        if (!checkInDate || !checkOutDate) return null
+        if (checkInDate.getFullYear() !== DEMO_YEAR || checkInDate.getMonth() !== DEMO_MONTH_INDEX) return null
+        if (checkOutDate.getFullYear() !== DEMO_YEAR) return null
+
+        const nights = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / msPerDay))
+        const start = checkInDate.getDate()
+        const end = start + nights - 1
+        if (start < 1 || end < 1 || start > DAYS_IN_MONTH) return null
+
+        const links = propertyIdToChannelLinks.get(propertyId) as any
+        const channel: 'airbnb' | 'booking' =
+          links?.airbnb ? 'airbnb' : links?.booking ? 'booking' : 'airbnb'
+
+        const platformFeeEur = b?.fraisPlateforme?.amount ?? 0
+        const netPayoutEur = b?.revenuNetDetaille?.amount ?? 0
+        const totalGuestEur = netPayoutEur + platformFeeEur
+        const cleaningEur = 0
+        const platformFeePercent = totalGuestEur > 0 ? (platformFeeEur / totalGuestEur) * 100 : 0
+
+        return {
+          apt: aptIndex,
+          channel,
+          start,
+          end,
+          guest: String(b.guestName || ''),
+          nights,
+          reservationId: String(b.id || ''),
+          totalGuestEur,
+          cleaningEur,
+          platformFeePercent,
+          platformFeeEur,
+          netPayoutEur,
+          bookingGenius: false,
+        } satisfies CalendarReservationDetail
+      })
+      .filter(Boolean) as CalendarReservationDetail[]
+  }, [mode, officialSync, connectedApartments])
+
   /** Assez de lignes pour afficher toute la grille demo (meme avec un seul canal connecte). */
   const calendarRowEntries = useMemo(() => {
     const count = Math.max(connectedApartments.length, DEMO_APARTMENT_ROW_COUNT)
@@ -357,7 +433,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   }, [calendarRowEntries, apartmentFilter])
   const hasConnectedListings = connectedApartments.length > 0
   const apartmentCount = calendarRowEntries.length
-  const availableBookings = useMemo(() => MOCK_BOOKINGS.filter((b) => b.apt < apartmentCount), [apartmentCount])
+  const availableBookings = useMemo(() => {
+    const sourceBookings =
+      mode === 'connected' && !isTestModeEnabled() ? realBookings : MOCK_BOOKINGS
+    return sourceBookings.filter((b) => b.apt < apartmentCount)
+  }, [apartmentCount, mode, realBookings])
   const visibleBookings = useMemo(() => {
     const byApartment =
       apartmentFilter === 'all' ? availableBookings : availableBookings.filter((b) => b.apt === Number(apartmentFilter) - 1)
@@ -718,6 +798,15 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
               </p>
               <p className="mt-1 text-xs text-zinc-600">
                 Une fois connectes, vous retrouverez ici la meme vue interactive que sur la page d accueil.
+              </p>
+            </div>
+          </div>
+        ) : mode === 'connected' && !isTestModeEnabled() && officialSync && realBookings.length === 0 ? (
+          <div className="px-4 py-10 sm:px-6">
+            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-5 text-center sm:px-6 sm:py-6">
+              <p className="text-sm font-semibold text-zinc-900">Aucune reservation trouvée pour ce mois.</p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Si vous venez de connecter votre channel manager, réessayez après une synchronisation complète.
               </p>
             </div>
           </div>
