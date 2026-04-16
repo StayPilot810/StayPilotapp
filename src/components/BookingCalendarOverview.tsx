@@ -287,7 +287,15 @@ function mondayOffsetFromSundayBasedJsDay(jsDay: number) {
   return (jsDay + 6) % 7
 }
 
-export function BookingCalendarOverview() {
+type BookingCalendarOverviewProps = {
+  /**
+   * "connected": use real connected apartment names.
+   * "generic": always display "Appartement 1/2/..." regardless of connected names.
+   */
+  mode?: 'connected' | 'generic'
+}
+
+export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarOverviewProps) {
   const { t, locale } = useLanguage()
   const modalTitleId = useId()
   const calendarWrapRef = useRef<HTMLDivElement>(null)
@@ -307,7 +315,10 @@ export function BookingCalendarOverview() {
   const bcp47 = BCP47[locale]
 
   const connectedApartments = useMemo(() => {
-    const fromConnected = getConnectedApartmentsFromStorage().map((apt) => ({ id: apt.id, name: apt.name }))
+    const fromConnected = getConnectedApartmentsFromStorage().map((apt, idx) => ({
+      id: apt.id,
+      name: mode === 'generic' ? apartmentName(t.apartmentLabel, idx + 1) : apt.name,
+    }))
     if (fromConnected.length > 0) return fromConnected
     if (isTestModeEnabled()) {
       return [
@@ -316,7 +327,7 @@ export function BookingCalendarOverview() {
       ]
     }
     return []
-  }, [])
+  }, [mode, t.apartmentLabel])
 
   /** Assez de lignes pour afficher toute la grille demo (meme avec un seul canal connecte). */
   const calendarRowEntries = useMemo(() => {

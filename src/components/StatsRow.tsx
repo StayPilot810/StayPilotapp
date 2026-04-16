@@ -192,7 +192,7 @@ export function StatsRow() {
         </Reveal>
 
         <Reveal className="mt-5 sm:mt-6" y={24} delay={0.06}>
-          <BookingCalendarOverview />
+          <BookingCalendarOverview mode="generic" />
         </Reveal>
       </div>
     </section>
