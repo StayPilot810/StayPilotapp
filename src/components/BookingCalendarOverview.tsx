@@ -315,9 +315,17 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   const bcp47 = BCP47[locale]
 
   const connectedApartments = useMemo(() => {
-    const fromConnected = getConnectedApartmentsFromStorage().map((apt, idx) => ({
+    if (mode === 'generic') {
+      // Lock the home-page simulation so it never changes after a connection.
+      return Array.from({ length: DEMO_APARTMENT_ROW_COUNT }, (_, idx) => ({
+        id: `demo-${idx + 1}`,
+        name: apartmentName(t.apartmentLabel, idx + 1),
+      }))
+    }
+
+    const fromConnected = getConnectedApartmentsFromStorage().map((apt) => ({
       id: apt.id,
-      name: mode === 'generic' ? apartmentName(t.apartmentLabel, idx + 1) : apt.name,
+      name: apt.name,
     }))
     if (fromConnected.length > 0) return fromConnected
     if (isTestModeEnabled()) {
