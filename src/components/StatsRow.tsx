@@ -5,7 +5,7 @@ import { useCountUp } from '../hooks/useCountUp'
 import { useLanguage } from '../hooks/useLanguage'
 import type { StatItemFormat } from '../i18n/statsRow'
 import { easePremium, Reveal, StaggerReveal, staggerItem } from './motion'
-import { BookingCalendarOverview } from './BookingCalendarOverview'
+import { MorningCalendarSimulation } from './MorningCalendarSimulation'
 
 const blueIcon = '#2563eb'
 const greenIcon = '#059669'
@@ -192,7 +192,7 @@ export function StatsRow() {
         </Reveal>
 
         <Reveal className="mt-5 sm:mt-6" y={24} delay={0.06}>
-          <BookingCalendarOverview />
+          <MorningCalendarSimulation />
         </Reveal>
       </div>
     </section>
