@@ -43,6 +43,8 @@ type Props = {
   anchor: Anchor
   t: BookingCalendarCopy
   locale: Locale
+  referenceYear: number
+  referenceMonthIndex: number
   apartmentLabel: (n: number) => string
   nightsLabel: (n: number) => string
   restrictedView?: boolean
@@ -55,6 +57,8 @@ export function BookingReservationPopover({
   anchor,
   t,
   locale,
+  referenceYear,
+  referenceMonthIndex,
   apartmentLabel,
   nightsLabel,
   restrictedView = false,
@@ -64,7 +68,7 @@ export function BookingReservationPopover({
   const bcp47 = BCP47[locale]
   const fmtEur = new Intl.NumberFormat(bcp47, { style: 'currency', currency: 'EUR' })
   const fmtDate = (dayOfMonth: number) => {
-    const d = new Date(2026, 3, dayOfMonth)
+    const d = new Date(referenceYear, referenceMonthIndex, dayOfMonth)
     return capitalizeFirst(
       new Intl.DateTimeFormat(bcp47, { day: 'numeric', month: 'long', year: 'numeric' }).format(d),
     )

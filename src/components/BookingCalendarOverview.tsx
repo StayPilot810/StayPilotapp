@@ -22,10 +22,9 @@ const BCP47: Record<Locale, string> = {
   it: 'it-IT',
 }
 
-/** Avril 2026 — données de démo (sans logique métier). */
-const DEMO_YEAR = 2026
-const DEMO_MONTH_INDEX = 3
-const DAYS_IN_MONTH = 30
+/** Avril 2026 — base de la simulation (données de démo). */
+const BASE_YEAR = 2026
+const BASE_MONTH_INDEX = 3
 
 /**
  * Ordres de grandeur pour la démo (les contrats réels varient fortement) :
@@ -315,6 +314,24 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
 
   const bcp47 = BCP47[locale]
 
+  // "this / last / next" navigation for the dashboard.
+  // In "generic" mode we keep periodTab locked on "this", so the calendar stays on the base month.
+  const viewMonthMeta = useMemo(() => {
+    const base = new Date(BASE_YEAR, BASE_MONTH_INDEX, 1)
+    const offset = periodTab === 'last' ? -1 : periodTab === 'next' ? 1 : 0
+    const d = new Date(base)
+    d.setMonth(d.getMonth() + offset)
+
+    const year = d.getFullYear()
+    const monthIndex = d.getMonth()
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+    return { year, monthIndex, daysInMonth }
+  }, [periodTab])
+
+  const viewYear = viewMonthMeta.year
+  const viewMonthIndex = viewMonthMeta.monthIndex
+  const daysInMonth = viewMonthMeta.daysInMonth
+
   const connectedApartments = useMemo(() => {
     if (mode === 'generic') {
       // Lock the home-page simulation so it never changes after a connection.
@@ -361,11 +378,21 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     }
 
     const msPerDay = 24 * 60 * 60 * 1000
-    const toDayIndex = (iso: string) => {
+    const parseYmdToLocalDate = (iso: string) => {
+      const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) {
+        const y = Number(m[1])
+        const mo = Number(m[2]) - 1
+        const day = Number(m[3])
+        return new Date(y, mo, day)
+      }
       const d = new Date(iso)
       if (!Number.isFinite(d.getTime())) return null
-      return d
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate())
     }
+
+    const viewMonthStart = new Date(viewYear, viewMonthIndex, 1)
+    const viewNextMonthStart = new Date(viewYear, viewMonthIndex + 1, 1)
 
     return officialSync.bookings
       .map((b: any) => {
@@ -373,16 +400,24 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         const aptIndex = propertyIdToAptIndex.get(propertyId)
         if (aptIndex == null) return null
 
-        const checkInDate = toDayIndex(String(b.checkIn ?? ''))
-        const checkOutDate = toDayIndex(String(b.checkOut ?? ''))
+        const checkInDate = parseYmdToLocalDate(String(b.checkIn ?? ''))
+        const checkOutDate = parseYmdToLocalDate(String(b.checkOut ?? ''))
         if (!checkInDate || !checkOutDate) return null
-        if (checkInDate.getFullYear() !== DEMO_YEAR || checkInDate.getMonth() !== DEMO_MONTH_INDEX) return null
-        if (checkOutDate.getFullYear() !== DEMO_YEAR) return null
 
-        const nights = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / msPerDay))
-        const start = checkInDate.getDate()
-        const end = start + nights - 1
-        if (start < 1 || end < 1 || start > DAYS_IN_MONTH) return null
+        // booking = [checkIn, checkOut) overlap with current view month.
+        if (checkInDate >= checkOutDate) return null
+        const overlapStartTime = Math.max(checkInDate.getTime(), viewMonthStart.getTime())
+        const overlapEndExclusiveTime = Math.min(checkOutDate.getTime(), viewNextMonthStart.getTime())
+        if (overlapEndExclusiveTime <= overlapStartTime) return null
+
+        const overlapStart = new Date(overlapStartTime)
+        const overlapEndExclusive = new Date(overlapEndExclusiveTime)
+        const endInclusiveDate = new Date(overlapEndExclusive.getTime() - msPerDay)
+
+        const start = overlapStart.getDate()
+        const end = endInclusiveDate.getDate()
+        const nights = Math.round((endInclusiveDate.getTime() - overlapStart.getTime()) / msPerDay) + 1
+        if (start < 1 || end < 1 || start > daysInMonth || end > daysInMonth || nights < 1) return null
 
         const links = propertyIdToChannelLinks.get(propertyId) as any
         const channel: 'airbnb' | 'booking' =
@@ -411,20 +446,10 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         } satisfies CalendarReservationDetail
       })
       .filter(Boolean) as CalendarReservationDetail[]
-  }, [mode, officialSync, connectedApartments])
+  }, [mode, officialSync, connectedApartments, viewYear, viewMonthIndex, daysInMonth])
 
-  /** Assez de lignes pour afficher toute la grille demo (meme avec un seul canal connecte). */
   const calendarRowEntries = useMemo(() => {
-    const count = Math.max(connectedApartments.length, DEMO_APARTMENT_ROW_COUNT)
-    return Array.from({ length: count }, (_, index) => {
-      const conn = connectedApartments[index]
-      if (conn) return { id: conn.id, name: conn.name, index }
-      return {
-        id: `demo-row-${index}`,
-        name: apartmentName(t.apartmentLabel, index + 1),
-        index,
-      }
-    })
+    return connectedApartments.map((conn, index) => ({ id: conn.id, name: conn.name, index }))
   }, [connectedApartments, t.apartmentLabel])
 
   const visibleApartmentEntries = useMemo(() => {
@@ -445,7 +470,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     return byApartment.filter((b) => b.end >= rangeStartDay && b.start <= rangeEndDay)
   }, [apartmentFilter, availableBookings, rangeStartDay, rangeEndDay])
   const computedStats = useMemo(() => {
-    const totalSlots = visibleApartmentEntries.length * DAYS_IN_MONTH
+    const totalSlots = visibleApartmentEntries.length * daysInMonth
     const bookedNights = visibleBookings.reduce((sum, b) => sum + b.nights, 0)
     const occupancyRate = totalSlots > 0 ? `${Math.round((bookedNights / totalSlots) * 100)}%` : '0%'
     const airbnbCount = visibleBookings.filter((b) => b.channel === 'airbnb').length
@@ -457,7 +482,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       airbnbCount,
       bookingCount,
     }
-  }, [visibleApartmentEntries.length, visibleBookings])
+  }, [visibleApartmentEntries.length, visibleBookings, daysInMonth])
 
   const closeModal = useCallback(() => setModal(null), [])
 
@@ -539,36 +564,36 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     const raw = new Intl.DateTimeFormat(bcp47, {
       month: 'long',
       year: 'numeric',
-    }).format(new Date(DEMO_YEAR, DEMO_MONTH_INDEX, 1))
+    }).format(new Date(viewYear, viewMonthIndex, 1))
     return capitalizeFirst(raw)
-  }, [bcp47])
+  }, [bcp47, viewYear, viewMonthIndex])
 
   const dayHeaders = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(bcp47, { weekday: 'short' })
-    return Array.from({ length: DAYS_IN_MONTH }, (_, i) => {
-      const d = new Date(DEMO_YEAR, DEMO_MONTH_INDEX, i + 1)
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(viewYear, viewMonthIndex, i + 1)
       const abbr = fmt.format(d).replace(/\.$/, '')
       return { day: i + 1, weekday: capitalizeFirst(abbr) }
     })
-  }, [bcp47])
+  }, [bcp47, viewYear, viewMonthIndex, daysInMonth])
 
   const miniCalendarWeekdays = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(bcp47, { weekday: 'short' })
-    const monday = new Date(DEMO_YEAR, DEMO_MONTH_INDEX, 7)
-    while (monday.getDay() !== 1) {
-      monday.setDate(monday.getDate() - 1)
-    }
+    const firstDay = new Date(viewYear, viewMonthIndex, 1)
+    const monday = new Date(firstDay)
+    const blanks = mondayOffsetFromSundayBasedJsDay(firstDay.getDay())
+    monday.setDate(firstDay.getDate() - blanks)
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday)
       d.setDate(monday.getDate() + i)
       return capitalizeFirst(fmt.format(d).replace(/\.$/, ''))
     })
-  }, [bcp47])
+  }, [bcp47, viewYear, viewMonthIndex])
 
   const leadingBlanks = useMemo(() => {
-    const first = new Date(DEMO_YEAR, DEMO_MONTH_INDEX, 1)
+    const first = new Date(viewYear, viewMonthIndex, 1)
     return mondayOffsetFromSundayBasedJsDay(first.getDay())
-  }, [])
+  }, [viewYear, viewMonthIndex])
 
   const periodTabs: { id: PeriodTab; label: string }[] = [
     { id: 'this', label: t.tabThisMonth },
@@ -581,6 +606,16 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   }
 
   const onPeriodTabClick = (id: PeriodTab) => {
+    // Dashboard connected: allow navigation across months.
+    if (mode === 'connected' && !isTestModeEnabled()) {
+      setPeriodTab(id)
+      setRangeStartDay(null)
+      setRangeEndDay(null)
+      setCalendarOpen(false)
+      return
+    }
+
+    // Generic mode (home page): keep demo locked.
     if (id === 'this') {
       setPeriodTab('this')
       return
@@ -657,6 +692,8 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           }}
           t={t}
           locale={locale}
+          referenceYear={viewYear}
+          referenceMonthIndex={viewMonthIndex}
           apartmentLabel={(n) => apartmentName(t.apartmentLabel, n)}
           nightsLabel={(n) => nightsText(t.nightsLabel, n)}
           onMouseEnter={clearHidePop}
@@ -734,7 +771,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                     {Array.from({ length: leadingBlanks }, (_, i) => (
                       <div key={`b-${i}`} className="aspect-square" aria-hidden />
                     ))}
-                    {Array.from({ length: DAYS_IN_MONTH }, (_, i) => {
+                    {Array.from({ length: daysInMonth }, (_, i) => {
                       const day = i + 1
                       const isSelectedRange = rangeStartDay != null && rangeEndDay != null && day >= rangeStartDay && day <= rangeEndDay
                       return (
@@ -807,9 +844,9 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           <div className="min-w-[720px] px-4 pb-2 pt-3 sm:px-6 sm:pt-4">
             <div
               className="grid items-end gap-y-1"
-              style={{
-                gridTemplateColumns: `7.5rem repeat(${DAYS_IN_MONTH}, minmax(0, 1fr))`,
-              }}
+                      style={{
+                        gridTemplateColumns: `7.5rem repeat(${daysInMonth}, minmax(0, 1fr))`,
+                      }}
             >
               <div />
               {dayHeaders.map(({ day, weekday }) => (
@@ -830,10 +867,10 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                     className="relative grid min-h-[3.5rem] items-center border-t border-zinc-100 py-0.5"
                     style={{
                       gridColumn: '2 / -1',
-                      gridTemplateColumns: `repeat(${DAYS_IN_MONTH}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${daysInMonth}, minmax(0, 1fr))`,
                     }}
                   >
-                    {Array.from({ length: DAYS_IN_MONTH }, (_, i) => (
+                    {Array.from({ length: daysInMonth }, (_, i) => (
                       <div
                         key={i}
                         className="h-full border-l border-zinc-100 first:border-l-0"
@@ -842,7 +879,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                     ))}
                     {visibleBookings.filter((b) => b.apt === aptEntry.index).map((b) => {
                       const start = Math.max(1, b.start)
-                      const end = Math.min(DAYS_IN_MONTH, b.end)
+                      const end = Math.min(daysInMonth, b.end)
                       const colStart = start
                       const span = end - start + 1
                       const bg = b.channel === 'airbnb' ? airbnbRed : bookingBlue
@@ -853,8 +890,8 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                           aria-label={`${b.guest}, ${nightsText(t.nightsLabel, b.nights)}, ${t.reservationNumberLabel} ${b.reservationId}`}
                           className="absolute inset-y-0.5 z-10 flex min-w-0 cursor-default items-center rounded-md px-1.5 py-0.5 shadow-sm transition-shadow hover:z-30 hover:shadow-md hover:ring-2 hover:ring-white/40 sm:px-2"
                           style={{
-                            left: `calc((${colStart - 1}) / ${DAYS_IN_MONTH} * 100%)`,
-                            width: `calc(${span} / ${DAYS_IN_MONTH} * 100%)`,
+                            left: `calc((${colStart - 1}) / ${daysInMonth} * 100%)`,
+                            width: `calc(${span} / ${daysInMonth} * 100%)`,
                             backgroundColor: bg,
                           }}
                           onMouseEnter={(e) => openPop(b, e.currentTarget)}
