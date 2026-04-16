@@ -343,10 +343,14 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       }))
     }
 
-    const fromConnected = getConnectedApartmentsFromStorage().map((apt) => ({
-      id: apt.id,
-      name: apt.name,
-    }))
+    // Dashboard calendar must reflect the channel manager state.
+    // Ignore iCal-based Airbnb/Booking entries to prevent extra "Appartement N" lines.
+    const fromConnected = getConnectedApartmentsFromStorage()
+      .filter((apt) => apt.platform === 'channelManager')
+      .map((apt) => ({
+        id: apt.id,
+        name: apt.name,
+      }))
     if (fromConnected.length > 0) return fromConnected
     if (isTestModeEnabled()) {
       return [
