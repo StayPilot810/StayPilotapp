@@ -187,6 +187,41 @@ function hasMeaningfulChannelIdValue(val) {
   return false
 }
 
+function inferGlobalOtaLinksFromPayload(payload) {
+  let airbnb = false
+  let booking = false
+
+  function walk(node, depth) {
+    if (!node || depth > 12) return
+    if (Array.isArray(node)) {
+      for (const el of node) walk(el, depth + 1)
+      return
+    }
+    if (typeof node !== 'object') return
+    for (const [key, value] of Object.entries(node)) {
+      const kl = key.toLowerCase()
+      const valueText = typeof value === 'string' ? value.toLowerCase() : ''
+      const hasValue = hasMeaningfulChannelIdValue(value)
+      if (
+        (kl.includes('airbnb') || valueText.includes('airbnb')) &&
+        (hasValue || valueText.includes('connected') || valueText.includes('active'))
+      ) {
+        airbnb = true
+      }
+      if (
+        (kl.includes('booking.com') || kl.includes('bookingcom') || kl.includes('bcom') || valueText.includes('booking.com')) &&
+        (hasValue || valueText.includes('connected') || valueText.includes('active'))
+      ) {
+        booking = true
+      }
+      if (value && typeof value === 'object') walk(value, depth + 1)
+    }
+  }
+
+  walk(payload, 0)
+  return { airbnb, booking }
+}
+
 /** Heuristique sur la payload Beds24 (champs connus / imbriqués) — sans appels OTA supplémentaires. */
 function inferBeds24ChannelLinks(item) {
   let airbnb = false
@@ -200,7 +235,31 @@ function inferBeds24ChannelLinks(item) {
     }
     for (const [key, val] of Object.entries(node)) {
       const kl = key.toLowerCase()
-      if (hasMeaningfulChannelIdValue(val)) {
+      const hasValue = hasMeaningfulChannelIdValue(val)
+      const bookingNoise =
+        kl.includes('bookingtype') ||
+        kl.includes('bookingengine') ||
+        kl.includes('directbooking') ||
+        kl.includes('bookingdeposit') ||
+        kl.includes('bookingwindow')
+
+      // Beds24 channel mapping fields vary by account/channel setup.
+      // Detect broad "airbnb*" / "booking*" keys first, then keep strict
+      // checks as fallback to avoid missing valid mappings.
+      if (hasValue) {
+        const likelyAirbnb =
+          kl.includes('airbnb') &&
+          !kl.includes('airbnbcontent') &&
+          !kl.includes('airbnbreview') &&
+          !kl.includes('airbnbmessage')
+        const likelyBooking =
+          (kl.includes('booking.com') || kl.includes('bookingcom') || kl.includes('bcom')) &&
+          !bookingNoise
+        if (likelyAirbnb) airbnb = true
+        if (likelyBooking) booking = true
+      }
+
+      if (hasValue) {
         if (
           kl === 'airbnblistingid' ||
           kl === 'airbnbuserid' ||
@@ -209,12 +268,6 @@ function inferBeds24ChannelLinks(item) {
         ) {
           airbnb = true
         }
-        const bookingNoise =
-          kl.includes('bookingtype') ||
-          kl.includes('bookingengine') ||
-          kl.includes('directbooking') ||
-          kl.includes('bookingdeposit') ||
-          kl.includes('bookingwindow')
         if (
           !bookingNoise &&
           (kl === 'bookingroomid' ||
@@ -322,13 +375,30 @@ async function syncBeds24({ apiToken }) {
 
   const properties = normalizeBeds24Properties(propertiesRes.data)
   const bookings = normalizeBeds24Bookings(bookingsRes.data)
+  let globalOta = { airbnb: false, booking: false }
+  const channelsRes = await fetchBeds24Json('/channels', token)
+  if (channelsRes.ok) {
+    globalOta = inferGlobalOtaLinksFromPayload(channelsRes.data)
+  }
+  const bookingsOta = inferGlobalOtaLinksFromPayload(bookingsRes.data)
+  const mergedGlobalOta = {
+    airbnb: globalOta.airbnb || bookingsOta.airbnb,
+    booking: globalOta.booking || bookingsOta.booking,
+  }
+  const propertiesWithOta = properties.map((prop) => ({
+    ...prop,
+    channelLinks: {
+      airbnb: Boolean(prop.channelLinks?.airbnb || mergedGlobalOta.airbnb),
+      booking: Boolean(prop.channelLinks?.booking || mergedGlobalOta.booking),
+    },
+  }))
 
   return {
     status: 200,
     ok: true,
     provider: 'beds24',
     data: {
-      properties,
+      properties: propertiesWithOta,
       bookings,
       connectionToken: token,
       tokenType: exchangedFromInviteCode ? 'exchanged_access_token' : 'provided_token',
