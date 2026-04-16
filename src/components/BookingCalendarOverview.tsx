@@ -801,18 +801,20 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
               </p>
             </div>
           </div>
-        ) : mode === 'connected' && !isTestModeEnabled() && officialSync && realBookings.length === 0 ? (
-          <div className="px-4 py-10 sm:px-6">
-            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-5 text-center sm:px-6 sm:py-6">
-              <p className="text-sm font-semibold text-zinc-900">Aucune reservation trouvée pour ce mois.</p>
-              <p className="mt-1 text-xs text-zinc-600">
-                Si vous venez de connecter votre channel manager, réessayez après une synchronisation complète.
-              </p>
-            </div>
-          </div>
         ) : (
           <>
-        <div className="-mx-px overflow-x-auto overscroll-x-contain touch-pan-x">
+            {mode === 'connected' && !isTestModeEnabled() && visibleBookings.length === 0 ? (
+              <div className="px-4 py-6 sm:px-6">
+                <div className="rounded-xl border border-zinc-200 bg-white px-4 py-5 text-center sm:px-6 sm:py-6">
+                  <p className="text-sm font-semibold text-zinc-900">Aucune reservation trouvée pour ce mois.</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Si vous venez de connecter votre channel manager, réessayez après une synchronisation complète.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="-mx-px overflow-x-auto overscroll-x-contain touch-pan-x">
           <div className="min-w-[720px] px-4 pb-2 pt-3 sm:px-6 sm:pt-4">
             <div
               className="grid items-end gap-y-1"
@@ -921,7 +923,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
               <span className="font-semibold text-[#1a1a1a]">{computedStats.bookingCount}</span>
             </span>
           </div>
-        </div>
+            </div>
           </>
         )}
       </div>
