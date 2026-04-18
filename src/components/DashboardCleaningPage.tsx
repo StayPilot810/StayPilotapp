@@ -1,9 +1,9 @@
-import { ClipboardList, Copy, FileText, ImagePlus, Inbox, Link2, ListChecks, Receipt, Send, Wallet, X } from 'lucide-react'
+import { ClipboardList, Copy, FileText, ImagePlus, Link2, ListChecks, Receipt, Send, Wallet, X } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Locale } from '../i18n/navbar'
-import { getStoredAccounts } from '../lib/accounts'
+import { getStoredAccounts, normalizeStoredLoginPiece, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
 import { getOfficialCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
@@ -796,12 +796,10 @@ export function DashboardCleaningPage() {
   const currentAccount = useMemo(() => {
     const identifier = currentUser.trim().toLowerCase()
     if (!identifier) return undefined
-    return getStoredAccounts().find(
-      (a) => a.email.trim().toLowerCase() === identifier || a.username.trim().toLowerCase() === identifier,
-    )
+    return getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, identifier))
   }, [currentUser])
   const currentVatRate = useMemo(
-    () => VAT_RATE_BY_COUNTRY[(currentAccount?.countryCode || 'FR').trim().toUpperCase()] ?? 20,
+    () => VAT_RATE_BY_COUNTRY[String(currentAccount?.countryCode ?? 'FR').trim().toUpperCase()] ?? 20,
     [currentAccount?.countryCode],
   )
   const cleanerDisplayName = useMemo(() => {
@@ -822,7 +820,7 @@ export function DashboardCleaningPage() {
   const cleanerHostLabel = useMemo(() => {
     const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return 'Votre hôte'
-    const host = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === hostUsername)
+    const host = getStoredAccounts().find((a) => normalizeStoredLoginPiece(a.username) === hostUsername)
     if (!host) return `Votre hôte ${currentAccount?.hostUsername}`
     const full = `${host.firstName || ''} ${host.lastName || ''}`.trim()
     return full ? `Votre hôte ${full}` : `Votre hôte ${host.username}`
@@ -889,7 +887,10 @@ export function DashboardCleaningPage() {
     const fromInvoices = invoices.map((i) => i.provider.trim()).filter(Boolean)
     const fromAccounts = getStoredAccounts()
       .filter((a) => (a.role || 'host') === 'cleaner')
-      .map((a) => `${a.firstName} ${a.lastName}`.trim() || a.username.trim())
+      .map(
+        (a) =>
+          `${String(a.firstName ?? '')} ${String(a.lastName ?? '')}`.trim() || String(a.username ?? '').trim(),
+      )
       .filter(Boolean)
     const uniq = Array.from(new Set([...fromInvoices, ...fromAccounts]))
     return uniq.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
@@ -907,8 +908,8 @@ export function DashboardCleaningPage() {
   const hostCleanerOptions = useMemo(() => {
     return hostCleanerAccounts
       .map((a) => ({
-        username: a.username.trim(),
-        label: `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.username.trim(),
+        username: String(a.username ?? '').trim(),
+        label: `${String(a.firstName ?? '')} ${String(a.lastName ?? '')}`.trim() || String(a.username ?? '').trim(),
       }))
       .filter((r) => r.username && r.label)
   }, [hostCleanerAccounts])
@@ -923,23 +924,24 @@ export function DashboardCleaningPage() {
   const selectedChatProvider = useMemo(() => {
     const username = (isHostSession ? currentCleanerUsername : currentHostUsername).trim().toLowerCase()
     if (!username) return ''
-    const account = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === username)
+    const account = getStoredAccounts().find((a) => normalizeStoredLoginPiece(a.username) === username)
     if (!account) return username
     return `${account.firstName || ''} ${account.lastName || ''}`.trim() || account.username
   }, [isHostSession, currentCleanerUsername, currentHostUsername])
   const hostDisplayName = useMemo(() => {
     const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return ''
-    const host = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === hostUsername)
+    const host = getStoredAccounts().find((a) => normalizeStoredLoginPiece(a.username) === hostUsername)
     if (!host) return currentAccount?.hostUsername || ''
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
   }, [currentAccount])
   const usernameLabelMap = useMemo(() => {
     const map = new Map<string, string>()
     getStoredAccounts().forEach((a) => {
-      const key = (a.username || '').trim().toLowerCase()
+      const key = normalizeStoredLoginPiece(a.username)
       if (!key) return
-      const label = `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.username
+      const label =
+        `${String(a.firstName ?? '')} ${String(a.lastName ?? '')}`.trim() || String(a.username ?? '')
       map.set(key, label)
     })
     return map

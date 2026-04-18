@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
-import { getStoredAccounts } from '../lib/accounts'
+import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { isTestModeEnabled } from '../utils/testMode'
@@ -309,10 +309,7 @@ export function DashboardSuppliesPage() {
       .trim()
       .toLowerCase()
     if (!identifier) return false
-    const account = getStoredAccounts().find(
-      (a) =>
-        a.email.trim().toLowerCase() === identifier || a.username.trim().toLowerCase() === identifier,
-    )
+    const account = getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, identifier))
     return (account?.role || 'host') === 'cleaner'
   })()
   const init = useMemo(() => initialSuppliesState(), [])

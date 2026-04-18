@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Eye, EyeOff } from 'lucide-react'
 import { jsPDF } from 'jspdf'
-import { getStoredAccounts, saveStoredAccounts, type StoredAccount } from '../lib/accounts'
+import {
+  getStoredAccounts,
+  saveStoredAccounts,
+  storedAccountMatchesNormalizedId,
+  type StoredAccount,
+} from '../lib/accounts'
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
 import { MOCK_BOOKINGS } from '../data/demoCalendarBookings'
@@ -190,19 +195,16 @@ export function ProfilePage() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('personal')
   const currentRole = (localStorage.getItem(LS_CURRENT_ROLE) || '').trim().toLowerCase()
   const isCleanerSession = currentRole === 'cleaner'
-  const accounts = useMemo(() => getStoredAccounts(), [])
+  const accounts = getStoredAccounts()
   const userKey = (localStorage.getItem(LS_CURRENT_USER) ?? localStorage.getItem(LS_IDENTIFIER) ?? '')
   const currentUser = userKey.trim().toLowerCase()
-  const accountIndex = accounts.findIndex((a) => {
-    const em = String(a.email ?? '').trim().toLowerCase()
-    const un = String(a.username ?? '').trim().toLowerCase()
-    return em === currentUser || un === currentUser
-  })
+  const accountIndex = accounts.findIndex((a) => storedAccountMatchesNormalizedId(a, currentUser))
   const account = accountIndex >= 0 ? accounts[accountIndex] : undefined
   const mailLocale = String(account?.preferredLocale || localStorage.getItem('staypilot_locale') || 'fr').slice(0, 2)
   const pricingLocale = ['fr', 'en', 'es', 'de', 'it'].includes(mailLocale) ? (mailLocale as 'fr' | 'en' | 'es' | 'de' | 'it') : 'fr'
   const pricing = pricingPlansTranslations[pricingLocale]
-  const activePlan = localStorage.getItem(LS_CURRENT_PLAN)?.trim() || account?.plan || 'Gratuit'
+  const activePlan =
+    localStorage.getItem(LS_CURRENT_PLAN)?.trim() || String(account?.plan ?? '').trim() || 'Gratuit'
   const starterTtc = getPlanMonthlyTtcEur('starter')
   const proTtc = getPlanMonthlyTtcEur('pro')
   const scaleTtc = getPlanMonthlyTtcEur('scale')
@@ -210,12 +212,12 @@ export function ProfilePage() {
   const proHt = computeHtFromTtc(proTtc, 20)
   const scaleHt = computeHtFromTtc(scaleTtc, 20)
 
-  const [firstName, setFirstName] = useState(account?.firstName || '')
-  const [lastName, setLastName] = useState(account?.lastName || '')
-  const [username, setUsername] = useState(account?.username || '')
-  const [email, setEmail] = useState(account?.email || '')
-  const [phone, setPhone] = useState(account?.phone || '')
-  const [company, setCompany] = useState(account?.company || '')
+  const [firstName, setFirstName] = useState(String(account?.firstName ?? ''))
+  const [lastName, setLastName] = useState(String(account?.lastName ?? ''))
+  const [username, setUsername] = useState(String(account?.username ?? ''))
+  const [email, setEmail] = useState(String(account?.email ?? ''))
+  const [phone, setPhone] = useState(String(account?.phone ?? ''))
+  const [company, setCompany] = useState(String(account?.company ?? ''))
   const [saveMsg, setSaveMsg] = useState('')
   const [paymentSaveLoading, setPaymentSaveLoading] = useState(false)
   const [cardStripeVerifiedAtIso, setCardStripeVerifiedAtIso] = useState<string | null>(null)
@@ -225,16 +227,16 @@ export function ProfilePage() {
   const [reviewPublishError, setReviewPublishError] = useState('')
   const [reviewPublishOk, setReviewPublishOk] = useState('')
   const reviewAccountKey = useMemo(
-    () => (email.trim() || currentUser || 'anon').toLowerCase(),
+    () => (String(email).trim() || currentUser || 'anon').toLowerCase(),
     [email, currentUser],
   )
   const [existingHostReview, setExistingHostReview] = useState<StoredHostReview | null>(null)
   const personalFormValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    username.trim().length > 0 &&
-    email.trim().length > 0 &&
-    phone.trim().length > 0
+    String(firstName).trim().length > 0 &&
+    String(lastName).trim().length > 0 &&
+    String(username).trim().length > 0 &&
+    String(email).trim().length > 0 &&
+    String(phone).trim().length > 0
 
   const prefs = useMemo(() => {
     try {
@@ -371,7 +373,12 @@ export function ProfilePage() {
   const [invoiceClientType, setInvoiceClientType] = useState<'b2b' | 'b2c'>(
     account?.clientType === 'b2b' && account?.vatVerified ? 'b2b' : 'b2c',
   )
-  const [invoiceCountryCode, setInvoiceCountryCode] = useState((account?.countryCode || 'FR').toUpperCase())
+  const [invoiceCountryCode, setInvoiceCountryCode] = useState(
+    String(account?.countryCode ?? 'FR')
+      .trim()
+      .toUpperCase()
+      .slice(0, 2) || 'FR',
+  )
 
   useEffect(() => {
     const sync = () => setExistingHostReview(getHostReviewForAccount(reviewAccountKey))
@@ -495,56 +502,66 @@ export function ProfilePage() {
   }, [paymentCardNumber, paymentExpiry, paymentHolder, paymentCvc])
 
   useEffect(() => {
-    const targetEmail = (email || account?.email || '').trim()
-    if (!targetEmail) return
-    const trialEnd = addDays(planStartDateIso(), 14)
-    const now = new Date()
-    if (now < trialEnd) return
-    if (!billingAutopay.paymentMethodValid) return
-    const dueAt = new Date(billingAutopay.nextDueIso)
-    if (!Number.isFinite(dueAt.getTime()) || now < dueAt) return
-    const y = dueAt.getFullYear()
-    const m = String(dueAt.getMonth() + 1).padStart(2, '0')
-    const periodKey = `${y}-${m}`
-    const planLabel = normalizePlanLabel(currentPlan || 'Starter')
-    const vatRateByCountry: Record<string, number> = {
-      FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
-      SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
-      SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
-    }
-    const normalizedCountry = invoiceCountryCode.trim().toUpperCase() || 'FR'
-    const isVerifiedB2b = invoiceClientType === 'b2b' && account?.vatVerified === true
-    const vatRate = isVerifiedB2b ? 0 : vatRateByCountry[normalizedCountry] ?? 20
-    const taxMode = isVerifiedB2b ? 'reverse_charge' : 'vat_collected'
-    const amountEur = computePlanAmountByTaxMode(planLabel, taxMode, vatRateByCountry[normalizedCountry] ?? 20)
-    const customerName =
-      `${firstName.trim()} ${lastName.trim()}`.trim() || username.trim() || targetEmail.split('@')[0] || 'Client'
-
-    setClientInvoices((prev) => {
-      const already = prev.some(
-        (inv) => inv.periodKey === periodKey && inv.clientEmail.toLowerCase() === targetEmail.toLowerCase(),
-      )
-      if (already) return prev
-      const invoice: ClientAutoInvoice = {
-        id: `${Date.now()}`,
-        clientName: customerName,
-        clientEmail: targetEmail,
-        apartment: 'Portefeuille principal',
-        amountEur,
-        planLabel,
-        periodKey,
-        clientType: invoiceClientType,
-        countryCode: normalizedCountry,
-        vatRate,
-        taxMode,
-        issuedAtIso: now.toISOString(),
-        dueAtIso: dueAt.toISOString(),
+    try {
+      const targetEmail = String(email || account?.email || '').trim()
+      if (!targetEmail) return
+      const trialEnd = addDays(planStartDateIso(), 14)
+      const now = new Date()
+      if (now < trialEnd) return
+      if (!billingAutopay.paymentMethodValid) return
+      const dueAt = new Date(billingAutopay.nextDueIso)
+      if (!Number.isFinite(dueAt.getTime()) || now < dueAt) return
+      const y = dueAt.getFullYear()
+      const m = String(dueAt.getMonth() + 1).padStart(2, '0')
+      const periodKey = `${y}-${m}`
+      const planLabel = normalizePlanLabel(String(currentPlan || 'Starter'))
+      const vatRateByCountry: Record<string, number> = {
+        FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
+        SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
+        SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
       }
-      return [invoice, ...prev].slice(0, 24)
-    })
-    const nextDue = computeUpcomingBillingDue(planStartDateIso(), new Date(dueAt.getTime() + 24 * 60 * 60 * 1000))
-    setBillingAutopay((prev) => ({ ...prev, nextDueIso: nextDue.toISOString(), lastNotifiedAttempt: 0 }))
-    readAndSyncBillingRecovery(null)
+      const normalizedCountry = String(invoiceCountryCode).trim().toUpperCase() || 'FR'
+      const isVerifiedB2b = invoiceClientType === 'b2b' && account?.vatVerified === true
+      const vatRate = isVerifiedB2b ? 0 : vatRateByCountry[normalizedCountry] ?? 20
+      const taxMode = isVerifiedB2b ? 'reverse_charge' : 'vat_collected'
+      const amountEur = computePlanAmountByTaxMode(planLabel, taxMode, vatRateByCountry[normalizedCountry] ?? 20)
+      const customerName =
+        `${String(firstName).trim()} ${String(lastName).trim()}`.trim() ||
+        String(username).trim() ||
+        targetEmail.split('@')[0] ||
+        'Client'
+
+      setClientInvoices((prev) => {
+        const already = prev.some(
+          (inv) =>
+            inv.periodKey === periodKey &&
+            String(inv.clientEmail ?? '').toLowerCase() === targetEmail.toLowerCase(),
+        )
+        if (already) return prev
+        const invoice: ClientAutoInvoice = {
+          id: `${Date.now()}`,
+          clientName: customerName,
+          clientEmail: targetEmail,
+          apartment: 'Portefeuille principal',
+          amountEur,
+          planLabel,
+          periodKey,
+          clientType: invoiceClientType,
+          countryCode: normalizedCountry,
+          vatRate,
+          taxMode,
+          issuedAtIso: now.toISOString(),
+          dueAtIso: dueAt.toISOString(),
+        }
+        return [invoice, ...prev].slice(0, 24)
+      })
+      const nextDue = computeUpcomingBillingDue(planStartDateIso(), new Date(dueAt.getTime() + 24 * 60 * 60 * 1000))
+      const nextIso = Number.isFinite(nextDue.getTime()) ? nextDue.toISOString() : new Date().toISOString()
+      setBillingAutopay((prev) => ({ ...prev, nextDueIso: nextIso, lastNotifiedAttempt: 0 }))
+      readAndSyncBillingRecovery(null)
+    } catch {
+      /* évite de faire tomber toute l’app si données localStorage atypiques */
+    }
   }, [account?.email, account?.vatVerified, billingAutopay.nextDueIso, billingAutopay.paymentMethodValid, currentPlan, email, firstName, invoiceClientType, invoiceCountryCode, lastName, username])
 
   function savePersonalInfo() {
@@ -2373,9 +2390,14 @@ export function ProfilePage() {
                   </p>
                 ) : latestInvoice ? (
                   <p className="mt-1 text-sm text-zinc-700">
-                    Dernière facture: plan <strong>{latestInvoice.planLabel}</strong> —{' '}
-                    <strong>{latestInvoice.amountEur.toFixed(2)} EUR</strong> — émise le{' '}
-                    <strong>{fmtLongDate(latestInvoice.issuedAtIso)}</strong>.
+                    Dernière facture: plan <strong>{String(latestInvoice.planLabel ?? '')}</strong> —{' '}
+                    <strong>
+                      {Number.isFinite(Number(latestInvoice.amountEur))
+                        ? Number(latestInvoice.amountEur).toFixed(2)
+                        : '—'}{' '}
+                      EUR
+                    </strong>{' '}
+                    — émise le <strong>{fmtLongDate(String(latestInvoice.issuedAtIso ?? ''))}</strong>.
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-zinc-700">
@@ -2557,8 +2579,10 @@ export function ProfilePage() {
                       {clientInvoices.slice(0, 5).map((inv) => (
                         <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5">
                           <p>
-                            {inv.clientName} - {inv.planLabel} - {inv.amountEur.toFixed(2)} EUR - échéance{' '}
-                            {fmtLongDate(inv.dueAtIso)} - {inv.clientType.toUpperCase()}{' '}
+                            {String(inv.clientName ?? '')} - {String(inv.planLabel ?? '')} -{' '}
+                            {Number.isFinite(Number(inv.amountEur)) ? Number(inv.amountEur).toFixed(2) : '—'} EUR -
+                            échéance {fmtLongDate(String(inv.dueAtIso ?? ''))} -{' '}
+                            {String(inv.clientType ?? '').toUpperCase()}{' '}
                             {inv.taxMode === 'reverse_charge' ? '(autoliquidation)' : `(TVA ${inv.vatRate}%)`}
                           </p>
                           <button

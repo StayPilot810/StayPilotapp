@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChartColumn, Gem, MessageCircle, Package, Sparkles, Wallet } from 'lucide-react'
-import { getStoredAccounts, type StoredAccount } from '../lib/accounts'
+import {
+  getStoredAccounts,
+  normalizeStoredLoginPiece,
+  storedAccountMatchesNormalizedId,
+  type StoredAccount,
+} from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
 import { canAccessDashboardPath, getPlanTierFromValue } from '../utils/subscriptionAccess'
 
@@ -70,11 +75,7 @@ export function DashboardPage() {
     const accounts = getStoredAccounts()
 
     const currentAccount =
-      accounts.find(
-        (a) =>
-          a.email.trim().toLowerCase() === savedIdentifier ||
-          a.username.trim().toLowerCase() === savedIdentifier,
-      ) ?? accounts[0]
+      accounts.find((a) => storedAccountMatchesNormalizedId(a, savedIdentifier || '')) ?? accounts[0]
 
     if (currentAccount?.plan) {
       setCurrentPlanRaw(currentAccount.plan)
@@ -94,13 +95,14 @@ export function DashboardPage() {
       .toLowerCase()
     if (!savedIdentifier) return ''
     const accounts = getStoredAccounts()
-    const matchAccount = (a: StoredAccount) =>
-      a.email.trim().toLowerCase() === savedIdentifier || a.username.trim().toLowerCase() === savedIdentifier
+    const matchAccount = (a: StoredAccount) => storedAccountMatchesNormalizedId(a, savedIdentifier)
     const cleaner = accounts.find((a) => matchAccount(a) && (a.role || 'host') === 'cleaner')
     if (!cleaner) return ''
     const hostUsername = (cleaner.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return ''
-    const host = accounts.find((a) => a.username.trim().toLowerCase() === hostUsername && (a.role || 'host') === 'host')
+    const host = accounts.find(
+      (a) => normalizeStoredLoginPiece(a.username) === hostUsername && (a.role || 'host') === 'host',
+    )
     if (!host) return cleaner.hostUsername?.trim() || ''
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
   }, [isCleanerSession])

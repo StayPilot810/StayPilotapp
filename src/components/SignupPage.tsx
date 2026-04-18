@@ -4,9 +4,10 @@ import { Check, CircleCheck, Eye, EyeOff, TrendingUp, Users } from 'lucide-react
 import { useLanguage } from '../hooks/useLanguage'
 import {
   accountExistsByEmailOrUsernameAsync,
-  clearStoredAccounts,
+  clearLocalAccountsIfRemoteServerEmpty,
   createAccount,
   getStoredAccounts,
+  normalizeStoredLoginPiece,
   saveStoredAccounts,
   type StoredAccount,
 } from '../lib/accounts'
@@ -83,7 +84,8 @@ function clearSignupEmailOtp(targetEmail: string) {
 }
 
 function emailAlreadyRegisteredForSignup(emailNorm: string) {
-  return getStoredAccounts().some((a) => a.email.trim().toLowerCase() === emailNorm)
+  const want = normalizeStoredLoginPiece(emailNorm)
+  return getStoredAccounts().some((a) => normalizeStoredLoginPiece(a.email) === want)
 }
 
 function planToPlanKey(plan: string): PlanKey {
@@ -91,16 +93,6 @@ function planToPlanKey(plan: string): PlanKey {
   if (value === 'starter') return 'starter'
   if (value === 'scale') return 'scale'
   return 'pro'
-}
-
-function formatCardDigitsOnly(value: string, maxLength: number) {
-  return value.replace(/\D/g, '').slice(0, maxLength)
-}
-
-function formatCardExpiry(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 4)
-  if (digits.length <= 2) return digits
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`
 }
 
 export function SignupPage() {
@@ -127,18 +119,12 @@ export function SignupPage() {
   const [company, setCompany] = useState('')
   const [phone, setPhone] = useState('')
   const [promoCode, setPromoCode] = useState('')
-  const [cardHolder, setCardHolder] = useState('')
-  const [cardNumber, setCardNumber] = useState('')
-  const [cardExpiry, setCardExpiry] = useState('')
-  const [cardCvc, setCardCvc] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [emailVerifySending, setEmailVerifySending] = useState(false)
   const [emailVerifyRequested, setEmailVerifyRequested] = useState(false)
   const [emailVerifyValidated, setEmailVerifyValidated] = useState(false)
   const [emailVerifyInput, setEmailVerifyInput] = useState('')
   const [emailVerifyMsg, setEmailVerifyMsg] = useState('')
-  const [accountsCount, setAccountsCount] = useState(() => getStoredAccounts().length)
-  const [accountsPreview, setAccountsPreview] = useState(() => getStoredAccounts())
   const [remoteKvOk, setRemoteKvOk] = useState<boolean | null>(() =>
     isServerAccountsMandatory() ? null : true,
   )
@@ -159,9 +145,6 @@ export function SignupPage() {
   const selectedPlanKey = planToPlanKey(plan)
   const priceTtc = getPlanMonthlyTtcEur(selectedPlanKey)
   const priceHt = vatRate > 0 ? priceTtc / (1 + vatRate / 100) : priceTtc
-  const cardNumberDigits = cardNumber.replace(/\D/g, '')
-  const cardExpiryDigits = cardExpiry.replace(/\D/g, '')
-  const cardCvcDigits = cardCvc.replace(/\D/g, '')
 
   useEffect(() => {
     if (!isServerAccountsMandatory()) {
@@ -181,6 +164,11 @@ export function SignupPage() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (remoteKvOk !== true) return
+    void clearLocalAccountsIfRemoteServerEmpty()
+  }, [remoteKvOk])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -204,8 +192,9 @@ export function SignupPage() {
     if (!code) return null
     const invite = readCleanerInvites().find((i) => i.code === code)
     if (!invite) return null
+    const hostNorm = normalizeStoredLoginPiece(invite.hostUsername)
     const hostExists = getStoredAccounts().some(
-      (a) => (a.role || 'host') === 'host' && a.username.trim().toLowerCase() === invite.hostUsername.trim().toLowerCase(),
+      (a) => (a.role || 'host') === 'host' && normalizeStoredLoginPiece(a.username) === hostNorm,
     )
     return hostExists ? invite : null
   }
@@ -221,13 +210,7 @@ export function SignupPage() {
       password.trim().length > 0 &&
       confirmPassword.trim().length > 0 &&
       password === confirmPassword &&
-      (role === 'cleaner'
-        ? Boolean(getValidCleanerInvite())
-        : cardHolder.trim().length > 0 &&
-          (clientType === 'b2c' || (vatNumber.trim().length > 0 && vatVerified)) &&
-          cardNumberDigits.length >= 14 &&
-          cardExpiryDigits.length === 4 &&
-          cardCvcDigits.length >= 3),
+      (role === 'cleaner' ? Boolean(getValidCleanerInvite()) : clientType === 'b2c' || (vatNumber.trim().length > 0 && vatVerified)),
     [
       plan,
       role,
@@ -237,10 +220,6 @@ export function SignupPage() {
       email,
       password,
       confirmPassword,
-      cardHolder,
-      cardNumber,
-      cardExpiry,
-      cardCvc,
       invitationCode,
       clientType,
       vatNumber,
@@ -397,14 +376,6 @@ export function SignupPage() {
         setSubmitError('Inscription impossible : forfait non sélectionné.')
         return
       }
-      if (role === 'host' && (!cardHolder.trim() || cardNumber.trim().length < 14 || cardExpiry.trim().length < 4 || cardCvc.trim().length < 3)) {
-        setSubmitError('Inscription impossible : coordonnées bancaires non renseignées ou incomplètes.')
-        return
-      }
-      if (role === 'host' && (cardNumberDigits.length < 14 || cardExpiryDigits.length !== 4 || cardCvcDigits.length < 3)) {
-        setSubmitError('Inscription impossible : coordonnées bancaires non renseignées ou incomplètes.')
-        return
-      }
       if (requireEmailOtp && !emailVerifyValidated) {
         setSubmitError('Inscription impossible : adresse e-mail non vérifiée.')
         return
@@ -482,7 +453,9 @@ export function SignupPage() {
       }
       saveStoredAccounts(data.accounts)
       const uNorm = username.trim().toLowerCase()
-      const found = data.accounts.find((a: { username: string }) => a.username.trim().toLowerCase() === uNorm)
+      const found = data.accounts.find(
+        (a: { username?: unknown }) => normalizeStoredLoginPiece(a.username) === uNorm,
+      )
       if (!found) {
         setSubmitError("Inscription impossible : compte non retrouvé après création.")
         return
@@ -511,73 +484,60 @@ export function SignupPage() {
       // Non-blocking: signup flow must continue even if email transport is unavailable.
     }
     clearSignupEmailOtp(email.trim())
-    const updatedAccounts = getStoredAccounts()
-    setAccountsCount(updatedAccounts.length)
-    setAccountsPreview(updatedAccounts)
     setSubmitError('')
-    localStorage.setItem('staypilot_current_user', username.trim())
-    localStorage.setItem('staypilot_login_identifier', username.trim())
-    localStorage.setItem('staypilot_session_active', 'true')
-    localStorage.setItem('staypilot_current_plan', role === 'cleaner' ? 'Gratuit' : plan)
-    localStorage.setItem('staypilot_current_role', role)
-    window.dispatchEvent(new Event('staypilot-session-changed'))
-    if (role === 'host') {
-      try {
-        const res = await fetch('/api/create-checkout-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            planKey: planToPlanKey(plan),
-            clientType,
-            accountId: createdAccount.id,
-            email: email.trim(),
-            locale,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (res.ok && data?.url) {
-          window.location.href = data.url
-          return
-        }
-      } catch {
-        // fallback below
-      }
-    }
-    window.location.href = '/dashboard'
-  }
 
-  function onResetTestData() {
-    clearStoredAccounts()
-    setAccountsCount(0)
-    setAccountsPreview([])
-    setFirstName('')
-    setLastName('')
-    setUsername('')
-    setEmail('')
-    setPassword('')
-    setConfirmPassword('')
-    setShowPassword(false)
-    setShowConfirmPassword(false)
-    setCompany('')
-    setPhone('')
-    setPromoCode('')
-    setClientType('b2b')
-    setRole('host')
-    setInvitationCode('')
-    setCountryCode('FR')
-    setVatNumber('')
-    setVatVerified(false)
-    setVatStatusMsg('')
-    setCardHolder('')
-    setCardNumber('')
-    setCardExpiry('')
-    setCardCvc('')
-    setSubmitError('')
-    setEmailVerifySending(false)
-    setEmailVerifyRequested(false)
-    setEmailVerifyValidated(false)
-    setEmailVerifyInput('')
-    setEmailVerifyMsg('')
+    if (role === 'cleaner') {
+      localStorage.setItem('staypilot_current_user', username.trim())
+      localStorage.setItem('staypilot_login_identifier', username.trim())
+      localStorage.setItem('staypilot_session_active', 'true')
+      localStorage.setItem('staypilot_current_plan', 'Gratuit')
+      localStorage.setItem('staypilot_current_role', role)
+      window.dispatchEvent(new Event('staypilot-session-changed'))
+      window.location.href = '/dashboard'
+      return
+    }
+
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planKey: planToPlanKey(plan),
+          clientType,
+          accountId: createdAccount.id,
+          email: email.trim(),
+          locale,
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string }
+      if (res.ok && data?.url) {
+        localStorage.setItem('staypilot_current_user', username.trim())
+        localStorage.setItem('staypilot_login_identifier', username.trim())
+        localStorage.setItem('staypilot_session_active', 'true')
+        localStorage.setItem('staypilot_current_plan', plan)
+        localStorage.setItem('staypilot_current_role', role)
+        window.dispatchEvent(new Event('staypilot-session-changed'))
+        window.location.href = data.url
+        return
+      }
+      if (data?.error === 'missing_plan_price_id') {
+        setSubmitError(
+          'Configuration Stripe incomplète (identifiant de prix manquant pour ce forfait). Contactez le support.',
+        )
+        return
+      }
+      if (data?.error === 'invalid_plan') {
+        setSubmitError('Forfait invalide. Sélectionnez Starter, Pro ou Scale puis réessayez.')
+        return
+      }
+      setSubmitError(
+        "Impossible d'ouvrir la page de paiement sécurisée Stripe. Réessayez dans un instant. Si le compte a été créé, vous pouvez vous connecter puis compléter le paiement depuis votre espace.",
+      )
+    } catch {
+      setSubmitError(
+        "Impossible d'ouvrir la page de paiement Stripe (réseau). Réessayez. Si le compte a été créé, connectez-vous avec vos identifiants.",
+      )
+    }
   }
 
   return (
@@ -618,11 +578,6 @@ export function SignupPage() {
               )}
             </p>
           )}
-          <p className="mt-1 text-xs font-medium text-zinc-500">
-            {accountsCount > 0
-              ? `${accountsCount} ${t.signupAccountsSome}`
-              : t.signupAccountsNone}
-          </p>
 
           {isServerAccountsMandatory() && remoteKvOk !== true ? (
             <div
@@ -906,59 +861,9 @@ export function SignupPage() {
             ) : null}
 
             {role === 'host' ? (
-              <div className="sm:col-span-2 mt-1 rounded-xl border border-zinc-200/90 bg-zinc-50/60 p-3.5">
-                <p className="text-sm font-semibold text-zinc-800">{t.signupCardTitle}</p>
-                <p className="mt-1 text-xs text-zinc-600">
-                  {t.signupCardSubtitle}
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <input
-                      type="text"
-                      value={cardHolder}
-                      onChange={(e) => setCardHolder(e.target.value)}
-                      placeholder={t.signupCardHolder}
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                    />
-                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <input
-                      type="text"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(formatCardDigitsOnly(e.target.value, 19))}
-                      placeholder={t.signupCardNumber}
-                      inputMode="numeric"
-                      autoComplete="cc-number"
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                    />
-                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
-                      placeholder={t.signupCardExpiry}
-                      inputMode="numeric"
-                      autoComplete="cc-exp"
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                    />
-                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={cardCvc}
-                      onChange={(e) => setCardCvc(formatCardDigitsOnly(e.target.value, 4))}
-                      placeholder={t.signupCardCvc}
-                      inputMode="numeric"
-                      autoComplete="cc-csc"
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                    />
-                    <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
-                  </div>
-                </div>
+              <div className="sm:col-span-2 mt-1 rounded-xl border border-sky-200/90 bg-sky-50/70 p-3.5">
+                <p className="text-sm font-semibold text-sky-950">{t.signupCardTitle}</p>
+                <p className="mt-1 text-xs leading-relaxed text-sky-900/90">{t.signupCardSubtitle}</p>
               </div>
             ) : null}
 

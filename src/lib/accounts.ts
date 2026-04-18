@@ -26,8 +26,18 @@ import { isServerAccountsMandatory } from './serverAccountsPolicy'
 
 const ACCOUNTS_KEY = 'staypilot_accounts'
 
-function normalize(value: string) {
+export function normalizeStoredLoginPiece(value: unknown) {
   return String(value ?? '').trim().toLowerCase()
+}
+
+/** Identifiant courant (email ou username) déjà en minuscules — tolère champs non-string après JSON.parse. */
+export function storedAccountMatchesNormalizedId(
+  a: Pick<StoredAccount, 'email' | 'username'>,
+  loginIdNorm: string,
+): boolean {
+  const id = normalizeStoredLoginPiece(loginIdNorm)
+  if (!id) return false
+  return normalizeStoredLoginPiece(a.email) === id || normalizeStoredLoginPiece(a.username) === id
 }
 
 export function getStoredAccounts(): StoredAccount[] {
@@ -71,10 +81,10 @@ export function hasAnyAccount() {
 }
 
 export function accountExistsByEmailOrUsername(email: string, username: string) {
-  const emailNorm = normalize(email)
-  const userNorm = normalize(username)
+  const emailNorm = normalizeStoredLoginPiece(email)
+  const userNorm = normalizeStoredLoginPiece(username)
   return getStoredAccounts().some(
-    (a) => normalize(a.email) === emailNorm || normalize(a.username) === userNorm,
+    (a) => normalizeStoredLoginPiece(a.email) === emailNorm || normalizeStoredLoginPiece(a.username) === userNorm,
   )
 }
 
@@ -116,9 +126,11 @@ export function createAccount(account: Omit<StoredAccount, 'id' | 'createdAt'>) 
 }
 
 export function findAccountForLogin(identifier: string, password: string) {
-  const idNorm = normalize(identifier)
+  const idNorm = normalizeStoredLoginPiece(identifier)
   return getStoredAccounts().find(
-    (a) => (normalize(a.email) === idNorm || normalize(a.username) === idNorm) && a.password === password,
+    (a) =>
+      (normalizeStoredLoginPiece(a.email) === idNorm || normalizeStoredLoginPiece(a.username) === idNorm) &&
+      a.password === password,
   )
 }
 
