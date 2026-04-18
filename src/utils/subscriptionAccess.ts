@@ -1,7 +1,7 @@
 export type PlanTier = 'starter' | 'pro' | 'scale'
 
 function normalizePlan(raw: string) {
-  return raw.trim().toLowerCase()
+  return String(raw ?? '').trim().toLowerCase()
 }
 
 export function getPlanTierFromValue(rawPlan: string): PlanTier {

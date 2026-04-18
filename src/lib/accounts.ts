@@ -27,7 +27,7 @@ import { isServerAccountsMandatory } from './serverAccountsPolicy'
 const ACCOUNTS_KEY = 'staypilot_accounts'
 
 function normalize(value: string) {
-  return value.trim().toLowerCase()
+  return String(value ?? '').trim().toLowerCase()
 }
 
 export function getStoredAccounts(): StoredAccount[] {
@@ -47,6 +47,23 @@ export function saveStoredAccounts(accounts: StoredAccount[]) {
 
 export function clearStoredAccounts() {
   localStorage.removeItem(ACCOUNTS_KEY)
+}
+
+/** Si le serveur (KV) n’a aucun compte mais le navigateur garde d’anciennes entrées locales, on les retire (évite faux « comptes » vs connexion prod). */
+export async function clearLocalAccountsIfRemoteServerEmpty(): Promise<void> {
+  try {
+    const st = (await fetch('/api/auth-status', { method: 'GET' }).then((r) =>
+      r.json().catch(() => ({})),
+    )) as { remoteAuth?: boolean }
+    if (!st?.remoteAuth) return
+    const meta = (await fetch('/api/auth-accounts-meta', { method: 'GET' }).then((r) =>
+      r.json().catch(() => ({})),
+    )) as { remoteAuth?: boolean; serverHasAccounts?: boolean | null }
+    if (!meta?.remoteAuth || meta.serverHasAccounts !== false) return
+    if (getStoredAccounts().length > 0) clearStoredAccounts()
+  } catch {
+    /* ignore */
+  }
 }
 
 export function hasAnyAccount() {

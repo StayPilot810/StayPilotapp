@@ -193,11 +193,13 @@ export function ProfilePage() {
   const accounts = useMemo(() => getStoredAccounts(), [])
   const userKey = (localStorage.getItem(LS_CURRENT_USER) ?? localStorage.getItem(LS_IDENTIFIER) ?? '')
   const currentUser = userKey.trim().toLowerCase()
-  const accountIndex = accounts.findIndex(
-    (a) => a.email.trim().toLowerCase() === currentUser || a.username.trim().toLowerCase() === currentUser,
-  )
+  const accountIndex = accounts.findIndex((a) => {
+    const em = String(a.email ?? '').trim().toLowerCase()
+    const un = String(a.username ?? '').trim().toLowerCase()
+    return em === currentUser || un === currentUser
+  })
   const account = accountIndex >= 0 ? accounts[accountIndex] : undefined
-  const mailLocale = (account?.preferredLocale || localStorage.getItem('staypilot_locale') || 'fr').slice(0, 2)
+  const mailLocale = String(account?.preferredLocale || localStorage.getItem('staypilot_locale') || 'fr').slice(0, 2)
   const pricingLocale = ['fr', 'en', 'es', 'de', 'it'].includes(mailLocale) ? (mailLocale as 'fr' | 'en' | 'es' | 'de' | 'it') : 'fr'
   const pricing = pricingPlansTranslations[pricingLocale]
   const activePlan = localStorage.getItem(LS_CURRENT_PLAN)?.trim() || account?.plan || 'Gratuit'
@@ -329,7 +331,8 @@ export function ProfilePage() {
   const initialPlan = normalizePlanLabel(activePlan || 'Starter')
   const [currentPlan, setCurrentPlan] = useState(initialPlan)
   const [planSelection, setPlanSelection] = useState(initialPlan)
-  const planChangeAccountKey = (account?.id || currentUser || 'guest').trim().toLowerCase()
+  const planChangeAccountKey =
+    String(account?.id ?? '').trim().toLowerCase() || currentUser || 'guest'
   const [planPolicy, setPlanPolicy] = useState<PlanChangePolicyState | null>(() => {
     try {
       const raw = localStorage.getItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
@@ -481,7 +484,8 @@ export function ProfilePage() {
         if (!raw) return
         const parsed = JSON.parse(raw) as { stripeVerifiedAt?: string; [k: string]: unknown }
         if (parsed.stripeVerifiedAt) {
-          const { stripeVerifiedAt: _drop, ...rest } = parsed
+          const rest = { ...parsed }
+          delete rest.stripeVerifiedAt
           localStorage.setItem(LS_PAYMENT_DETAILS, JSON.stringify(rest))
         }
       } catch {
@@ -953,7 +957,10 @@ export function ProfilePage() {
     const toEmail = (email || account?.email || '').trim()
     if (!toEmail || !notifications || !digestEmailsEnabled) return
     const cadence = String(digest || 'weekly')
-    const accountKey = (account?.id || toEmail || 'guest').trim().toLowerCase()
+    const accountKey =
+      String(account?.id ?? '').trim().toLowerCase() ||
+      String(toEmail || '').trim().toLowerCase() ||
+      'guest'
     const schedule = digestScheduleSlot(cadence)
     if (!schedule.due) return
     const storageKey = `${LS_DIGEST_LAST_SENT_PREFIX}${accountKey}_${cadence}_${schedule.slot}`
@@ -1026,6 +1033,15 @@ export function ProfilePage() {
       setSaveMsg('Aucun changement détecté sur le forfait.')
       return
     }
+    if (billingCancellation) {
+      localStorage.removeItem(LS_BILLING_CANCELLATION)
+      setBillingCancellation(null)
+      setShowCancelFunnel(false)
+      setCancelStep(1)
+      setSaveMsg(
+        "Résiliation programmée annulée : vous restez abonné. Confirmez ci-dessous le changement de forfait (Starter, Pro ou Scale).",
+      )
+    }
     setPlanChangeConfirmOpen(true)
   }
 
@@ -1037,12 +1053,21 @@ export function ProfilePage() {
     }
     setPlanChangeLoading(true)
     try {
+      if (billingCancellation) {
+        localStorage.removeItem(LS_BILLING_CANCELLATION)
+        setBillingCancellation(null)
+        setShowCancelFunnel(false)
+        setCancelStep(1)
+      }
       const oldPlan = currentPlan
       const oldTier = getPlanTierFromValue(oldPlan)
       const nextTier = getPlanTierFromValue(nextPlan)
       const tierRank: Record<'starter' | 'pro' | 'scale', number> = { starter: 1, pro: 2, scale: 3 }
       const isUpgrade = tierRank[nextTier] > tierRank[oldTier]
-      const effectiveAtIso = computeUpcomingBillingDue(planStartDateIso(), new Date()).toISOString()
+      const billingDue = computeUpcomingBillingDue(planStartDateIso(), new Date())
+      const effectiveAtIso = Number.isFinite(billingDue.getTime())
+        ? billingDue.toISOString()
+        : new Date().toISOString()
       if (isUpgrade) {
         localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
         setPlanPolicy(null)
@@ -1112,11 +1137,13 @@ export function ProfilePage() {
   }
 
   function planStartDateIso() {
-    if (account?.createdAt) return account.createdAt
+    const raw = account?.createdAt
+    if (raw && Number.isFinite(new Date(raw).getTime())) return raw
     return new Date().toISOString()
   }
 
   function computeEndDateForCancellation(startIso: string, now = new Date()) {
+    if (!Number.isFinite(new Date(startIso).getTime())) return addDays(new Date().toISOString(), 14)
     const trialEnd = addDays(startIso, 14)
     if (now < trialEnd) return trialEnd
     const start = new Date(startIso)
@@ -1134,16 +1161,23 @@ export function ProfilePage() {
 
   function computeUpcomingBillingDue(startIso: string, now = new Date()) {
     const start = new Date(startIso)
+    if (!Number.isFinite(start.getTime())) {
+      const y = now.getFullYear()
+      const m = now.getMonth()
+      const d = Math.min(now.getDate(), new Date(y, m + 1, 0).getDate())
+      return new Date(y, m, d, 9, 0, 0, 0)
+    }
     const startDay = start.getDate()
     const y = now.getFullYear()
     const m = now.getMonth()
     const daysInThisMonth = new Date(y, m + 1, 0).getDate()
     const thisMonthDue = new Date(y, m, Math.min(startDay, daysInThisMonth), 9, 0, 0, 0)
-    if (now <= thisMonthDue) return thisMonthDue
+    if (Number.isFinite(thisMonthDue.getTime()) && now <= thisMonthDue) return thisMonthDue
     const nextY = m === 11 ? y + 1 : y
     const nextM = (m + 1) % 12
     const daysInNextMonth = new Date(nextY, nextM + 1, 0).getDate()
-    return new Date(nextY, nextM, Math.min(startDay, daysInNextMonth), 9, 0, 0, 0)
+    const nextDue = new Date(nextY, nextM, Math.min(startDay, daysInNextMonth), 9, 0, 0, 0)
+    return Number.isFinite(nextDue.getTime()) ? nextDue : thisMonthDue
   }
 
   function fmtLongDate(iso: string) {
@@ -1261,6 +1295,16 @@ export function ProfilePage() {
   useEffect(() => {
     void sendActivityDigestIfDue()
   }, [account?.email, digest, digestEmailsEnabled, email, firstName, notifications])
+
+  function revokeScheduledCancellation() {
+    localStorage.removeItem(LS_BILLING_CANCELLATION)
+    setBillingCancellation(null)
+    setShowCancelFunnel(false)
+    setCancelStep(1)
+    setSaveMsg(
+      "Abonnement réactivé : la fin d'abonnement programmée a été annulée. Vous pouvez à nouveau modifier votre forfait ou lancer une nouvelle résiliation si besoin.",
+    )
+  }
 
   async function confirmCancelBilling() {
     if (planPolicy) {
@@ -1996,9 +2040,17 @@ export function ProfilePage() {
                     <strong>{fmtLongDate(billingCancellation.endAtIso)}</strong>.
                   </p>
                   <p className="mt-1 text-xs">
-                    Le changement de forfait est désactivé tant que la résiliation est active, pour éviter des états
-                    contradictoires.
+                    Tant qu’une fin d’abonnement est programmée, évitez de cumuler d’autres actions contradictoires. Vous
+                    pouvez <strong>réactiver</strong> ci-dessous, ou lancer un <strong>changement de forfait</strong> :
+                    dans ce cas la résiliation programmée est annulée automatiquement pour rester cohérent avec Stripe.
                   </p>
+                  <button
+                    type="button"
+                    onClick={revokeScheduledCancellation}
+                    className="mt-3 inline-flex rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                  >
+                    Réactiver mon abonnement (annuler la résiliation)
+                  </button>
                 </div>
               ) : null}
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
@@ -2028,7 +2080,6 @@ export function ProfilePage() {
                   <button
                     type="button"
                     onClick={savePlanSelection}
-                    disabled={Boolean(billingCancellation)}
                     className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
                   >
                     Valider le changement
@@ -2080,7 +2131,7 @@ export function ProfilePage() {
                     <button
                       type="button"
                       onClick={confirmPlanSelectionChange}
-                      disabled={planChangeLoading || Boolean(billingCancellation)}
+                      disabled={planChangeLoading}
                       className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {planChangeLoading ? 'Validation...' : 'Confirmer le changement'}
@@ -2185,19 +2236,37 @@ export function ProfilePage() {
                   <p className="mt-1 text-xs">
                     E-mail envoyé à <strong>{billingCancellation.email}</strong> avec confirmation de résiliation.
                   </p>
+                  <button
+                    type="button"
+                    onClick={revokeScheduledCancellation}
+                    className="mt-3 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:brightness-95"
+                  >
+                    Réactiver mon abonnement
+                  </button>
+                  <p className="mt-2 text-xs text-amber-950/80">
+                    Après réactivation, vous pouvez changer de forfait (Starter, Pro ou Scale) avec « Modifier mon plan »
+                    ci-dessus.
+                  </p>
                 </div>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCancelFunnel((v) => !v)
-                  setCancelStep(1)
-                }}
-                className="inline-flex rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-              >
-                Annuler mon abonnement
-              </button>
+              {billingCancellation ? (
+                <p className="text-xs text-zinc-600">
+                  Une résiliation est déjà programmée. Utilisez d&apos;abord <strong>Réactiver mon abonnement</strong>{' '}
+                  ci-dessus si vous souhaitez lancer une nouvelle demande de fin d&apos;abonnement.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCancelFunnel((v) => !v)
+                    setCancelStep(1)
+                  }}
+                  className="inline-flex rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                >
+                  Annuler mon abonnement
+                </button>
+              )}
 
               {showCancelFunnel ? (
                 <div className="rounded-xl border border-zinc-200 bg-white p-4">
