@@ -22,6 +22,7 @@ export type PricingPlansCopy = {
   scalePrice: string
   scalePriceSuffix: string
   scaleFeatures: string[]
+  mandatoryChannelManagerNote: string
 }
 
 const fr: PricingPlansCopy = {
@@ -49,7 +50,7 @@ const fr: PricingPlansCopy = {
     'Signaux prix (vacances, événements) pour ne pas laisser de ADR sur la table',
     'Ligne directe ménage : photos, horaires → moins d’avis qui coûtent des nuits',
     'Support prioritaire — on accélère quand votre calendrier est sous pression',
-    'Rapports marge par bien : vous tranchez où investir la prochaine euro',
+    'Rapports marge par bien : vous tranchez où investir le prochain euro',
     'Listes consommables par logement → moins de ruptures qui cassent la note',
     'Checklists départ / arrivée par appart → turnovers qui protègent le RevPAR',
     'Pilotage ménage bout-en-bout pour remplir le mois suivant plus vite',
@@ -65,6 +66,8 @@ const fr: PricingPlansCopy = {
     'WhatsApp prioritaire — quand chaque minute coûte une résa',
     'Accès anticipé aux nouveautés qui poussent encaissement & occupation',
   ],
+  mandatoryChannelManagerNote:
+    'Channel manager obligatoire pour accéder à StayPilot : Beds24, Hostaway, Guesty ou Lodgify.',
 }
 
 const en: PricingPlansCopy = {
@@ -108,6 +111,8 @@ const en: PricingPlansCopy = {
     'Priority WhatsApp—when every minute costs a booking',
     'Early access to drops that push payouts and occupancy',
   ],
+  mandatoryChannelManagerNote:
+    'A channel manager is required to use StayPilot: Beds24, Hostaway, Guesty, or Lodgify.',
 }
 
 const es: PricingPlansCopy = {
@@ -151,6 +156,8 @@ const es: PricingPlansCopy = {
     'WhatsApp prioritario — cuando cada minuto cuesta una reserva',
     'Acceso anticipado a novedades que empujan cobro y ocupación',
   ],
+  mandatoryChannelManagerNote:
+    'Channel manager obligatorio para usar StayPilot: Beds24, Hostaway, Guesty o Lodgify.',
 }
 
 const de: PricingPlansCopy = {
@@ -194,6 +201,8 @@ const de: PricingPlansCopy = {
     'Prioritäts-WhatsApp — wenn jede Minute eine Buchung kostet',
     'Early Access auf Features für Auszahlung & Auslastung',
   ],
+  mandatoryChannelManagerNote:
+    'Für StayPilot ist ein Channel-Manager erforderlich: Beds24, Hostaway, Guesty oder Lodgify.',
 }
 
 const it: PricingPlansCopy = {
@@ -237,6 +246,8 @@ const it: PricingPlansCopy = {
     'WhatsApp prioritario — quando ogni minuto costa una prenotazione',
     'Accesso anticipato alle novità su incasso e occupazione',
   ],
+  mandatoryChannelManagerNote:
+    'Per usare StayPilot è obbligatorio un channel manager: Beds24, Hostaway, Guesty o Lodgify.',
 }
 
 export const pricingPlansTranslations: Record<Locale, PricingPlansCopy> = {

@@ -6,6 +6,7 @@ import {
   sendPasswordResetConfirmationEmail,
   sendPasswordVerificationCodeEmail,
   sendSignupEmailVerificationCodeEmail,
+  sendWelcomeOnboardingEmail,
   sendActivityDigestEmail,
   sendCallBookingConfirmationEmail,
 } from '../server/cancellationEmail.mjs'
@@ -39,6 +40,8 @@ export default async function handler(req, res) {
           ? await sendPasswordVerificationCodeEmail(body)
         : mode === 'signup_email_verification_code'
           ? await sendSignupEmailVerificationCodeEmail(body)
+        : mode === 'welcome_onboarding'
+          ? await sendWelcomeOnboardingEmail(body)
         : mode === 'activity_digest'
           ? await sendActivityDigestEmail(body)
         : mode === 'call_booking_confirmation'

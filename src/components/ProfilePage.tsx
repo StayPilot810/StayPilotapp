@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Check, Eye, EyeOff } from 'lucide-react'
 import { jsPDF } from 'jspdf'
-import { getStoredAccounts, saveStoredAccounts } from '../lib/accounts'
+import { getStoredAccounts, saveStoredAccounts, type StoredAccount } from '../lib/accounts'
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
 import { MOCK_BOOKINGS } from '../data/demoCalendarBookings'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { CONTACT_EMAIL } from '../i18n/contactPage'
-import { appendHostPublishedReview } from '../utils/hostPublishedReviews'
+import {
+  appendHostPublishedReview,
+  getHostReviewForAccount,
+  HOST_REVIEWS_UPDATED_EVENT,
+  removeHostPublishedReviewForAccount,
+  type StoredHostReview,
+} from '../utils/hostPublishedReviews'
 import { moderateHostReviewQuote } from '../utils/reviewModeration'
+import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur } from '../utils/planPricing'
 
 const LS_IDENTIFIER = 'staypilot_login_identifier'
 const LS_CURRENT_PLAN = 'staypilot_current_plan'
@@ -56,6 +64,14 @@ function nightsBetween(start: Date, end: Date) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000))
 }
 
+function profileSaveMessageLooksLikeError(msg: string): boolean {
+  const t = msg.trim()
+  if (!t) return false
+  return /refus|invalide|impossible|erreur|échou|veuillez|stripe|indisponible|incorrect|expir|manquant|correspond|introuvable|bloqu/i.test(
+    t,
+  )
+}
+
 type ProfileTab = 'personal' | 'plan' | 'billing' | 'preferences' | 'review' | 'security'
 type BillingRecoveryState = {
   firstFailedAtIso: string
@@ -73,6 +89,7 @@ type PlanChangePolicyState = {
   effectiveAtIso: string
   fromPlan: string
   toPlan: string
+  changeKind?: 'upgrade' | 'downgrade'
 }
 type ClientAutoInvoice = {
   id: string
@@ -90,13 +107,89 @@ type ClientAutoInvoice = {
   dueAtIso: string
 }
 
+function normalizePlanLabel(raw: string) {
+  const normalized = String(raw || '').trim().toLowerCase()
+  if (normalized === 'starter') return 'Starter'
+  if (normalized === 'pro') return 'Pro'
+  if (normalized === 'scale') return 'Scale'
+  return 'Starter'
+}
+
+function addDays(baseIso: string, days: number) {
+  const d = new Date(baseIso)
+  if (!Number.isFinite(d.getTime())) return new Date()
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function computePlanAmountByTaxMode(planLabel: string, taxMode: 'reverse_charge' | 'vat_collected', vatRate: number) {
+  const ttcByPlan: Record<string, number> = { starter: 19.99, pro: 59.99, scale: 99.99 }
+  const ttc = ttcByPlan[planLabel.trim().toLowerCase()] ?? 19.99
+  if (taxMode === 'reverse_charge') {
+    const fallbackVat = Number.isFinite(vatRate) && vatRate > 0 ? vatRate : 20
+    return ttc / (1 + fallbackVat / 100)
+  }
+  return ttc
+}
+
+function formatCardNumberInput(raw: string) {
+  const digits = String(raw || '').replace(/\D/g, '').slice(0, 19)
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+}
+
+function formatExpiryInput(raw: string) {
+  const digits = String(raw || '').replace(/\D/g, '').slice(0, 4)
+  if (digits.length <= 2) return digits
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+
+function formatCvcInput(raw: string) {
+  return String(raw || '').replace(/\D/g, '').slice(0, 3)
+}
+
+function luhnCheck(cardDigits: string) {
+  const digits = String(cardDigits || '').replace(/\D/g, '')
+  if (!digits) return false
+  let sum = 0
+  let shouldDouble = false
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let d = Number(digits[i])
+    if (!Number.isFinite(d)) return false
+    if (shouldDouble) {
+      d *= 2
+      if (d > 9) d -= 9
+    }
+    sum += d
+    shouldDouble = !shouldDouble
+  }
+  return sum % 10 === 0
+}
+
+function expiryIsValid(expiry: string) {
+  const m = String(expiry || '').match(/^(\d{2})\/(\d{2})$/)
+  if (!m) return false
+  const month = Number(m[1])
+  const year2 = Number(m[2])
+  if (!Number.isFinite(month) || month < 1 || month > 12) return false
+  const now = new Date()
+  const currentYear2 = now.getFullYear() % 100
+  const currentMonth = now.getMonth() + 1
+  if (year2 < currentYear2) return false
+  if (year2 === currentYear2 && month < currentMonth) return false
+  return true
+}
+
+function maskCardNumberDisplay(cardFormatted: string) {
+  const digits = String(cardFormatted || '').replace(/\D/g, '')
+  if (digits.length < 13) return cardFormatted.trim() || '—'
+  return `•••• •••• •••• ${digits.slice(-4)}`
+}
+
 export function ProfilePage() {
   const loggedIn = useStaypilotSessionLoggedIn()
   const [activeTab, setActiveTab] = useState<ProfileTab>('personal')
   const currentRole = (localStorage.getItem(LS_CURRENT_ROLE) || '').trim().toLowerCase()
   const isCleanerSession = currentRole === 'cleaner'
-  const pricing = pricingPlansTranslations.fr
-
   const accounts = useMemo(() => getStoredAccounts(), [])
   const userKey = (localStorage.getItem(LS_CURRENT_USER) ?? localStorage.getItem(LS_IDENTIFIER) ?? '')
   const currentUser = userKey.trim().toLowerCase()
@@ -105,7 +198,15 @@ export function ProfilePage() {
   )
   const account = accountIndex >= 0 ? accounts[accountIndex] : undefined
   const mailLocale = (account?.preferredLocale || localStorage.getItem('staypilot_locale') || 'fr').slice(0, 2)
+  const pricingLocale = ['fr', 'en', 'es', 'de', 'it'].includes(mailLocale) ? (mailLocale as 'fr' | 'en' | 'es' | 'de' | 'it') : 'fr'
+  const pricing = pricingPlansTranslations[pricingLocale]
   const activePlan = localStorage.getItem(LS_CURRENT_PLAN)?.trim() || account?.plan || 'Gratuit'
+  const starterTtc = getPlanMonthlyTtcEur('starter')
+  const proTtc = getPlanMonthlyTtcEur('pro')
+  const scaleTtc = getPlanMonthlyTtcEur('scale')
+  const starterHt = computeHtFromTtc(starterTtc, 20)
+  const proHt = computeHtFromTtc(proTtc, 20)
+  const scaleHt = computeHtFromTtc(scaleTtc, 20)
 
   const [firstName, setFirstName] = useState(account?.firstName || '')
   const [lastName, setLastName] = useState(account?.lastName || '')
@@ -114,11 +215,18 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(account?.phone || '')
   const [company, setCompany] = useState(account?.company || '')
   const [saveMsg, setSaveMsg] = useState('')
+  const [paymentSaveLoading, setPaymentSaveLoading] = useState(false)
+  const [cardStripeVerifiedAtIso, setCardStripeVerifiedAtIso] = useState<string | null>(null)
   const [reviewStars, setReviewStars] = useState(0)
   const [reviewText, setReviewText] = useState('')
   const [reviewPublicNameOk, setReviewPublicNameOk] = useState(false)
   const [reviewPublishError, setReviewPublishError] = useState('')
   const [reviewPublishOk, setReviewPublishOk] = useState('')
+  const reviewAccountKey = useMemo(
+    () => (email.trim() || currentUser || 'anon').toLowerCase(),
+    [email, currentUser],
+  )
+  const [existingHostReview, setExistingHostReview] = useState<StoredHostReview | null>(null)
   const personalFormValid =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
@@ -178,6 +286,11 @@ export function ProfilePage() {
   const [forgotOtpSending, setForgotOtpSending] = useState(false)
   const [forgotOtpValidated, setForgotOtpValidated] = useState(false)
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false)
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false)
   const [showCancelFunnel, setShowCancelFunnel] = useState(false)
   const [cancelStep, setCancelStep] = useState<1 | 2>(1)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -208,12 +321,12 @@ export function ProfilePage() {
       // ignore and rebuild defaults below
     }
     return {
-      paymentMethodValid: true,
+      paymentMethodValid: false,
       nextDueIso: computeUpcomingBillingDue(planStartDateIso()).toISOString(),
       lastNotifiedAttempt: 0,
     }
   })
-  const initialPlan = (activePlan || 'Starter').trim()
+  const initialPlan = normalizePlanLabel(activePlan || 'Starter')
   const [currentPlan, setCurrentPlan] = useState(initialPlan)
   const [planSelection, setPlanSelection] = useState(initialPlan)
   const planChangeAccountKey = (account?.id || currentUser || 'guest').trim().toLowerCase()
@@ -238,6 +351,16 @@ export function ProfilePage() {
       return []
     }
   })
+
+  useEffect(() => {
+    const trialEnd = addDays(planStartDateIso(), 14)
+    setClientInvoices((prev) =>
+      prev.filter((inv) => {
+        const issuedAt = new Date(inv.issuedAtIso)
+        return Number.isFinite(issuedAt.getTime()) && issuedAt >= trialEnd
+      }),
+    )
+  }, [account?.createdAt])
   const [paymentCardNumber, setPaymentCardNumber] = useState('4242 4242 4242 4242')
   const [paymentExpiry, setPaymentExpiry] = useState('12/29')
   const [paymentHolder, setPaymentHolder] = useState(() => `${firstName} ${lastName}`.trim())
@@ -246,6 +369,20 @@ export function ProfilePage() {
     account?.clientType === 'b2b' && account?.vatVerified ? 'b2b' : 'b2c',
   )
   const [invoiceCountryCode, setInvoiceCountryCode] = useState((account?.countryCode || 'FR').toUpperCase())
+
+  useEffect(() => {
+    const sync = () => setExistingHostReview(getHostReviewForAccount(reviewAccountKey))
+    sync()
+    window.addEventListener(HOST_REVIEWS_UPDATED_EVENT, sync)
+    return () => window.removeEventListener(HOST_REVIEWS_UPDATED_EVENT, sync)
+  }, [reviewAccountKey])
+
+  useEffect(() => {
+    if (activeTab !== 'review') return
+    if (!existingHostReview) return
+    setReviewStars(existingHostReview.stars)
+    setReviewText(existingHostReview.quote)
+  }, [activeTab, existingHostReview?.id])
 
   useEffect(() => {
     if (!isCleanerSession) return
@@ -264,26 +401,108 @@ export function ProfilePage() {
     try {
       const raw = localStorage.getItem(LS_PAYMENT_DETAILS)
       if (!raw) return
-      const parsed = JSON.parse(raw) as { cardNumber?: string; expiry?: string; holder?: string; cvc?: string }
+      const parsed = JSON.parse(raw) as {
+        cardNumber?: string
+        expiry?: string
+        holder?: string
+        cvc?: string
+        stripeVerifiedAt?: string
+      }
+      const digits = String(parsed.cardNumber || '').replace(/\D/g, '')
+      const exp = String(parsed.expiry || '').trim()
+      const holder = String(parsed.holder || '').trim()
+      const stripeOk = Boolean(String(parsed.stripeVerifiedAt || '').trim())
+      const locallyOk =
+        digits.length >= 13 &&
+        digits.length <= 19 &&
+        luhnCheck(digits) &&
+        expiryIsValid(exp) &&
+        holder.length >= 3
+      if (!locallyOk) {
+        localStorage.removeItem(LS_PAYMENT_DETAILS)
+        setPaymentCardNumber('')
+        setPaymentExpiry('')
+        setPaymentHolder(`${(account?.firstName || '').trim()} ${(account?.lastName || '').trim()}`.trim())
+        setPaymentCvc('')
+        setCardStripeVerifiedAtIso(null)
+        setBillingAutopay((prev) => ({ ...prev, paymentMethodValid: false }))
+        return
+      }
       if (parsed.cardNumber) setPaymentCardNumber(parsed.cardNumber)
       if (parsed.expiry) setPaymentExpiry(parsed.expiry)
       if (parsed.holder) setPaymentHolder(parsed.holder)
       if (parsed.cvc) setPaymentCvc(parsed.cvc)
+      setBillingAutopay((prev) => ({ ...prev, paymentMethodValid: stripeOk }))
+      setCardStripeVerifiedAtIso(stripeOk && parsed.stripeVerifiedAt ? String(parsed.stripeVerifiedAt).trim() : null)
     } catch {
       // ignore invalid local data
     }
   }, [])
 
+  const paymentDigits = useMemo(() => paymentCardNumber.replace(/\D/g, ''), [paymentCardNumber])
+  const paymentCvcDigits = useMemo(() => paymentCvc.replace(/\D/g, ''), [paymentCvc])
+
+  const { paymentCanSubmitLocal, paymentLocalIssues } = useMemo(() => {
+    const issues: string[] = []
+    const digits = paymentDigits
+    const exp = paymentExpiry.trim()
+    const cvc = paymentCvcDigits
+    const holder = paymentHolder.trim()
+
+    if (!digits.length) issues.push('Numéro de carte : saisissez 13 à 19 chiffres.')
+    else if (digits.length < 13) issues.push('Numéro incomplet : il manque des chiffres.')
+    else if (digits.length > 19) issues.push('Numéro trop long (maximum 19 chiffres).')
+    else if (!luhnCheck(digits)) issues.push('Numéro invalide : vérifiez les chiffres (clé de contrôle).')
+
+    if (!/^\d{2}\/\d{2}$/.test(exp)) issues.push("Date d'expiration au format MM/AA (ex. 06/28).")
+    else if (!expiryIsValid(exp)) issues.push("Carte expirée ou date d'expiration invalide.")
+
+    if (holder.length < 3) issues.push('Nom du titulaire : au moins 3 caractères.')
+
+    if (cvc.length !== 3) issues.push('Code de sécurité : exactement 3 chiffres.')
+
+    return { paymentCanSubmitLocal: issues.length === 0, paymentLocalIssues: issues }
+  }, [paymentDigits, paymentExpiry, paymentHolder, paymentCvcDigits])
+
+  useEffect(() => {
+    const digits = paymentCardNumber.replace(/\D/g, '')
+    const ok =
+      digits.length >= 13 &&
+      digits.length <= 19 &&
+      luhnCheck(digits) &&
+      expiryIsValid(paymentExpiry.trim()) &&
+      paymentHolder.trim().length >= 3 &&
+      paymentCvc.replace(/\D/g, '').length === 3
+    if (!ok) {
+      setBillingAutopay((p) => (p.paymentMethodValid ? { ...p, paymentMethodValid: false } : p))
+      setCardStripeVerifiedAtIso(null)
+      try {
+        const raw = localStorage.getItem(LS_PAYMENT_DETAILS)
+        if (!raw) return
+        const parsed = JSON.parse(raw) as { stripeVerifiedAt?: string; [k: string]: unknown }
+        if (parsed.stripeVerifiedAt) {
+          const { stripeVerifiedAt: _drop, ...rest } = parsed
+          localStorage.setItem(LS_PAYMENT_DETAILS, JSON.stringify(rest))
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [paymentCardNumber, paymentExpiry, paymentHolder, paymentCvc])
+
   useEffect(() => {
     const targetEmail = (email || account?.email || '').trim()
     if (!targetEmail) return
-    const dueAt = computeUpcomingBillingDue(planStartDateIso(), new Date())
+    const trialEnd = addDays(planStartDateIso(), 14)
+    const now = new Date()
+    if (now < trialEnd) return
+    if (!billingAutopay.paymentMethodValid) return
+    const dueAt = new Date(billingAutopay.nextDueIso)
+    if (!Number.isFinite(dueAt.getTime()) || now < dueAt) return
     const y = dueAt.getFullYear()
     const m = String(dueAt.getMonth() + 1).padStart(2, '0')
     const periodKey = `${y}-${m}`
-    const planLabel = (currentPlan || 'Starter').trim()
-    const amountByPlan: Record<string, number> = { starter: 19.99, pro: 59.99, scale: 99.99 }
-    const amountEur = amountByPlan[planLabel.toLowerCase()] ?? 19.99
+    const planLabel = normalizePlanLabel(currentPlan || 'Starter')
     const vatRateByCountry: Record<string, number> = {
       FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
       SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
@@ -293,6 +512,7 @@ export function ProfilePage() {
     const isVerifiedB2b = invoiceClientType === 'b2b' && account?.vatVerified === true
     const vatRate = isVerifiedB2b ? 0 : vatRateByCountry[normalizedCountry] ?? 20
     const taxMode = isVerifiedB2b ? 'reverse_charge' : 'vat_collected'
+    const amountEur = computePlanAmountByTaxMode(planLabel, taxMode, vatRateByCountry[normalizedCountry] ?? 20)
     const customerName =
       `${firstName.trim()} ${lastName.trim()}`.trim() || username.trim() || targetEmail.split('@')[0] || 'Client'
 
@@ -313,12 +533,15 @@ export function ProfilePage() {
         countryCode: normalizedCountry,
         vatRate,
         taxMode,
-        issuedAtIso: new Date().toISOString(),
+        issuedAtIso: now.toISOString(),
         dueAtIso: dueAt.toISOString(),
       }
       return [invoice, ...prev].slice(0, 24)
     })
-  }, [account?.email, account?.vatVerified, currentPlan, email, firstName, invoiceClientType, invoiceCountryCode, lastName, username])
+    const nextDue = computeUpcomingBillingDue(planStartDateIso(), new Date(dueAt.getTime() + 24 * 60 * 60 * 1000))
+    setBillingAutopay((prev) => ({ ...prev, nextDueIso: nextDue.toISOString(), lastNotifiedAttempt: 0 }))
+    readAndSyncBillingRecovery(null)
+  }, [account?.email, account?.vatVerified, billingAutopay.nextDueIso, billingAutopay.paymentMethodValid, currentPlan, email, firstName, invoiceClientType, invoiceCountryCode, lastName, username])
 
   function savePersonalInfo() {
     if (accountIndex < 0 || !personalFormValid) return
@@ -498,7 +721,7 @@ export function ProfilePage() {
       )
     } else {
       recommendationLines.push(
-        'Mercredi montre deja de la traction: maintenez un prix moderement competitif plutot qu une forte remise pour proteger le revenu moyen.',
+        'Mercredi montre déjà de la traction : maintenez un prix modérément compétitif plutôt qu’une forte remise pour protéger le revenu moyen.',
       )
     }
     const apartmentInsights = apartmentBreakdown.map(
@@ -770,96 +993,122 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (!planPolicy) return
+    const nextPlan = normalizePlanLabel(planPolicy.toPlan)
     const effectiveAt = new Date(planPolicy.effectiveAtIso)
+    if (!Number.isFinite(effectiveAt.getTime()) || !nextPlan) {
+      localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
+      setPlanPolicy(null)
+      return
+    }
     if (Date.now() < effectiveAt.getTime()) return
-    localStorage.setItem(LS_CURRENT_PLAN, planPolicy.toPlan)
+    localStorage.setItem(LS_CURRENT_PLAN, nextPlan)
     if (accountIndex >= 0) {
       const next = [...accounts]
-      next[accountIndex] = { ...next[accountIndex], plan: planPolicy.toPlan }
+      next[accountIndex] = { ...next[accountIndex], plan: nextPlan }
       saveStoredAccounts(next)
     }
     localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
-    setCurrentPlan(planPolicy.toPlan)
-    setPlanSelection(planPolicy.toPlan)
+    setCurrentPlan(nextPlan)
+    setPlanSelection(nextPlan)
     setPlanPolicy(null)
-    setSaveMsg(`Nouveau forfait actif: ${planPolicy.toPlan}.`)
+    setSaveMsg(`Nouveau forfait actif : ${nextPlan}.`)
   }, [accountIndex, accounts, planChangeAccountKey, planPolicy])
 
   function savePlanSelection() {
-    const nextPlan = planSelection.trim() || 'Starter'
-    if (nextPlan === currentPlan) {
-      setSaveMsg('Aucun changement detecte sur le forfait.')
+    const nextPlan = normalizePlanLabel(planSelection)
+    if (nextPlan === currentPlan && planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime()) {
+      localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
+      setPlanPolicy(null)
+      setSaveMsg('Demande de changement annulée. Vous conservez votre forfait actuel.')
       return
     }
-    if (planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime()) {
-      setSaveMsg(
-        `Un changement est deja programme (${planPolicy.fromPlan} -> ${planPolicy.toPlan}). Nouvelle modification possible apres le ${fmtLongDate(
-          planPolicy.effectiveAtIso,
-        )}.`,
-      )
+    if (nextPlan === currentPlan) {
+      setSaveMsg('Aucun changement détecté sur le forfait.')
       return
     }
     setPlanChangeConfirmOpen(true)
   }
 
   async function confirmPlanSelectionChange() {
-    const nextPlan = planSelection.trim() || 'Starter'
+    const nextPlan = normalizePlanLabel(planSelection)
     if (nextPlan === currentPlan) {
       setPlanChangeConfirmOpen(false)
       return
     }
-    if (planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime()) {
-      setPlanChangeConfirmOpen(false)
-      setSaveMsg(
-        `Un changement est deja programme (${planPolicy.fromPlan} -> ${planPolicy.toPlan}). Nouvelle modification possible apres le ${fmtLongDate(
-          planPolicy.effectiveAtIso,
-        )}.`,
-      )
-      return
-    }
     setPlanChangeLoading(true)
-    const oldPlan = currentPlan
-    const effectiveAtIso = computeUpcomingBillingDue(planStartDateIso(), new Date()).toISOString()
-    const policyPayload: PlanChangePolicyState = {
-      requestedAtIso: new Date().toISOString(),
-      effectiveAtIso,
-      fromPlan: oldPlan,
-      toPlan: nextPlan,
-    }
-    localStorage.setItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`, JSON.stringify(policyPayload))
-    setPlanPolicy(policyPayload)
-
-    const targetEmail = (email || account?.email || '').trim()
-    let mailSent = false
-    if (targetEmail) {
-      try {
-        const res = await fetch('/api/cancel-subscription-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'plan_change_confirmation',
-            to: targetEmail,
-            firstName: firstName.trim(),
-            locale: mailLocale,
-            oldPlan,
-            newPlan: nextPlan,
-            nextBillingIso: effectiveAtIso,
-          }),
-        })
-        mailSent = res.ok
-      } catch {
-        mailSent = false
+    try {
+      const oldPlan = currentPlan
+      const oldTier = getPlanTierFromValue(oldPlan)
+      const nextTier = getPlanTierFromValue(nextPlan)
+      const tierRank: Record<'starter' | 'pro' | 'scale', number> = { starter: 1, pro: 2, scale: 3 }
+      const isUpgrade = tierRank[nextTier] > tierRank[oldTier]
+      const effectiveAtIso = computeUpcomingBillingDue(planStartDateIso(), new Date()).toISOString()
+      if (isUpgrade) {
+        localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
+        setPlanPolicy(null)
+        localStorage.setItem(LS_CURRENT_PLAN, nextPlan)
+        if (accountIndex >= 0) {
+          const next = [...accounts]
+          next[accountIndex] = { ...next[accountIndex], plan: nextPlan }
+          saveStoredAccounts(next)
+        }
+        setCurrentPlan(nextPlan)
+        setPlanSelection(nextPlan)
+      } else {
+        const policyPayload: PlanChangePolicyState = {
+          requestedAtIso: new Date().toISOString(),
+          effectiveAtIso,
+          fromPlan: oldPlan,
+          toPlan: nextPlan,
+          changeKind: 'downgrade',
+        }
+        localStorage.setItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`, JSON.stringify(policyPayload))
+        setPlanPolicy(policyPayload)
       }
+
+      const targetEmail = (email || account?.email || '').trim()
+      let mailSent = false
+      if (targetEmail) {
+        try {
+          const res = await fetch('/api/cancel-subscription-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'plan_change_confirmation',
+              to: targetEmail,
+              firstName: firstName.trim(),
+              locale: mailLocale,
+              oldPlan,
+              newPlan: nextPlan,
+              nextBillingIso: effectiveAtIso,
+            }),
+          })
+          mailSent = res.ok
+        } catch {
+          mailSent = false
+        }
+      }
+      setSaveMsg(
+        isUpgrade
+          ? mailSent
+            ? `Upgrade appliqué immédiatement (${oldPlan} -> ${nextPlan}). E-mail de confirmation envoyé. Nouveau tarif facturé à partir du ${fmtLongDate(
+                effectiveAtIso,
+              )}.`
+            : `Upgrade appliqué immédiatement (${oldPlan} -> ${nextPlan}). Nouveau tarif facturé à partir du ${fmtLongDate(effectiveAtIso)}.`
+          : mailSent
+            ? `Downgrade programmé (${oldPlan} -> ${nextPlan}). Vous gardez vos accès actuels jusqu'au ${fmtLongDate(
+                effectiveAtIso,
+              )}. E-mail de confirmation envoyé.`
+            : `Downgrade programmé (${oldPlan} -> ${nextPlan}). Vous gardez vos accès actuels jusqu'au ${fmtLongDate(effectiveAtIso)}.`,
+      )
+      // Force session refresh to avoid stale UI state after plan switch.
+      window.dispatchEvent(new Event('staypilot-session-changed'))
+    } catch {
+      setSaveMsg("Erreur inattendue lors du changement de forfait. Réessayez s'il vous plaît.")
+    } finally {
+      setPlanChangeLoading(false)
+      setPlanChangeConfirmOpen(false)
     }
-    setPlanChangeLoading(false)
-    setPlanChangeConfirmOpen(false)
-    setSaveMsg(
-      mailSent
-        ? `Changement programme (${oldPlan} -> ${nextPlan}). Merci ! E-mail de confirmation envoye. Nouveau tarif applique le ${fmtLongDate(
-            effectiveAtIso,
-          )}.`
-        : `Changement programme (${oldPlan} -> ${nextPlan}). Nouveau tarif applique le ${fmtLongDate(effectiveAtIso)}.`,
-    )
   }
 
   function planStartDateIso() {
@@ -868,6 +1117,8 @@ export function ProfilePage() {
   }
 
   function computeEndDateForCancellation(startIso: string, now = new Date()) {
+    const trialEnd = addDays(startIso, 14)
+    if (now < trialEnd) return trialEnd
     const start = new Date(startIso)
     const startDay = start.getDate()
     const y = now.getFullYear()
@@ -898,6 +1149,14 @@ export function ProfilePage() {
   function fmtLongDate(iso: string) {
     try {
       return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
+    } catch {
+      return iso
+    }
+  }
+
+  function fmtDateTimeFr(iso: string) {
+    try {
+      return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(iso))
     } catch {
       return iso
     }
@@ -965,8 +1224,8 @@ export function ProfilePage() {
       }))
       setSaveMsg(
         suspended
-          ? '3e echec de prelevement detecte. Compte suspendu tant que les coordonnees bancaires ne sont pas mises a jour.'
-          : `Prelevement echoue (${expectedAttempts}/3). Une alerte client a ete envoyee.`,
+          ? '3e échec de prélèvement détecté. Compte suspendu tant que les coordonnées bancaires ne sont pas mises à jour.'
+          : `Prélèvement échoué (${expectedAttempts}/3). Une alerte client a été envoyée.`,
       )
     }
   }
@@ -1004,6 +1263,10 @@ export function ProfilePage() {
   }, [account?.email, digest, digestEmailsEnabled, email, firstName, notifications])
 
   async function confirmCancelBilling() {
+    if (planPolicy) {
+      localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
+      setPlanPolicy(null)
+    }
     const endDate = computeEndDateForCancellation(planStartDateIso())
     const endAtIso = endDate.toISOString()
     const targetEmail = (email || account?.email || '').trim() || ''
@@ -1034,9 +1297,21 @@ export function ProfilePage() {
     setShowCancelFunnel(false)
     setCancelStep(1)
     setSaveMsg(
-      mailSent
-        ? `Résiliation confirmée. Un e-mail de confirmation a été envoyé depuis support@staypilot.fr à ${targetEmail}. Votre abonnement prendra fin le ${fmtLongDate(endAtIso)}.`
-        : `Résiliation confirmée. Envoi e-mail impossible pour le moment (configuration SMTP manquante). Votre abonnement prendra fin le ${fmtLongDate(endAtIso)}.`,
+      new Date() < addDays(planStartDateIso(), 14)
+        ? mailSent
+          ? `Résiliation confirmée pendant l'essai gratuit. Aucun débit ne sera effectué. Votre abonnement prendra fin le ${fmtLongDate(
+              endAtIso,
+            )}.`
+          : `Résiliation confirmée pendant l'essai gratuit. Aucun débit ne sera effectué. Votre abonnement prendra fin le ${fmtLongDate(
+              endAtIso,
+            )}.`
+        : mailSent
+          ? `Résiliation confirmée. Un e-mail de confirmation a été envoyé depuis support@staypilot.fr à ${targetEmail}. Votre abonnement prendra fin le ${fmtLongDate(
+              endAtIso,
+            )}.`
+          : `Résiliation confirmée. Envoi e-mail impossible pour le moment (configuration SMTP manquante). Votre abonnement prendra fin le ${fmtLongDate(
+              endAtIso,
+            )}.`,
     )
     setCancelLoading(false)
   }
@@ -1084,7 +1359,7 @@ export function ProfilePage() {
     doc.setFont('helvetica', 'normal')
     doc.text(`Description: Abonnement StayPilot - ${invoice.planLabel}`, 14, 90)
     doc.text(`Date emission: ${issueLabel}`, 14, 96)
-    doc.text(`Date echeance: ${dueLabel}`, 14, 102)
+    doc.text(`Date échéance: ${dueLabel}`, 14, 102)
     doc.text(`Montant HT: ${amountHtLabel}`, 14, 108)
     doc.text(`TVA (${invoice.vatRate}%): ${vatLabel}`, 14, 114)
     doc.text(`Montant TTC: ${amountTtcLabel}`, 14, 120)
@@ -1099,7 +1374,7 @@ export function ProfilePage() {
 
     doc.setFontSize(10)
     doc.text(
-      "Paiement: le changement de forfait n'est pas debite immediatement. Le nouveau tarif s'applique a la prochaine echeance.",
+      "Paiement : le changement de forfait n'est pas débité immédiatement. Le nouveau tarif s'applique à la prochaine échéance.",
       14,
       140,
     )
@@ -1111,34 +1386,84 @@ export function ProfilePage() {
     doc.save(out)
   }
 
-  function savePaymentDetails() {
-    const digits = paymentCardNumber.replace(/\D/g, '')
-    if (digits.length < 13 || digits.length > 19) {
-      setSaveMsg('Veuillez saisir un numero de carte valide.')
+  async function savePaymentDetails() {
+    if (paymentSaveLoading) return
+    if (!paymentCanSubmitLocal) {
+      setSaveMsg('Complétez correctement tous les champs avant la vérification Stripe.')
       return
     }
-    const cvcDigits = paymentCvc.replace(/\D/g, '')
-    if (cvcDigits.length !== 3) {
-      setSaveMsg('Veuillez saisir un code de securite a 3 chiffres.')
-      return
+    setPaymentSaveLoading(true)
+    try {
+      const digits = paymentCardNumber.replace(/\D/g, '')
+      if (digits.length < 13 || digits.length > 19) {
+        setSaveMsg('Veuillez saisir un numero de carte valide.')
+        return
+      }
+      if (!luhnCheck(digits)) {
+        setSaveMsg('Numero de carte invalide. Verifiez les chiffres saisis.')
+        return
+      }
+      const cvcDigits = paymentCvc.replace(/\D/g, '')
+      if (cvcDigits.length !== 3) {
+        setSaveMsg('Veuillez saisir un code de securite a 3 chiffres.')
+        return
+      }
+      if (!expiryIsValid(paymentExpiry.trim()) || !paymentHolder.trim()) {
+        setSaveMsg('Veuillez completer les coordonnees bancaires (carte + titulaire + expiration + code securite).')
+        return
+      }
+      if (paymentHolder.trim().length < 3) {
+        setSaveMsg('Nom du titulaire invalide.')
+        return
+      }
+      try {
+        const verifyRes = await fetch('/api/verify-card', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            number: digits,
+            expiry: paymentExpiry.trim(),
+            cvc: cvcDigits,
+          }),
+        })
+        if (!verifyRes.ok) {
+          let errorCode = 'card_verification_failed'
+          try {
+            const payload = (await verifyRes.json()) as { error?: string }
+            if (payload?.error) errorCode = payload.error
+          } catch {
+            errorCode = 'card_verification_failed'
+          }
+          setSaveMsg(`Carte refusée par Stripe (${errorCode}). Utilisez une carte valide.`)
+          return
+        }
+      } catch {
+        setSaveMsg('Vérification bancaire indisponible pour le moment. Réessayez.')
+        return
+      }
+      const normalizedNumber = digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+      const verifiedAt = new Date().toISOString()
+      localStorage.setItem(
+        LS_PAYMENT_DETAILS,
+        JSON.stringify({
+          cardNumber: normalizedNumber,
+          expiry: paymentExpiry.trim(),
+          holder: paymentHolder.trim(),
+          stripeVerifiedAt: verifiedAt,
+        }),
+      )
+      setPaymentCardNumber(normalizedNumber)
+      setPaymentExpiry(formatExpiryInput(paymentExpiry))
+      setPaymentCvc(cvcDigits)
+      setCardStripeVerifiedAtIso(verifiedAt)
+      setBillingAutopay((prev) => ({ ...prev, paymentMethodValid: true }))
+      readAndSyncBillingRecovery(null)
+      setSaveMsg(
+        `Carte validée par Stripe le ${fmtDateTimeFr(verifiedAt)}. Elle sera utilisée pour les prochains prélèvements.`,
+      )
+    } finally {
+      setPaymentSaveLoading(false)
     }
-    if (!paymentExpiry.trim() || !paymentHolder.trim()) {
-      setSaveMsg('Veuillez completer les coordonnees bancaires (carte + titulaire + expiration + code securite).')
-      return
-    }
-    const normalizedNumber = digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
-    localStorage.setItem(
-      LS_PAYMENT_DETAILS,
-      JSON.stringify({
-        cardNumber: normalizedNumber,
-        expiry: paymentExpiry.trim(),
-        holder: paymentHolder.trim(),
-        cvc: cvcDigits,
-      }),
-    )
-    setPaymentCardNumber(normalizedNumber)
-    setPaymentCvc(cvcDigits)
-    setSaveMsg('Coordonnees bancaires mises a jour.')
   }
 
   function otpStorageKeyForEmail(targetEmail: string) {
@@ -1184,8 +1509,43 @@ export function ProfilePage() {
       setSaveMsg("Adresse e-mail manquante pour envoyer le code.")
       return
     }
+    if (!account?.username?.trim()) {
+      setSaveMsg('Compte incomplet (identifiant manquant).')
+      return
+    }
     if (flow === 'change') setPasswordOtpSending(true)
     else setForgotOtpSending(true)
+    try {
+      const st = await fetch('/api/auth-status', { method: 'GET' }).then((r) => r.json().catch(() => ({})))
+      if (st.remoteAuth) {
+        const res = await fetch('/api/auth-password-otp-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: account.username.trim() }),
+        })
+        if (res.status === 404) {
+          setSaveMsg('Compte introuvable.')
+          return
+        }
+        if (!res.ok) {
+          setSaveMsg("Impossible d'envoyer le code pour le moment.")
+          return
+        }
+        if (flow === 'change') {
+          setPasswordOtpRequested(true)
+          setPasswordOtpInput('')
+          setPasswordOtpValidated(false)
+        } else {
+          setForgotOtpRequested(true)
+          setForgotOtpInput('')
+          setForgotOtpValidated(false)
+        }
+        setSaveMsg(`Code de vérification envoyé à ${targetEmail}.`)
+        return
+      }
+    } catch {
+      /* local fallback */
+    }
     const code = createSixDigitCode()
     try {
       const res = await fetch('/api/cancel-subscription-email', {
@@ -1213,7 +1573,7 @@ export function ProfilePage() {
         setForgotOtpInput('')
         setForgotOtpValidated(false)
       }
-      setSaveMsg(`Code de verification envoye a ${targetEmail}.`)
+      setSaveMsg(`Code de vérification envoyé à ${targetEmail}.`)
     } catch {
       setSaveMsg("Impossible d'envoyer le code pour le moment.")
     } finally {
@@ -1245,12 +1605,76 @@ export function ProfilePage() {
     }
     const targetEmail = (email || account.email || '').trim()
     if (!passwordOtpRequested || !passwordOtpValidated) {
-      setSaveMsg('Veuillez demander un code de verification a 6 chiffres.')
+      setSaveMsg('Veuillez demander un code de vérification à 6 chiffres.')
       return
     }
     if (!/^\d{6}$/.test(passwordOtpInput.trim())) {
-      setSaveMsg('Veuillez saisir un code de verification a 6 chiffres.')
+      setSaveMsg('Veuillez saisir un code de vérification à 6 chiffres.')
       return
+    }
+    try {
+      const st = await fetch('/api/auth-status', { method: 'GET' }).then((r) => r.json().catch(() => ({})))
+      if (st.remoteAuth) {
+        setPasswordLoading(true)
+        let res: Response
+        try {
+          res = await fetch('/api/auth-update-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: account.username.trim(),
+              oldPassword: currentPasswordInput,
+              newPassword: newPasswordInput,
+            }),
+          })
+        } catch {
+          setPasswordLoading(false)
+          setSaveMsg('Mise à jour impossible pour le moment.')
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setPasswordLoading(false)
+          if (res.status === 401) setSaveMsg('Mot de passe actuel incorrect.')
+          else setSaveMsg('Mise à jour impossible pour le moment.')
+          return
+        }
+        if (Array.isArray(data.accounts)) saveStoredAccounts(data.accounts as StoredAccount[])
+        let mailSent = false
+        if (targetEmail) {
+          try {
+            const mailRes = await fetch('/api/cancel-subscription-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'password_changed_confirmation',
+                to: targetEmail,
+                firstName: firstName.trim(),
+                locale: mailLocale,
+                changedAtIso: new Date().toISOString(),
+              }),
+            })
+            mailSent = mailRes.ok
+          } catch {
+            mailSent = false
+          }
+        }
+        setCurrentPasswordInput('')
+        setNewPasswordInput('')
+        setConfirmPasswordInput('')
+        setPasswordOtpInput('')
+        setPasswordOtpRequested(false)
+        setPasswordOtpValidated(false)
+        setPasswordLoading(false)
+        setSaveMsg(
+          mailSent
+            ? `Mot de passe mis à jour. E-mail de confirmation envoyé à ${targetEmail}.`
+            : 'Mot de passe mis a jour. Envoi e-mail non disponible pour le moment.',
+        )
+        return
+      }
+    } catch {
+      /* local fallback */
     }
     if (!verifyOtpForEmail(targetEmail, passwordOtpInput)) {
       setSaveMsg('Code invalide ou expire. Demandez un nouveau code.')
@@ -1288,7 +1712,7 @@ export function ProfilePage() {
     setPasswordLoading(false)
     setSaveMsg(
       mailSent
-        ? `Mot de passe mis a jour. E-mail de confirmation envoye a ${targetEmail}.`
+        ? `Mot de passe mis à jour. E-mail de confirmation envoyé à ${targetEmail}.`
         : 'Mot de passe mis a jour. Envoi e-mail non disponible pour le moment.',
     )
   }
@@ -1312,12 +1736,78 @@ export function ProfilePage() {
     }
     const targetEmail = (email || account.email || '').trim()
     if (!forgotOtpRequested || !forgotOtpValidated) {
-      setSaveMsg('Veuillez demander un code de verification a 6 chiffres.')
+      setSaveMsg('Veuillez demander un code de vérification à 6 chiffres.')
       return
     }
     if (!/^\d{6}$/.test(forgotOtpInput.trim())) {
-      setSaveMsg('Veuillez saisir un code de verification a 6 chiffres.')
+      setSaveMsg('Veuillez saisir un code de vérification à 6 chiffres.')
       return
+    }
+    try {
+      const st = await fetch('/api/auth-status', { method: 'GET' }).then((r) => r.json().catch(() => ({})))
+      if (st.remoteAuth) {
+        setForgotPasswordLoading(true)
+        let res: Response
+        try {
+          res = await fetch('/api/auth-forgot-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              identifier: account.username.trim(),
+              code: forgotOtpInput.trim(),
+              newPassword: forgotNewPasswordInput,
+            }),
+          })
+        } catch {
+          setForgotPasswordLoading(false)
+          setSaveMsg('Reinitialisation impossible pour le moment.')
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        setForgotPasswordLoading(false)
+        if (!res.ok) {
+          setSaveMsg(
+            data?.error === 'invalid_code' || data?.error === 'otp_expired'
+              ? 'Code invalide ou expire. Demandez un nouveau code.'
+              : 'Reinitialisation impossible pour le moment.',
+          )
+          return
+        }
+        if (Array.isArray(data.accounts)) saveStoredAccounts(data.accounts as StoredAccount[])
+        let mailSent = false
+        if (targetEmail) {
+          try {
+            const mailRes = await fetch('/api/cancel-subscription-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'password_reset_confirmation',
+                to: targetEmail,
+                firstName: firstName.trim(),
+                locale: mailLocale,
+                resetAtIso: new Date().toISOString(),
+              }),
+            })
+            mailSent = mailRes.ok
+          } catch {
+            mailSent = false
+          }
+        }
+        setForgotNewPasswordInput('')
+        setForgotConfirmPasswordInput('')
+        setForgotOtpInput('')
+        setForgotOtpRequested(false)
+        setForgotOtpValidated(false)
+        setForgotPasswordOpen(false)
+        setSaveMsg(
+          mailSent
+            ? `Mot de passe réinitialisé. E-mail de confirmation envoyé à ${targetEmail}.`
+            : 'Mot de passe réinitialisé. Envoi e-mail non disponible pour le moment.',
+        )
+        return
+      }
+    } catch {
+      /* local fallback */
     }
     if (!verifyOtpForEmail(targetEmail, forgotOtpInput)) {
       setSaveMsg('Code invalide ou expire. Demandez un nouveau code.')
@@ -1357,21 +1847,45 @@ export function ProfilePage() {
     setForgotPasswordLoading(false)
     setSaveMsg(
       mailSent
-        ? `Mot de passe reinitialise. E-mail de confirmation envoye a ${targetEmail}.`
-        : 'Mot de passe reinitialise. Envoi e-mail non disponible pour le moment.',
+        ? `Mot de passe réinitialisé. E-mail de confirmation envoyé à ${targetEmail}.`
+        : 'Mot de passe réinitialisé. Envoi e-mail non disponible pour le moment.',
     )
   }
 
-  function validatePasswordOtp(flow: 'change' | 'forgot') {
+  async function validatePasswordOtp(flow: 'change' | 'forgot') {
     const targetEmail = (email || account?.email || '').trim()
     if (!targetEmail) {
-      setSaveMsg("Adresse e-mail manquante pour verifier le code.")
+      setSaveMsg("Adresse e-mail manquante pour vérifier le code.")
+      return
+    }
+    if (!account?.username?.trim()) {
+      setSaveMsg('Compte incomplet (identifiant manquant).')
       return
     }
     const input = flow === 'change' ? passwordOtpInput : forgotOtpInput
     if (!/^\d{6}$/.test(input.trim())) {
-      setSaveMsg('Veuillez saisir un code de verification a 6 chiffres.')
+      setSaveMsg('Veuillez saisir un code de vérification à 6 chiffres.')
       return
+    }
+    try {
+      const st = await fetch('/api/auth-status', { method: 'GET' }).then((r) => r.json().catch(() => ({})))
+      if (st.remoteAuth) {
+        const res = await fetch('/api/auth-verify-password-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: account.username.trim(), code: input.trim() }),
+        })
+        if (!res.ok) {
+          setSaveMsg('Code invalide ou expire. Demandez un nouveau code.')
+          return
+        }
+        if (flow === 'change') setPasswordOtpValidated(true)
+        else setForgotOtpValidated(true)
+        setSaveMsg('Code valide. Vous pouvez maintenant modifier le mot de passe.')
+        return
+      }
+    } catch {
+      /* local fallback */
     }
     if (!verifyOtpForEmail(targetEmail, input)) {
       setSaveMsg('Code invalide ou expire. Demandez un nouveau code.')
@@ -1381,6 +1895,10 @@ export function ProfilePage() {
     else setForgotOtpValidated(true)
     setSaveMsg('Code valide. Vous pouvez maintenant modifier le mot de passe.')
   }
+
+  const trialEndDate = addDays(planStartDateIso(), 14)
+  const isTrialActive = new Date() < trialEndDate
+  const latestInvoice = clientInvoices[0]
 
   if (!loggedIn) {
     return (
@@ -1430,6 +1948,20 @@ export function ProfilePage() {
             <TabButton label="Sécurité" active={activeTab === 'security'} onClick={() => setActiveTab('security')} />
           </div>
 
+          {saveMsg ? (
+            <div
+              className={`mt-4 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                profileSaveMessageLooksLikeError(saveMsg)
+                  ? 'border-rose-200 bg-rose-50 text-rose-800'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {saveMsg}
+            </div>
+          ) : null}
+
           {activeTab === 'personal' ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <InputField label="Prénom" value={firstName} onChange={setFirstName} />
@@ -1456,6 +1988,19 @@ export function ProfilePage() {
 
           {activeTab === 'plan' ? (
             <div className="mt-5 space-y-4">
+              {billingCancellation ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                  <p className="font-semibold">Résiliation déjà programmée</p>
+                  <p className="mt-1">
+                    Votre abonnement est en cours de résiliation et prendra fin le{' '}
+                    <strong>{fmtLongDate(billingCancellation.endAtIso)}</strong>.
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Le changement de forfait est désactivé tant que la résiliation est active, pour éviter des états
+                    contradictoires.
+                  </p>
+                </div>
+              ) : null}
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Plan actif</p>
                 <p className="mt-1 text-lg font-bold text-sky-900">{currentPlan}</p>
@@ -1463,12 +2008,12 @@ export function ProfilePage() {
               <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
                 <p className="text-sm font-semibold text-zinc-900">Modifier mon plan</p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Validation obligatoire avant changement. Anti-abus actif: des qu un changement est programme, il est
-                  verrouille jusqu a la prochaine echeance de facturation.
+                  Validation obligatoire avant changement. Si un changement est déjà programmé, vous pouvez le modifier
+                  ou l'annuler à tout moment avant la prochaine échéance.
                 </p>
                 <p className="mt-1 text-xs font-medium text-zinc-600">
-                  En cas de changement aujourd hui, vous gardez votre tarif actuel jusqu a la prochaine echeance. Le
-                  nouveau montant est debite uniquement le mois prochain.
+                  En cas de changement aujourd’hui, vous gardez votre tarif actuel jusqu’à la prochaine échéance. Le
+                  nouveau montant est débité uniquement le mois prochain.
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <select
@@ -1483,24 +2028,28 @@ export function ProfilePage() {
                   <button
                     type="button"
                     onClick={savePlanSelection}
-                    disabled={Boolean(planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime())}
-                    className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-55"
+                    disabled={Boolean(billingCancellation)}
+                    className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
                   >
-                    {planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime()
-                      ? 'Changement deja programme'
-                      : 'Valider le changement'}
+                    Valider le changement
                   </button>
                 </div>
               </div>
               {planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime() ? (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                  <p className="font-semibold">Changement deja programme</p>
+                  <p className="font-semibold">Changement déjà programmé</p>
                   <p className="mt-1">
-                    {planPolicy.fromPlan} vers {planPolicy.toPlan} (prise d effet le{' '}
+                    {planPolicy.fromPlan} vers {planPolicy.toPlan} (prise d’effet le{' '}
                     <strong>{fmtLongDate(planPolicy.effectiveAtIso)}</strong>).
                   </p>
+                  {planPolicy.changeKind === 'downgrade' ? (
+                    <p className="mt-1 text-xs">
+                      Les accès du forfait actuel restent actifs jusqu'à cette date, puis les accès seront alignés sur le
+                      forfait inférieur.
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-xs">
-                    Modification supplementaire bloquee jusqu a cette date pour eviter les changements opportunistes.
+                    Vous pouvez encore modifier cette demande ou revenir au forfait actuel avant cette date.
                   </p>
                 </div>
               ) : null}
@@ -1508,17 +2057,30 @@ export function ProfilePage() {
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                   <p className="font-semibold">Validation finale du changement de forfait</p>
                   <p className="mt-1">
-                    Vous passez de <strong>{currentPlan}</strong> a <strong>{planSelection}</strong>. Le nouveau montant
-                    sera debite uniquement a la prochaine echeance mensuelle.
+                    Vous passez de <strong>{currentPlan}</strong> à <strong>{planSelection}</strong>. Le nouveau montant
+                    sera débité uniquement à la prochaine échéance mensuelle.
                   </p>
+                  {(() => {
+                    const currentTier = getPlanTierFromValue(currentPlan)
+                    const targetTier = getPlanTierFromValue(planSelection)
+                    const rank: Record<'starter' | 'pro' | 'scale', number> = { starter: 1, pro: 2, scale: 3 }
+                    const upgrading = rank[targetTier] > rank[currentTier]
+                    return (
+                      <p className="mt-1 text-xs">
+                        {upgrading
+                          ? "Accès au forfait supérieur activés immédiatement. La facturation du nouveau montant démarre à la prochaine échéance."
+                          : "En cas de downgrade, vous gardez les accès actuels jusqu'à la prochaine échéance puis les accès passent au forfait inférieur."}
+                      </p>
+                    )
+                  })()}
                   <p className="mt-1 text-xs">
-                    Une fois confirme, ce changement est verrouille jusqu a la prochaine echeance de facturation.
+                    Une fois confirmé, ce changement est verrouillé jusqu’à la prochaine échéance de facturation.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={confirmPlanSelectionChange}
-                      disabled={planChangeLoading}
+                      disabled={planChangeLoading || Boolean(billingCancellation)}
                       className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {planChangeLoading ? 'Validation...' : 'Confirmer le changement'}
@@ -1540,8 +2102,8 @@ export function ProfilePage() {
                   <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50 to-white p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Plan 1</p>
                     <p className="mt-1 text-lg font-bold text-zinc-900">{pricing.starterName}</p>
-                    <p className="mt-1 text-2xl font-bold text-sky-800">{(19.99 / 1.2).toFixed(2)}€ HT</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">19.99€ TTC / mois</p>
+                    <p className="mt-1 text-2xl font-bold text-sky-800">{formatEuroForLocale(pricingLocale, starterHt)} HT</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">{formatEuroForLocale(pricingLocale, starterTtc)} TTC / mois</p>
                     <p className="mt-1 text-xs text-zinc-500">{pricing.starterRange}</p>
                     <ul className="mt-3 space-y-1.5 text-xs text-zinc-700">
                       {pricing.starterFeatures.map((feature, index) => (
@@ -1556,8 +2118,8 @@ export function ProfilePage() {
                     </span>
                     <p className="text-xs font-semibold uppercase tracking-wide text-blue-100">Plan 2</p>
                     <p className="mt-1 text-lg font-bold">{pricing.proName}</p>
-                    <p className="mt-1 text-2xl font-bold">{(59.99 / 1.2).toFixed(2)}€ HT</p>
-                    <p className="mt-0.5 text-xs text-blue-100">59.99€ TTC / mois</p>
+                    <p className="mt-1 text-2xl font-bold">{formatEuroForLocale(pricingLocale, proHt)} HT</p>
+                    <p className="mt-0.5 text-xs text-blue-100">{formatEuroForLocale(pricingLocale, proTtc)} TTC / mois</p>
                     <p className="mt-1 text-xs text-blue-100">{pricing.proRange}</p>
                     <ul className="mt-3 space-y-1.5 text-xs text-white/95">
                       {pricing.proFeatures.map((feature, index) => (
@@ -1569,8 +2131,8 @@ export function ProfilePage() {
                   <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50 to-white p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Plan 3</p>
                     <p className="mt-1 text-lg font-bold text-zinc-900">{pricing.scaleName}</p>
-                    <p className="mt-1 text-2xl font-bold text-violet-800">{(99.99 / 1.2).toFixed(2)}€ HT</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">99.99€ TTC / mois</p>
+                    <p className="mt-1 text-2xl font-bold text-violet-800">{formatEuroForLocale(pricingLocale, scaleHt)} HT</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">{formatEuroForLocale(pricingLocale, scaleTtc)} TTC / mois</p>
                     <p className="mt-1 text-xs text-zinc-500">{pricing.scaleRange}</p>
                     <ul className="mt-3 space-y-1.5 text-xs text-zinc-700">
                       {pricing.scaleFeatures.map((feature, index) => (
@@ -1634,7 +2196,7 @@ export function ProfilePage() {
                 }}
                 className="inline-flex rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
               >
-                Annuler le paiement
+                Annuler mon abonnement
               </button>
 
               {showCancelFunnel ? (
@@ -1676,6 +2238,11 @@ export function ProfilePage() {
                         Votre abonnement prendra fin le{' '}
                         <strong>{fmtLongDate(computeEndDateForCancellation(planStartDateIso()).toISOString())}</strong>.
                       </p>
+                      {new Date() < addDays(planStartDateIso(), 14) ? (
+                        <p className="text-sm text-zinc-700">
+                          Résiliation pendant essai gratuit : <strong>aucun débit ne sera effectué</strong>.
+                        </p>
+                      ) : null}
                       <p className="text-sm text-zinc-700">
                         Règle appliquée automatiquement aujourd hui : abonnement demarre le{' '}
                         <strong>{fmtLongDate(planStartDateIso())}</strong>, demande faite le{' '}
@@ -1729,85 +2296,168 @@ export function ProfilePage() {
           {activeTab === 'billing' ? (
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                <p className="text-sm font-semibold text-zinc-900">Dernière facture</p>
-                <p className="mt-1 text-sm text-zinc-700">
-                  Plan {activePlan} — 49 EUR — Émise le 01/{new Date().getMonth() + 1}/{new Date().getFullYear()}
-                </p>
+                <p className="text-sm font-semibold text-zinc-900">Statut de facturation</p>
+                {isTrialActive ? (
+                  <p className="mt-1 text-sm text-zinc-700">
+                    Essai gratuit actif jusqu&apos;au <strong>{fmtLongDate(trialEndDate.toISOString())}</strong>. Aucune
+                    facture disponible avant le premier paiement.
+                  </p>
+                ) : latestInvoice ? (
+                  <p className="mt-1 text-sm text-zinc-700">
+                    Dernière facture: plan <strong>{latestInvoice.planLabel}</strong> —{' '}
+                    <strong>{latestInvoice.amountEur.toFixed(2)} EUR</strong> — émise le{' '}
+                    <strong>{fmtLongDate(latestInvoice.issuedAtIso)}</strong>.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-zinc-700">
+                    Aucun paiement validé pour le moment. Les factures apparaîtront automatiquement après paiement.
+                  </p>
+                )}
               </div>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                 <p className="text-sm font-semibold text-zinc-900">Mode de paiement</p>
-                <p className="mt-1 text-sm text-zinc-700">Carte enregistree : {paymentCardNumber}</p>
-                <p className="mt-1 text-xs text-zinc-500">Prochaine échéance automatique : {fmtLongDate(billingAutopay.nextDueIso)}</p>
-                <p className="mt-1 text-xs font-medium text-zinc-600">
-                  Prochaine echeance possible : {fmtLongDate(billingAutopay.nextDueIso)}
+                {billingAutopay.paymentMethodValid ? (
+                  <div className="mt-1 space-y-1">
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-emerald-800">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+                      </span>
+                      Carte acceptée par Stripe
+                    </p>
+                    <p className="text-sm text-zinc-700">
+                      <span className="font-mono tabular-nums">{maskCardNumberDisplay(paymentCardNumber)}</span>
+                      {' — expiration '}
+                      <strong>{paymentExpiry}</strong>
+                    </p>
+                    {cardStripeVerifiedAtIso ? (
+                      <p className="text-xs text-zinc-600">
+                        Confirmation enregistrée le <strong>{fmtDateTimeFr(cardStripeVerifiedAtIso)}</strong>.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-amber-900">
+                    Aucune carte vérifiée par Stripe pour le moment. Complétez le formulaire (numéro complet, date
+                    valide, CVC), puis cliquez sur <strong>Enregistrer</strong>. Si la carte est acceptée, une pastille
+                    verte « Carte acceptée par Stripe » apparaît ici avec la date et l&apos;heure de confirmation.
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-zinc-500">
+                  Prochaine échéance automatique : {fmtLongDate(billingAutopay.nextDueIso)}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Fiscalite: B2B = autoliquidation sur facture. B2C = TVA adaptee selon le pays client.
+                  Fiscalité : B2B = autoliquidation sur facture. B2C = TVA adaptée selon le pays client.
                 </p>
               </div>
               <div className="rounded-xl border border-zinc-200 bg-white px-4 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-zinc-900">Coordonnees bancaires</p>
+                  <p className="text-sm font-semibold text-zinc-900">Coordonnées bancaires</p>
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                    Espace securise
+                    Espace sécurisé
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Mettez a jour votre moyen de paiement pour eviter les echecs de prelevement et les interruptions de
+                  Mettez à jour votre moyen de paiement pour éviter les échecs de prélèvement et les interruptions de
                   service.
                 </p>
                 <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-                  Moyen actuel : carte <strong>{paymentCardNumber}</strong> - expiration{' '}
-                  <strong>{paymentExpiry}</strong>
+                  {billingAutopay.paymentMethodValid ? (
+                    <p>
+                      Moyen enregistré (vérifié Stripe) : carte{' '}
+                      <strong className="font-mono tabular-nums">{maskCardNumberDisplay(paymentCardNumber)}</strong> —
+                      expiration <strong>{paymentExpiry}</strong>
+                      {cardStripeVerifiedAtIso ? (
+                        <>
+                          {' '}
+                          — validée le <strong>{fmtDateTimeFr(cardStripeVerifiedAtIso)}</strong>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : (
+                    <p>
+                      Aucun moyen de paiement enregistré pour le moment : ce qui est saisi dans le formulaire
+                      n&apos;est <strong>pas</strong> considéré comme actif tant que l&apos;enregistrement Stripe n&apos;a
+                      pas réussi (une fausse carte ou un refus Stripe ne crée donc pas de « moyen actuel »).
+                    </p>
+                  )}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <InputField
-                    label="Numero de carte"
+                    label="Numéro de carte"
                     value={paymentCardNumber}
-                    onChange={setPaymentCardNumber}
+                    onChange={(v) => setPaymentCardNumber(formatCardNumberInput(v))}
                     onFocus={() => {
                       if (paymentCardNumber.trim()) setPaymentCardNumber('')
                     }}
+                    autoComplete="cc-number"
+                    inputMode="numeric"
                     inputClassName="text-transparent [text-shadow:0_0_0_#9ca3af] focus:text-zinc-900 focus:[text-shadow:none]"
                   />
                   <InputField
-                    label="Date d expiration (MM/AA)"
+                    label="Date d'expiration (MM/AA)"
                     value={paymentExpiry}
-                    onChange={setPaymentExpiry}
+                    onChange={(v) => setPaymentExpiry(formatExpiryInput(v))}
                     onFocus={() => {
                       if (paymentExpiry.trim()) setPaymentExpiry('')
                     }}
+                    autoComplete="cc-exp"
+                    inputMode="numeric"
                     inputClassName="text-transparent [text-shadow:0_0_0_#9ca3af] focus:text-zinc-900 focus:[text-shadow:none]"
                   />
-                  <InputField label="Nom du titulaire" value={paymentHolder} onChange={setPaymentHolder} />
                   <InputField
-                    label="Code de securite (CVC 3 chiffres)"
+                    label="Nom du titulaire"
+                    value={paymentHolder}
+                    onChange={setPaymentHolder}
+                    autoComplete="cc-name"
+                  />
+                  <InputField
+                    label="Code de sécurité (CVC, 3 chiffres)"
                     value={paymentCvc}
-                    onChange={setPaymentCvc}
+                    onChange={(v) => setPaymentCvc(formatCvcInput(v))}
                     onFocus={() => {
                       if (paymentCvc.trim()) setPaymentCvc('')
                     }}
+                    autoComplete="cc-csc"
+                    inputMode="numeric"
                     inputClassName="text-transparent [text-shadow:0_0_0_#9ca3af] focus:text-zinc-900 focus:[text-shadow:none]"
                   />
                 </div>
+                {paymentLocalIssues.length > 0 ? (
+                  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                    <p className="font-semibold">À corriger avant enregistrement</p>
+                    <ul className="mt-1 list-inside list-disc space-y-0.5">
+                      {paymentLocalIssues.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-zinc-500">
+                    Vérification locale (format, date, CVC), puis validation Stripe au clic sur Enregistrer.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={savePaymentDetails}
-                    className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                    disabled={paymentSaveLoading || !paymentCanSubmitLocal}
+                    title={!paymentCanSubmitLocal ? 'Remplissez tous les champs correctement pour activer la vérification Stripe.' : undefined}
+                    onClick={() => {
+                      void savePaymentDetails()
+                    }}
+                    className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Enregistrer les nouvelles coordonnees
+                    {paymentSaveLoading ? 'Vérification Stripe en cours…' : 'Enregistrer les nouvelles coordonnées'}
                   </button>
                   <p className="text-xs text-zinc-500">
-                    Le nouveau moyen de paiement sera utilise a la prochaine echeance.
+                    Le nouveau moyen de paiement sera utilisé à la prochaine échéance.
                   </p>
                 </div>
               </div>
               <div className="rounded-xl border border-zinc-200 bg-white px-4 py-4">
                 <p className="text-sm font-semibold text-zinc-900">Facturation clients automatique</p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Les factures se creent automatiquement selon l offre active du client. Le client ne cree rien
-                  manuellement.
+                  Les factures sont générées automatiquement uniquement après paiement réussi. Aucune facture n&apos;est
+                  disponible pendant les 14 jours d&apos;essai gratuit.
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-zinc-700">
@@ -1838,7 +2488,7 @@ export function ProfilePage() {
                       {clientInvoices.slice(0, 5).map((inv) => (
                         <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5">
                           <p>
-                            {inv.clientName} - {inv.planLabel} - {inv.amountEur.toFixed(2)} EUR - echeance{' '}
+                            {inv.clientName} - {inv.planLabel} - {inv.amountEur.toFixed(2)} EUR - échéance{' '}
                             {fmtLongDate(inv.dueAtIso)} - {inv.clientType.toUpperCase()}{' '}
                             {inv.taxMode === 'reverse_charge' ? '(autoliquidation)' : `(TVA ${inv.vatRate}%)`}
                           </p>
@@ -1855,7 +2505,7 @@ export function ProfilePage() {
                   </div>
                 ) : (
                   <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-                    Aucune facture encore. Une facture sera creee automatiquement pour la prochaine echeance active.
+                    Aucune facture encore. Une facture sera créée automatiquement pour la prochaine échéance active.
                   </div>
                 )}
               </div>
@@ -1892,7 +2542,7 @@ export function ProfilePage() {
                   onChange={(e) => setDigestEmailsEnabled(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
                 />
-                Activer les e-mails de synthese (hebdomadaire/mensuel)
+                Activer les e-mails de synthèse (hebdomadaire/mensuel)
               </label>
               <div className="sm:col-span-2">
                 <button
@@ -1903,7 +2553,7 @@ export function ProfilePage() {
                   Enregistrer les préférences
                 </button>
                 <p className="mt-2 text-xs text-zinc-500">
-                  Un e-mail de synthese est envoye automatiquement selon la frequence choisie (hebdomadaire ou
+                  Un e-mail de synthèse est envoyé automatiquement selon la fréquence choisie (hebdomadaire ou
                   mensuel), avec un recap reservations, nuits, revenu estime et recommandations prix calendrier.
                 </p>
               </div>
@@ -1917,30 +2567,60 @@ export function ProfilePage() {
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="text-xs text-zinc-700 sm:col-span-2">
                   Mot de passe actuel
-                  <input
-                    type="password"
-                    value={currentPasswordInput}
-                    onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  />
+                  <div className="relative mt-1">
+                    <input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={currentPasswordInput}
+                      onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 pr-10 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword((v) => !v)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                      aria-label={showCurrentPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                    </button>
+                  </div>
                 </label>
                 <label className="text-xs text-zinc-700">
                   Nouveau mot de passe
-                  <input
-                    type="password"
-                    value={newPasswordInput}
-                    onChange={(e) => setNewPasswordInput(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  />
+                  <div className="relative mt-1">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPasswordInput}
+                      onChange={(e) => setNewPasswordInput(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 pr-10 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((v) => !v)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                      aria-label={showNewPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                    </button>
+                  </div>
                 </label>
                 <label className="text-xs text-zinc-700">
                   Confirmer le nouveau mot de passe
-                  <input
-                    type="password"
-                    value={confirmPasswordInput}
-                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  />
+                  <div className="relative mt-1">
+                    <input
+                      type={showConfirmNewPassword ? 'text' : 'password'}
+                      value={confirmPasswordInput}
+                      onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 pr-10 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmNewPassword((v) => !v)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                      aria-label={showConfirmNewPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                    >
+                      {showConfirmNewPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                    </button>
+                  </div>
                 </label>
               </div>
               <button
@@ -1986,7 +2666,7 @@ export function ProfilePage() {
                   />
                   <button
                     type="button"
-                    onClick={() => validatePasswordOtp('change')}
+                    onClick={() => void validatePasswordOtp('change')}
                     disabled={!passwordOtpRequested}
                     className="inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -1996,7 +2676,7 @@ export function ProfilePage() {
                 {passwordOtpValidated ? <p className="mt-1 text-xs font-semibold text-emerald-700">Code valide.</p> : null}
               </div>
               <p className="text-xs text-zinc-500">
-                Un e-mail de confirmation est envoye automatiquement apres chaque changement de mot de passe.
+                Un e-mail de confirmation est envoyé automatiquement après chaque changement de mot de passe.
               </p>
               <button
                 type="button"
@@ -2041,7 +2721,7 @@ export function ProfilePage() {
                     />
                     <button
                       type="button"
-                      onClick={() => validatePasswordOtp('forgot')}
+                      onClick={() => void validatePasswordOtp('forgot')}
                       disabled={!forgotOtpRequested}
                       className="inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -2051,23 +2731,45 @@ export function ProfilePage() {
                   {forgotOtpValidated ? <p className="text-xs font-semibold text-emerald-700">Code valide.</p> : null}
                   <label className="text-xs text-zinc-700">
                     Nouveau mot de passe
-                    <input
-                      type="password"
-                      value={forgotNewPasswordInput}
-                      onChange={(e) => setForgotNewPasswordInput(e.target.value)}
-                      disabled={!forgotOtpValidated}
-                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                    />
+                    <div className="relative mt-1">
+                      <input
+                        type={showForgotNewPassword ? 'text' : 'password'}
+                        value={forgotNewPasswordInput}
+                        onChange={(e) => setForgotNewPasswordInput(e.target.value)}
+                        disabled={!forgotOtpValidated}
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 pr-10 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotNewPassword((v) => !v)}
+                        disabled={!forgotOtpValidated}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-40"
+                        aria-label={showForgotNewPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                      >
+                        {showForgotNewPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                      </button>
+                    </div>
                   </label>
                   <label className="text-xs text-zinc-700">
                     Confirmer le nouveau mot de passe
-                    <input
-                      type="password"
-                      value={forgotConfirmPasswordInput}
-                      onChange={(e) => setForgotConfirmPasswordInput(e.target.value)}
-                      disabled={!forgotOtpValidated}
-                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                    />
+                    <div className="relative mt-1">
+                      <input
+                        type={showForgotConfirmPassword ? 'text' : 'password'}
+                        value={forgotConfirmPasswordInput}
+                        onChange={(e) => setForgotConfirmPasswordInput(e.target.value)}
+                        disabled={!forgotOtpValidated}
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 pr-10 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotConfirmPassword((v) => !v)}
+                        disabled={!forgotOtpValidated}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-40"
+                        aria-label={showForgotConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                      >
+                        {showForgotConfirmPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                      </button>
+                    </div>
                   </label>
                   <button
                     type="button"
@@ -2087,10 +2789,51 @@ export function ProfilePage() {
               <div>
                 <h2 className="text-lg font-bold text-zinc-900">Ajouter un avis</h2>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Votre retour guide notre roadmap et rassure les autres hebergeurs. Prenez quelques secondes pour
-                  partager ce qui compte pour vous.
+                  Votre retour guide notre roadmap et rassure les autres hébergeurs.{' '}
+                  <strong>Un seul avis par compte</strong> : vous pouvez le modifier en republiant, ou le retirer à tout
+                  moment sur cet appareil.
                 </p>
               </div>
+
+              {existingHostReview ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-950">
+                  <p className="font-semibold text-emerald-900">Votre avis actuellement affiché sur le site</p>
+                  <p className="mt-2 text-lg font-bold text-emerald-950">{existingHostReview.stars}/5</p>
+                  <p className="mt-2 leading-relaxed text-emerald-950/95">
+                    &ldquo;{existingHostReview.quote}&rdquo;
+                  </p>
+                  <p className="mt-2 text-xs text-emerald-900/85">
+                    Publié le {fmtLongDate(existingHostReview.submittedAtIso)} — {existingHostReview.name},{' '}
+                    {existingHostReview.role}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          'Retirer votre avis public ? Il disparaîtra du site sur cet appareil et ce navigateur.',
+                        )
+                      ) {
+                        return
+                      }
+                      setReviewPublishError('')
+                      setReviewPublishOk('')
+                      if (removeHostPublishedReviewForAccount(reviewAccountKey)) {
+                        setReviewStars(0)
+                        setReviewText('')
+                        setReviewPublishOk('Votre avis a été retiré du site.')
+                      }
+                    }}
+                    className="mt-3 inline-flex rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-50"
+                  >
+                    Retirer mon avis
+                  </button>
+                  <p className="mt-2 text-xs text-emerald-900/80">
+                    Pour le modifier sans le supprimer : changez la note ou le texte ci-dessous puis cliquez sur
+                    « Mettre à jour mon avis ».
+                  </p>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-sky-950">
                 <p className="font-semibold text-sky-900">Pourquoi une evaluation enthousiaste change tout</p>
@@ -2155,10 +2898,13 @@ export function ProfilePage() {
               </div>
 
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <p className="text-sm font-semibold text-zinc-900">3. Publier sur la page d accueil</p>
+                <p className="text-sm font-semibold text-zinc-900">
+                  3. {existingHostReview ? 'Mettre à jour ou remplacer votre avis' : "Publier sur la page d'accueil"}
+                </p>
                 <p className="mt-1 text-xs text-zinc-600">
-                  Votre texte est verifie automatiquement (gros mots, propos degradants, spam). S il est respectueux et
-                  assez detaille, il apparait dans la section avis du site, sur cet appareil et ce navigateur.
+                  Votre texte est vérifié automatiquement (gros mots, propos dégradants, spam). S’il est respectueux et
+                  assez détaillé, il apparaît dans la section avis du site, sur cet appareil et ce navigateur. Un nouvel
+                  envoi remplace votre avis précédent pour ce compte.
                 </p>
                 <button
                   type="button"
@@ -2174,30 +2920,33 @@ export function ProfilePage() {
                       return
                     }
                     const displayName = reviewPublicNameOk
-                      ? `${firstName.trim()} ${lastName.trim()}`.trim() || 'Hote verifie StayPilot'
-                      : 'Hote verifie StayPilot'
-                    const roleLine = company.trim() ? company.trim() : 'Hebergeur – compte verifie'
+                      ? `${firstName.trim()} ${lastName.trim()}`.trim() || 'Hôte vérifié StayPilot'
+                      : 'Hôte vérifié StayPilot'
+                    const roleLine = company.trim() ? company.trim() : 'Hébergeur – compte vérifié'
                     const stars = Math.min(5, Math.max(1, reviewStars)) as 1 | 2 | 3 | 4 | 5
                     const res = appendHostPublishedReview({
                       stars,
                       quote: text,
                       name: displayName,
                       role: roleLine,
-                      accountKey: (email.trim() || currentUser || 'anon').toLowerCase(),
+                      accountKey: reviewAccountKey,
                     })
                     if (!res.ok) {
                       setReviewPublishError(res.error)
                       return
                     }
                     setReviewPublishOk(
-                      'Merci ! Votre avis est publie sur la page d accueil (bloc temoignages) apres verification automatique.',
+                      res.replaced
+                        ? "Merci ! Votre avis a été mis à jour sur la page d'accueil (bloc témoignages)."
+                        : "Merci ! Votre avis est publié sur la page d'accueil (bloc témoignages) après vérification automatique.",
                     )
-                    setReviewText('')
-                    setReviewStars(0)
+                    setExistingHostReview(getHostReviewForAccount(reviewAccountKey))
                   }}
                   className="mt-3 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Publier mon avis (moderation automatique)
+                  {existingHostReview
+                    ? 'Mettre à jour mon avis (modération automatique)'
+                    : 'Publier mon avis (modération automatique)'}
                 </button>
                 {reviewPublishError ? (
                   <p className="mt-2 text-xs font-medium text-rose-600">{reviewPublishError}</p>
@@ -2235,11 +2984,6 @@ export function ProfilePage() {
             </div>
           ) : null}
 
-          {saveMsg ? (
-            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-              {saveMsg}
-            </div>
-          ) : null}
         </div>
       </div>
     </section>
@@ -2253,6 +2997,8 @@ function InputField({
   required = true,
   onFocus,
   inputClassName = '',
+  autoComplete,
+  inputMode,
 }: {
   label: string
   value: string
@@ -2260,6 +3006,8 @@ function InputField({
   required?: boolean
   onFocus?: () => void
   inputClassName?: string
+  autoComplete?: string
+  inputMode?: 'numeric' | 'text' | 'search' | 'none' | 'email' | 'tel' | 'url' | 'decimal'
 }) {
   return (
     <label className="text-sm text-zinc-700">
@@ -2269,6 +3017,8 @@ function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
         className={`mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${inputClassName}`}
       />
     </label>

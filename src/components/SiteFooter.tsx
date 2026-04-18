@@ -101,7 +101,7 @@ export function SiteFooter() {
                 </a>
               </li>
               <li>
-                <a href="#faq" className={footerLinkClass}>
+                <a href="/#faq" className={footerLinkClass}>
                   {t.footerLinkFaq}
                 </a>
               </li>

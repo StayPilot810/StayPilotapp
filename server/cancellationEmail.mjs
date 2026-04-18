@@ -134,10 +134,10 @@ export async function sendFailedPaymentAlertEmail(payload, env = process.env) {
   const isFinalAttempt = attempt >= 3
   const subject = isFinalAttempt
     ? 'Action requise : compte StayPilot suspendu (paiement non valide)'
-    : `Action requise : tentative de prelevement ${attempt}/3 echouee`
+    : `Action requise : tentative de prélèvement ${attempt}/3 échouée`
   const text = isFinalAttempt
-    ? `Bonjour,\n\nVotre 3eme tentative de prelevement a echoue. Votre compte StayPilot est maintenant suspendu.\n\nPour reactiver l'acces, mettez vos coordonnees bancaires a jour depuis votre profil.\n\nSans mise a jour, le compte reste suspendu.\n\nSupport: support@staypilot.fr\n\n- L'equipe StayPilot`
-    : `Bonjour,\n\nLa tentative de prelevement ${attempt}/3 a echoue.\n\nMerci de mettre a jour vos coordonnees bancaires pour eviter une suspension automatique de votre compte le ${suspensionDate}.\n\nSupport: support@staypilot.fr\n\n- L'equipe StayPilot`
+    ? `Bonjour,\n\nVotre 3e tentative de prélèvement a échoué. Votre compte StayPilot est maintenant suspendu.\n\nPour réactiver l'accès, mettez vos coordonnées bancaires à jour depuis votre profil.\n\nSans mise à jour, le compte reste suspendu.\n\nSupport : support@staypilot.fr\n\n- L'équipe StayPilot`
+    : `Bonjour,\n\nLa tentative de prélèvement ${attempt}/3 a échoué.\n\nMerci de mettre à jour vos coordonnées bancaires pour éviter une suspension automatique de votre compte le ${suspensionDate}.\n\nSupport : support@staypilot.fr\n\n- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#fff7ed;padding:24px;color:#0f172a">
@@ -150,21 +150,21 @@ export async function sendFailedPaymentAlertEmail(payload, env = process.env) {
           <p style="margin:0 0 12px;font-size:15px">
             ${
               isFinalAttempt
-                ? "Votre 3eme tentative de prelevement a echoue. Votre compte est suspendu."
-                : `La tentative de prelevement ${attempt}/3 a echoue.`
+                ? "Votre 3e tentative de prélèvement a échoué. Votre compte est suspendu."
+                : `La tentative de prélèvement ${attempt}/3 a échoué.`
             }
           </p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74">
             <p style="margin:0;font-size:14px;color:#9a3412">
               ${
                 isFinalAttempt
-                  ? 'Mettez vos coordonnees bancaires a jour pour reactiver votre acces immediatement.'
-                  : `Sans mise a jour, suspension automatique le ${suspensionDate}.`
+                  ? 'Mettez vos coordonnées bancaires à jour pour réactiver votre accès immédiatement.'
+                  : `Sans mise à jour, suspension automatique le ${suspensionDate}.`
               }
             </p>
           </div>
-          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#9a3412;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Mettre a jour mes coordonnees</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#7c2d12">- L'equipe StayPilot</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#9a3412;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Mettre à jour mes coordonnées</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#7c2d12">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>
@@ -204,35 +204,35 @@ export async function sendPlanChangeConfirmationEmail(payload, env = process.env
 
   const nextBillingLabel = fmtLongDate(nextBillingIso, locale)
   const hello = firstName ? `Bonjour ${firstName},` : 'Bonjour,'
-  const subject = `Merci - votre changement de forfait StayPilot est confirme (${newPlan})`
+  const subject = `Merci - votre changement de forfait StayPilot est confirmé (${newPlan})`
   const text =
     `${hello}\n\n` +
-    `Merci pour votre confiance. Votre demande de changement de forfait est bien confirmee.\n` +
+    `Merci pour votre confiance. Votre demande de changement de forfait est bien confirmée.\n` +
     `Ancien forfait: ${oldPlan}\n` +
     `Nouveau forfait: ${newPlan}\n\n` +
-    `Important: vous ne serez pas debite immediatement du nouveau montant.\n` +
-    `Le nouveau tarif s'appliquera uniquement a partir de votre prochaine echeance, le ${nextBillingLabel}.\n\n` +
-    `Besoin d'aide ? Repondez a cet e-mail ou contactez support@staypilot.fr.\n\n` +
-    `- L'equipe StayPilot`
+    `Important : vous ne serez pas débité immédiatement du nouveau montant.\n` +
+    `Le nouveau tarif s'appliquera uniquement à partir de votre prochaine échéance, le ${nextBillingLabel}.\n\n` +
+    `Besoin d'aide ? Répondez à cet e-mail ou contactez support@staypilot.fr.\n\n` +
+    `- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#2563eb,#3b82f6);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Changement de forfait confirme
+          StayPilot - Changement de forfait confirmé
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Merci pour votre confiance. Votre changement de forfait est valide.</p>
+          <p style="margin:0 0 12px;font-size:15px">Merci pour votre confiance. Votre changement de forfait est validé.</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe">
             <p style="margin:0;font-size:14px;color:#1e3a8a">Ancien forfait : <strong>${oldPlan}</strong></p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Nouveau forfait : <strong>${newPlan}</strong></p>
           </div>
           <p style="margin:0 0 12px;font-size:14px;color:#334155">
-            Important: vous ne serez pas debite tout de suite du nouveau montant. Le nouveau tarif sera applique a partir du <strong>${nextBillingLabel}</strong>.
+            Important : vous ne serez pas débité tout de suite du nouveau montant. Le nouveau tarif sera appliqué à partir du <strong>${nextBillingLabel}</strong>.
           </p>
           <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>
@@ -271,24 +271,24 @@ export async function sendPasswordChangedConfirmationEmail(payload, env = proces
   const subject = 'Confirmation de changement de mot de passe StayPilot'
   const text =
     `${hello}\n\n` +
-    `Votre mot de passe StayPilot a bien ete modifie le ${changedLabel}.\n` +
-    `Si vous n'etes pas a l'origine de ce changement, contactez immediatement support@staypilot.fr.\n\n` +
-    `- L'equipe StayPilot`
+    `Votre mot de passe StayPilot a bien été modifié le ${changedLabel}.\n` +
+    `Si vous n'êtes pas à l'origine de ce changement, contactez immédiatement support@staypilot.fr.\n\n` +
+    `- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Securite du compte
+          StayPilot - Sécurité du compte
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a ete modifie avec succes le <strong>${changedLabel}</strong>.</p>
+          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a été modifié avec succès le <strong>${changedLabel}</strong>.</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #cbd5e1">
-            <p style="margin:0;font-size:13px;color:#334155">Si ce changement ne vient pas de vous, contactez immediatement support@staypilot.fr.</p>
+            <p style="margin:0;font-size:13px;color:#334155">Si ce changement ne vient pas de vous, contactez immédiatement support@staypilot.fr.</p>
           </div>
           <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>
@@ -324,27 +324,27 @@ export async function sendPasswordResetConfirmationEmail(payload, env = process.
 
   const resetLabel = fmtLongDate(resetAtIso, locale)
   const hello = firstName ? `Bonjour ${firstName},` : 'Bonjour,'
-  const subject = 'Confirmation de reinitialisation du mot de passe StayPilot'
+  const subject = 'Confirmation de réinitialisation du mot de passe StayPilot'
   const text =
     `${hello}\n\n` +
-    `Votre mot de passe StayPilot a bien ete reinitialise le ${resetLabel}.\n` +
-    `Si vous n'etes pas a l'origine de cette action, contactez immediatement support@staypilot.fr.\n\n` +
-    `- L'equipe StayPilot`
+    `Votre mot de passe StayPilot a bien été réinitialisé le ${resetLabel}.\n` +
+    `Si vous n'êtes pas à l'origine de cette action, contactez immédiatement support@staypilot.fr.\n\n` +
+    `- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Reinitialisation mot de passe
+          StayPilot - Réinitialisation mot de passe
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a ete reinitialise avec succes le <strong>${resetLabel}</strong>.</p>
+          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a été réinitialisé avec succès le <strong>${resetLabel}</strong>.</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #cbd5e1">
-            <p style="margin:0;font-size:13px;color:#334155">Si cette action ne vient pas de vous, contactez immediatement support@staypilot.fr.</p>
+            <p style="margin:0;font-size:13px;color:#334155">Si cette action ne vient pas de vous, contactez immédiatement support@staypilot.fr.</p>
           </div>
           <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>
@@ -380,7 +380,7 @@ export async function sendPasswordVerificationCodeEmail(payload, env = process.e
 
   const hello = firstName ? `${L(locale, { fr: 'Bonjour', en: 'Hello', es: 'Hola', de: 'Hallo', it: 'Ciao' })} ${firstName},` : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Ciao,' })
   const subject = L(locale, {
-    fr: 'Code de verification StayPilot (mot de passe)',
+    fr: 'Code de vérification StayPilot (mot de passe)',
     en: 'StayPilot verification code (password)',
     es: 'Código de verificación StayPilot (contraseña)',
     de: 'StayPilot-Bestätigungscode (Passwort)',
@@ -388,16 +388,16 @@ export async function sendPasswordVerificationCodeEmail(payload, env = process.e
   })
   const text =
     `${hello}\n\n` +
-    `Voici votre code de verification a 6 chiffres : ${code}\n` +
+    `Voici votre code de vérification à 6 chiffres : ${code}\n` +
     `Ce code est valable 10 minutes.\n` +
-    `Si vous n'etes pas a l'origine de cette demande, ignorez cet e-mail et contactez support@staypilot.fr.\n\n` +
-    `- L'equipe StayPilot`
+    `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et contactez support@staypilot.fr.\n\n` +
+    `- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Verification securite
+          StayPilot - Vérification sécurité
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
@@ -407,7 +407,7 @@ export async function sendPasswordVerificationCodeEmail(payload, env = process.e
           </div>
           <p style="margin:0 0 12px;font-size:13px;color:#475569">Ce code est valable 10 minutes.</p>
           <p style="margin:0;font-size:13px;color:#475569">Si cette demande ne vient pas de vous, ignorez cet e-mail et contactez support@staypilot.fr.</p>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>
@@ -443,28 +443,28 @@ export async function sendSignupEmailVerificationCodeEmail(payload, env = proces
 
   const hello = firstName ? `${L(locale, { fr: 'Bonjour', en: 'Hello', es: 'Hola', de: 'Hallo', it: 'Ciao' })} ${firstName},` : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Ciao,' })
   const subject = L(locale, {
-    fr: 'Code de verification StayPilot (adresse e-mail)',
+    fr: 'Code de vérification StayPilot (adresse e-mail)',
     en: 'StayPilot verification code (email address)',
     es: 'Codigo de verificacion StayPilot (correo electronico)',
     de: 'StayPilot-Bestätigungscode (E-Mail-Adresse)',
     it: 'Codice di verifica StayPilot (indirizzo email)',
   })
   const intro = L(locale, {
-    fr: 'Utilisez ce code pour confirmer votre adresse e-mail lors de la creation de votre compte StayPilot.',
+    fr: 'Utilisez ce code pour confirmer votre adresse e-mail lors de la création de votre compte StayPilot.',
     en: 'Use this code to confirm your email address while creating your StayPilot account.',
     es: 'Use este codigo para confirmar su correo al crear su cuenta StayPilot.',
     de: 'Nutzen Sie diesen Code, um Ihre E-Mail-Adresse bei der StayPilot-Kontoerstellung zu bestatigen.',
     it: 'Usa questo codice per confermare la tua email durante la creazione del account StayPilot.',
   })
   const codeLine = L(locale, {
-    fr: `Voici votre code de verification a 6 chiffres : ${code}`,
+    fr: `Voici votre code de vérification à 6 chiffres : ${code}`,
     en: `Your 6-digit verification code: ${code}`,
     es: `Su codigo de verificacion de 6 digitos: ${code}`,
     de: `Ihr 6-stelliger Bestatigungscode: ${code}`,
     it: `Il tuo codice di verifica a 6 cifre: ${code}`,
   })
   const footer = L(locale, {
-    fr: `Ce code est valable 10 minutes.\nSi vous n'etes pas a l'origine de cette inscription, ignorez cet e-mail et contactez support@staypilot.fr.\n\n- L'equipe StayPilot`,
+    fr: `Ce code est valable 10 minutes.\nSi vous n'êtes pas à l'origine de cette inscription, ignorez cet e-mail et contactez support@staypilot.fr.\n\n- L'équipe StayPilot`,
     en: `This code is valid for 10 minutes.\nIf you did not start this signup, ignore this email and contact support@staypilot.fr.\n\n- The StayPilot team`,
     es: `Este codigo es valido 10 minutos.\nSi no ha iniciado este registro, ignore este correo y contacte support@staypilot.fr.\n\n- El equipo StayPilot`,
     de: `Dieser Code ist 10 Minuten gultig.\nWenn Sie diese Registrierung nicht gestartet haben, ignorieren Sie diese E-Mail und kontaktieren Sie support@staypilot.fr.\n\n- Ihr StayPilot-Team`,
@@ -473,7 +473,7 @@ export async function sendSignupEmailVerificationCodeEmail(payload, env = proces
   const text = `${hello}\n\n${intro}\n\n${codeLine}\n\n${footer}`
 
   const htmlIntro = L(locale, {
-    fr: 'Utilisez ce code pour confirmer votre adresse e-mail lors de la creation de votre compte :',
+    fr: 'Utilisez ce code pour confirmer votre adresse e-mail lors de la création de votre compte :',
     en: 'Use this code to confirm your email address while creating your account:',
     es: 'Use este codigo para confirmar su correo al crear su cuenta:',
     de: 'Nutzen Sie diesen Code, um Ihre E-Mail-Adresse bei der Kontoerstellung zu bestatigen:',
@@ -483,7 +483,7 @@ export async function sendSignupEmailVerificationCodeEmail(payload, env = proces
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Verification e-mail
+          StayPilot - Vérification e-mail
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
@@ -493,7 +493,88 @@ export async function sendSignupEmailVerificationCodeEmail(payload, env = proces
           </div>
           <p style="margin:0 0 12px;font-size:13px;color:#475569">${L(locale, { fr: 'Ce code est valable 10 minutes.', en: 'This code is valid for 10 minutes.', es: 'Este codigo es valido 10 minutos.', de: 'Dieser Code ist 10 Minuten gultig.', it: 'Questo codice e valido per 10 minuti.' })}</p>
           <p style="margin:0;font-size:13px;color:#475569">${L(locale, { fr: "Si cette demande ne vient pas de vous, ignorez cet e-mail et contactez support@staypilot.fr.", en: 'If you did not request this, ignore this email and contact support@staypilot.fr.', es: 'Si no lo solicito, ignore este correo y contacte support@staypilot.fr.', de: 'Wenn Sie dies nicht angefordert haben, ignorieren Sie diese E-Mail und kontaktieren Sie support@staypilot.fr.', it: 'Se non avete richiesto questo, ignorate questa email e contattate support@staypilot.fr.' })}</p>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
+        </div>
+      </div>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: smtp.from,
+    to,
+    replyTo: smtp.from,
+    subject,
+    text,
+    html,
+  })
+  return { ok: true, status: 200 }
+}
+
+export async function sendWelcomeOnboardingEmail(payload, env = process.env) {
+  const to = (payload?.to || '').trim()
+  const firstName = (payload?.firstName || '').trim()
+  const role = String(payload?.role || 'host').trim().toLowerCase()
+  const locale = normalizeLocale(payload?.locale)
+  if (!to) return { ok: false, status: 400, error: 'invalid_payload' }
+
+  const smtp = buildTransportConfig(env)
+  if (!smtp) return { ok: false, status: 503, error: 'email_not_configured' }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.port === 465,
+    auth: { user: smtp.user, pass: smtp.pass },
+  })
+
+  const hello = firstName
+    ? `${L(locale, { fr: 'Bonjour', en: 'Hello', es: 'Hola', de: 'Hallo', it: 'Ciao' })} ${firstName},`
+    : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Ciao,' })
+  const subject = L(locale, {
+    fr: 'Bienvenue sur StayPilot',
+    en: 'Welcome to StayPilot',
+    es: 'Bienvenido a StayPilot',
+    de: 'Willkommen bei StayPilot',
+    it: 'Benvenuto su StayPilot',
+  })
+  const roleLine = role === 'cleaner'
+    ? L(locale, {
+      fr: 'Votre compte prestataire ménage est actif.',
+      en: 'Your cleaning provider account is now active.',
+      es: 'Su cuenta de proveedor de limpieza ya esta activa.',
+      de: 'Ihr Dienstleister-Konto ist jetzt aktiv.',
+      it: 'Il vostro account fornitore pulizie e ora attivo.',
+    })
+    : L(locale, {
+      fr: 'Votre compte hôte est actif et prêt à connecter vos logements.',
+      en: 'Your host account is active and ready to connect your listings.',
+      es: 'Su cuenta de anfitrion esta activa y lista para conectar alojamientos.',
+      de: 'Ihr Gastgeberkonto ist aktiv und bereit, Unterkunfte zu verbinden.',
+      it: 'Il vostro account host e attivo e pronto a collegare gli alloggi.',
+    })
+  const text =
+    `${hello}\n\n` +
+    `${L(locale, { fr: 'Merci pour votre inscription sur StayPilot.', en: 'Thank you for signing up to StayPilot.', es: 'Gracias por registrarse en StayPilot.', de: 'Danke fur Ihre Registrierung bei StayPilot.', it: 'Grazie per esservi registrati su StayPilot.' })}\n` +
+    `${roleLine}\n\n` +
+    `${L(locale, { fr: 'Vous pouvez maintenant accéder à votre dashboard et finaliser votre configuration.', en: 'You can now access your dashboard and complete your setup.', es: 'Ahora puede acceder al panel y completar su configuracion.', de: 'Sie konnen jetzt auf Ihr Dashboard zugreifen und die Einrichtung abschliessen.', it: 'Ora potete accedere alla dashboard e completare la configurazione.' })}\n\n` +
+    `${L(locale, { fr: "Besoin d'aide ? Répondez à cet e-mail ou contactez support@staypilot.fr.", en: 'Need help? Reply to this email or contact support@staypilot.fr.', es: 'Necesita ayuda? Responda a este correo o contacte support@staypilot.fr.', de: 'Brauchen Sie Hilfe? Antworten Sie auf diese E-Mail oder kontaktieren Sie support@staypilot.fr.', it: 'Serve aiuto? Rispondete a questa e-mail o contattate support@staypilot.fr.' })}\n\n` +
+    `${L(locale, { fr: "- L'équipe StayPilot", en: '- The StayPilot team', es: '- El equipo StayPilot', de: '- Das StayPilot-Team', it: '- Il team StayPilot' })}`
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
+      <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
+        <div style="background:linear-gradient(90deg,#2563eb,#0ea5e9);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
+          StayPilot
+        </div>
+        <div style="padding:24px">
+          <p style="margin:0 0 12px;font-size:15px">${hello}</p>
+          <p style="margin:0 0 12px;font-size:15px">${L(locale, { fr: 'Merci pour votre inscription sur StayPilot.', en: 'Thank you for signing up to StayPilot.', es: 'Gracias por registrarse en StayPilot.', de: 'Danke fur Ihre Registrierung bei StayPilot.', it: 'Grazie per esservi registrati su StayPilot.' })}</p>
+          <div style="margin:14px 0;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe">
+            <p style="margin:0;font-size:14px;color:#1e3a8a">${roleLine}</p>
+          </div>
+          <p style="margin:0 0 12px;font-size:14px;color:#334155">${L(locale, { fr: 'Vous pouvez maintenant accéder à votre dashboard et finaliser votre configuration.', en: 'You can now access your dashboard and complete your setup.', es: 'Ahora puede acceder al panel y completar su configuracion.', de: 'Sie konnen jetzt auf Ihr Dashboard zugreifen und die Einrichtung abschliessen.', it: 'Ora potete accedere alla dashboard e completare la configurazione.' })}</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">${L(locale, { fr: 'Contacter le support', en: 'Contact support', es: 'Contactar soporte', de: 'Support kontaktieren', it: 'Contatta il supporto' })}</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">${L(locale, { fr: "- L'équipe StayPilot", en: '- The StayPilot team', es: '- El equipo StayPilot', de: '- Das StayPilot-Team', it: '- Il team StayPilot' })}</p>
         </div>
       </div>
     </div>
@@ -514,7 +595,7 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
   const to = (payload?.to || '').trim()
   const firstName = (payload?.firstName || '').trim()
   const cadence = (payload?.cadence || 'weekly').trim()
-  const periodLabel = (payload?.periodLabel || '').trim() || 'periode recente'
+  const periodLabel = (payload?.periodLabel || '').trim() || 'période récente'
   const reservationsCount = Number(payload?.reservationsCount || 0)
   const newReservationsCount = Number(payload?.newReservationsCount || 0)
   const checkInCount = Number(payload?.checkInCount || 0)
@@ -528,8 +609,8 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
   const avgStayNights = Number(payload?.avgStayNights || 0)
   const upcomingOccupancyPct = Number(payload?.upcomingOccupancyPct || 0)
   const upcomingNights = Number(payload?.upcomingNights || 0)
-  const upcomingPeriodLabel = (payload?.upcomingPeriodLabel || '').trim() || 'periode a venir'
-  const upcomingOutlookLabel = (payload?.upcomingOutlookLabel || 'periode a venir').trim()
+  const upcomingPeriodLabel = (payload?.upcomingPeriodLabel || '').trim() || 'période à venir'
+  const upcomingOutlookLabel = (payload?.upcomingOutlookLabel || 'période à venir').trim()
   const upcomingRecommendations = Array.isArray(payload?.upcomingRecommendations)
     ? payload.upcomingRecommendations.map((v) => String(v || '').trim()).filter(Boolean)
     : []
@@ -590,7 +671,7 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
         ? 'jour -1'
         : 'semaine -1'
   const subject = L(locale, {
-    fr: `Votre synthese ${cadenceLabel} StayPilot`,
+    fr: `Votre synthèse ${cadenceLabel} StayPilot`,
     en: `Your ${cadenceLabel} StayPilot summary`,
     es: `Su resumen ${cadenceLabel} de StayPilot`,
     de: `Ihre ${cadenceLabel} StayPilot-Zusammenfassung`,
@@ -598,16 +679,16 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
   })
   const text =
     `${hello}\n\n` +
-    `Voici votre synthese ${cadenceLabel} (${periodLabel}).\n\n` +
-    (dataConfidenceLabel ? `Niveau de donnees: ${dataConfidenceLabel}\n` : '') +
+    `Voici votre synthèse ${cadenceLabel} (${periodLabel}).\n\n` +
+    (dataConfidenceLabel ? `Niveau de données : ${dataConfidenceLabel}\n` : '') +
     (connectedApartmentsCount > 0 ? `Logements analyses: ${connectedApartmentsCount}\n` : '') +
     `\n` +
-    `Les pourcentages sont compares a la periode precedente (${comparisonLabel}).\n\n` +
+    `Les pourcentages sont comparés à la période précédente (${comparisonLabel}).\n\n` +
     `- Reservations: ${reservationsCount}\n` +
     `- Nouvelles reservations: ${newReservationsCount} (${newReservationsDeltaPct >= 0 ? '+' : ''}${newReservationsDeltaPct.toFixed(1)}%)\n` +
     `- Check-in: ${checkInCount} (${checkInDeltaPct >= 0 ? '+' : ''}${checkInDeltaPct.toFixed(1)}%)\n` +
     `- Check-out: ${checkOutCount} (${checkOutDeltaPct >= 0 ? '+' : ''}${checkOutDeltaPct.toFixed(1)}%)\n` +
-    `- Nuits reservees: ${nightsCount}\n` +
+    `- Nuits réservées: ${nightsCount}\n` +
     `- Chiffre d'affaires brut: ${grossRevenueEur.toFixed(2)} EUR\n` +
     `- Encaisse net estime: ${netPayoutEur.toFixed(2)} EUR\n` +
     `- Duree moyenne de sejour: ${avgStayNights.toFixed(1)} nuits\n\n` +
@@ -616,7 +697,7 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
     `- Completion taches menage: ${cleaningCompletionPct.toFixed(1)}%\n\n` +
     `Prevision (${upcomingOutlookLabel}) - ${upcomingPeriodLabel}\n` +
     `- Taux d'occupation previsionnel: ${upcomingOccupancyPct.toFixed(1)}%\n` +
-    `- Nuits deja reservees: ${upcomingNights}\n` +
+    `- Nuits déjà réservées: ${upcomingNights}\n` +
     (mostFilledAptLabel ? `- Logement le plus rempli: ${mostFilledAptLabel}\n` : '') +
     (mostEmptyAptLabel ? `- Logement le plus creux: ${mostEmptyAptLabel}\n` : '') +
     (demandByDayLabel ? `- Intensite par jour: ${demandByDayLabel}\n` : '') +
@@ -632,11 +713,11 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
           .join('\n')}\n`
       : '') +
     (watchIntelSummaryLines.length > 0
-      ? `- Veille informationnelle (${watchIntelMonthLabel || 'periode locale'})${watchIntelAddress ? ` - ${watchIntelAddress}` : ''}:\n${watchIntelSummaryLines.map((line) => `  • ${line}`).join('\n')}\n`
+      ? `- Veille informationnelle (${watchIntelMonthLabel || 'période locale'})${watchIntelAddress ? ` - ${watchIntelAddress}` : ''}:\n${watchIntelSummaryLines.map((line) => `  • ${line}`).join('\n')}\n`
       : '') +
     `${upcomingRecommendations.length > 0 ? `\nConseils pricing:\n${upcomingRecommendations.map((line) => `- ${line}`).join('\n')}\n\n` : '\n'}` +
     `Support: support@staypilot.fr\n\n` +
-    `- L'equipe StayPilot`
+    `- L'équipe StayPilot`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
@@ -650,18 +731,18 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
           ${
             dataConfidenceLabel || connectedApartmentsCount > 0
               ? `<p style="margin:0 0 12px;font-size:13px;color:#475569">
-                  ${dataConfidenceLabel ? `Niveau de donnees: <strong>${dataConfidenceLabel}</strong>. ` : ''}
+                  ${dataConfidenceLabel ? `Niveau de données : <strong>${dataConfidenceLabel}</strong>. ` : ''}
                   ${connectedApartmentsCount > 0 ? `Logements analyses: <strong>${connectedApartmentsCount}</strong>.` : ''}
                 </p>`
               : ''
           }
-          <p style="margin:0 0 12px;font-size:13px;color:#475569">Les pourcentages sont compares a la periode precedente (<strong>${comparisonLabel}</strong>).</p>
+          <p style="margin:0 0 12px;font-size:13px;color:#475569">Les pourcentages sont comparés à la période précédente (<strong>${comparisonLabel}</strong>).</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe">
             <p style="margin:0;font-size:14px;color:#1e3a8a">Reservations: <strong>${reservationsCount}</strong></p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Nouvelles reservations: <strong>${newReservationsCount}</strong> (${newReservationsDeltaPct >= 0 ? '+' : ''}${newReservationsDeltaPct.toFixed(1)}%)</p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Check-in: <strong>${checkInCount}</strong> (${checkInDeltaPct >= 0 ? '+' : ''}${checkInDeltaPct.toFixed(1)}%)</p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Check-out: <strong>${checkOutCount}</strong> (${checkOutDeltaPct >= 0 ? '+' : ''}${checkOutDeltaPct.toFixed(1)}%)</p>
-            <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Nuits reservees: <strong>${nightsCount}</strong></p>
+            <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Nuits réservées: <strong>${nightsCount}</strong></p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">CA brut: <strong>${grossRevenueEur.toFixed(2)} EUR</strong></p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Encaisse net estime: <strong>${netPayoutEur.toFixed(2)} EUR</strong></p>
             <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Duree moyenne de sejour: <strong>${avgStayNights.toFixed(1)} nuits</strong></p>
@@ -672,7 +753,7 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #cbd5e1">
             <p style="margin:0;font-size:14px;color:#0f172a"><strong>Projection ${upcomingOutlookLabel}</strong> (${upcomingPeriodLabel})</p>
             <p style="margin:6px 0 0;font-size:14px;color:#334155">Taux d occupation previsionnel: <strong>${upcomingOccupancyPct.toFixed(1)}%</strong></p>
-            <p style="margin:6px 0 0;font-size:14px;color:#334155">Nuits deja reservees: <strong>${upcomingNights}</strong></p>
+            <p style="margin:6px 0 0;font-size:14px;color:#334155">Nuits déjà réservées: <strong>${upcomingNights}</strong></p>
             ${mostFilledAptLabel ? `<p style="margin:6px 0 0;font-size:13px;color:#334155">Logement le plus rempli: <strong>${mostFilledAptLabel}</strong></p>` : ''}
             ${mostEmptyAptLabel ? `<p style="margin:6px 0 0;font-size:13px;color:#334155">Logement le plus creux: <strong>${mostEmptyAptLabel}</strong></p>` : ''}
             ${
@@ -736,7 +817,7 @@ export async function sendActivityDigestEmail(payload, env = process.env) {
               : ''
           }
           <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'equipe StayPilot</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
         </div>
       </div>
     </div>

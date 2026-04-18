@@ -22,6 +22,8 @@ export type StoredAccount = {
   createdAt: string
 }
 
+import { isServerAccountsMandatory } from './serverAccountsPolicy'
+
 const ACCOUNTS_KEY = 'staypilot_accounts'
 
 function normalize(value: string) {
@@ -57,6 +59,32 @@ export function accountExistsByEmailOrUsername(email: string, username: string) 
   return getStoredAccounts().some(
     (a) => normalize(a.email) === emailNorm || normalize(a.username) === userNorm,
   )
+}
+
+/** Vérifie les doublons sur le serveur KV si activé, sinon local uniquement. */
+export async function accountExistsByEmailOrUsernameAsync(email: string, username: string) {
+  try {
+    const r = await fetch('/api/auth-status', { method: 'GET' })
+    const j = (await r.json().catch(() => ({}))) as { remoteAuth?: boolean }
+    if (!j?.remoteAuth) {
+      if (isServerAccountsMandatory()) return false
+      return accountExistsByEmailOrUsername(email, username)
+    }
+    const res = await fetch('/api/auth-check-duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, username }),
+    })
+    if (res.status === 503) {
+      if (isServerAccountsMandatory()) return false
+      return accountExistsByEmailOrUsername(email, username)
+    }
+    const d = (await res.json().catch(() => ({}))) as { duplicate?: boolean }
+    return Boolean(d?.duplicate)
+  } catch {
+    if (isServerAccountsMandatory()) return false
+    return accountExistsByEmailOrUsername(email, username)
+  }
 }
 
 export function createAccount(account: Omit<StoredAccount, 'id' | 'createdAt'>) {

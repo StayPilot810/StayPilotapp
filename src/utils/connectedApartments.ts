@@ -1,5 +1,7 @@
 import type { OfficialChannelOtaLinks } from './officialChannelData'
 import { readOfficialChannelSyncData } from './officialChannelData'
+import { readScopedStorage } from './sessionStorageScope'
+import { getCurrentPlanTier, getListingLimitForPlan } from './subscriptionAccess'
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
@@ -57,20 +59,23 @@ function guessNameFromIcal(ical: string, platform: ChannelKey) {
 
 export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
   try {
+    const planTier = getCurrentPlanTier()
+    const listingLimit = getListingLimitForPlan(planTier)
     const official = readOfficialChannelSyncData()
     if (official && official.properties.length > 0) {
-      return official.properties.map((prop) => ({
+      const mapped = official.properties.map((prop) => ({
         id: `channelManager:${prop.id}`,
         platform: 'channelManager',
         name: prop.name,
         address: prop.address || '',
         channelLinks: prop.channelLinks,
       }))
+      return listingLimit == null ? mapped : mapped.slice(0, listingLimit)
     }
 
-    const channelsRaw = localStorage.getItem(CHANNEL_STORAGE_KEY)
-    const accessRaw = localStorage.getItem(ACCESS_STORAGE_KEY)
-    const namesRaw = localStorage.getItem(APARTMENT_NAME_KEY)
+    const channelsRaw = readScopedStorage(CHANNEL_STORAGE_KEY)
+    const accessRaw = readScopedStorage(ACCESS_STORAGE_KEY)
+    const namesRaw = readScopedStorage(APARTMENT_NAME_KEY)
     const connected = channelsRaw ? (JSON.parse(channelsRaw) as Partial<Record<ChannelKey, boolean>>) : {}
     const access = accessRaw
       ? (JSON.parse(accessRaw) as Partial<Record<ChannelKey, { ical?: string; address?: string }>>)
@@ -91,7 +96,7 @@ export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
         address,
       })
     })
-    return result
+    return listingLimit == null ? result : result.slice(0, listingLimit)
   } catch {
     return []
   }

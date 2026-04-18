@@ -65,7 +65,7 @@ export const aiChatTranslations: Record<Locale, AiChatCopy> = {
   en,
   es: {
     ...en,
-    aiChatFabLabel: 'Hablar con Agent StayPilot',
+    aiChatFabLabel: 'Hablar con el Agente StayPilot',
     aiChatTitle: 'Agent StayPilot',
     aiChatSubtitle:
       'Solo conectados — recomendaciones claras, plan adecuado y siguiente paso inmediato.',

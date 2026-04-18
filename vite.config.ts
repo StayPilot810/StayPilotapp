@@ -121,7 +121,37 @@ export default defineConfig(() => {
             }
             // @ts-ignore runtime import in dev server middleware
             const { syncOfficialChannelData } = await import('./server/channelSync.mjs')
-            const result = await syncOfficialChannelData(body)
+            let result = await syncOfficialChannelData(body)
+
+            const networkDetail = `${String(result?.error || '')} ${String(result?.message || '')}`.toLowerCase()
+            const canRelayRemotely =
+              body?.provider === 'beds24' &&
+              req.headers['x-staypilot-relay'] !== 'vercel' &&
+              (networkDetail.includes('enotfound') ||
+                networkDetail.includes('fetch failed') ||
+                networkDetail.includes('network') ||
+                networkDetail.includes('dns'))
+
+            if (canRelayRemotely) {
+              try {
+                const relayRes = await fetch('https://stay-pilotapp.vercel.app/api/channel-sync', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-staypilot-relay': 'vercel',
+                  },
+                  body: JSON.stringify(body),
+                })
+                const relayJson = await relayRes.json().catch(() => ({}))
+                result = {
+                  ...(typeof relayJson === 'object' && relayJson ? relayJson : {}),
+                  status: relayRes.status,
+                }
+              } catch {
+                // keep local result when relay also fails
+              }
+            }
+
             res.statusCode = result.status ?? 500
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify(result))
@@ -214,6 +244,136 @@ export default defineConfig(() => {
             )
           }
         })
+
+        server.middlewares.use('/api/verify-card', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const chunks = []
+            for await (const chunk of req) chunks.push(chunk)
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let body: any = {}
+            try {
+              body = raw ? JSON.parse(raw) : {}
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'invalid_json' }))
+              return
+            }
+            const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            // @ts-ignore runtime import in dev server middleware
+            const { verifyCardWithStripe } = await import('./server/stripeCardVerification.mjs')
+            const result = await verifyCardWithStripe(body, liveEnv)
+            res.statusCode = result.status ?? 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(result.ok ? { ok: true, verified: true } : { error: result.error || 'card_verification_failed' }))
+          } catch {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'card_verification_failed' }))
+          }
+        })
+
+        async function readJsonBodyForMiddleware(req: any): Promise<{ ok: true; body: any } | { ok: false }> {
+          const chunks: Buffer[] = []
+          for await (const chunk of req) chunks.push(chunk)
+          const raw = Buffer.concat(chunks).toString('utf8')
+          try {
+            return { ok: true, body: raw ? JSON.parse(raw) : {} }
+          } catch {
+            return { ok: false }
+          }
+        }
+
+        function mergeEnvIntoProcess(liveEnv: Record<string, string>) {
+          for (const [k, v] of Object.entries(liveEnv)) {
+            if (v !== undefined) process.env[k] = v
+          }
+        }
+
+        server.middlewares.use('/api/auth-status', async (req, res) => {
+          if (req.method !== 'GET' && req.method !== 'HEAD') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            mergeEnvIntoProcess(liveEnv)
+            // @ts-ignore runtime import in dev server middleware
+            const { handleAuthStatus } = await import('./server/authAccounts.mjs')
+            const { status, json } = await handleAuthStatus()
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(json))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: 'server_error',
+                message: e instanceof Error ? e.message : 'Erreur serveur',
+              }),
+            )
+          }
+        })
+
+        const authPostHandlers: Array<{ path: string; name: string }> = [
+          { path: '/api/auth-login', name: 'handleAuthLogin' },
+          { path: '/api/auth-register', name: 'handleAuthRegister' },
+          { path: '/api/auth-update-password', name: 'handleAuthUpdatePassword' },
+          { path: '/api/auth-check-duplicate', name: 'handleAuthCheckDuplicate' },
+          { path: '/api/auth-password-otp-request', name: 'handleAuthPasswordOtpRequest' },
+          { path: '/api/auth-verify-password-otp', name: 'handleAuthVerifyPasswordOtp' },
+          { path: '/api/auth-forgot-reset', name: 'handleAuthForgotReset' },
+        ]
+
+        for (const { path, name } of authPostHandlers) {
+          server.middlewares.use(path, async (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'method_not_allowed' }))
+              return
+            }
+            try {
+              const parsed = await readJsonBodyForMiddleware(req)
+              if (!parsed.ok) {
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: 'invalid_json' }))
+                return
+              }
+              const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+              mergeEnvIntoProcess(liveEnv)
+              // @ts-ignore runtime import in dev server middleware
+              const mod = await import('./server/authAccounts.mjs')
+              const fn = mod[name] as (body: any, env?: NodeJS.ProcessEnv) => Promise<{ status: number; json: unknown }>
+              const { status, json } =
+                name === 'handleAuthPasswordOtpRequest'
+                  ? await fn(parsed.body, { ...process.env, ...liveEnv })
+                  : await fn(parsed.body)
+              res.statusCode = status
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify(json))
+            } catch (e) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(
+                JSON.stringify({
+                  error: 'server_error',
+                  message: e instanceof Error ? e.message : 'Erreur serveur',
+                }),
+              )
+            }
+          })
+        }
 
         server.middlewares.use('/api/cancel-subscription-email', async (req, res) => {
           if (req.method !== 'POST') {

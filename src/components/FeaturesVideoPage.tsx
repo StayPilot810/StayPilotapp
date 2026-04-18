@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { BookingCalendarOverview } from './BookingCalendarOverview'
+import type { Locale } from '../i18n/navbar'
 
 const FEATURE_VIDEO_OPTIONS = [
   { lang: 'fr', src: '/intel-watch-tutorial.mp4' },
@@ -30,22 +31,109 @@ function normalizeFeatureLocale(locale: string): (typeof FEATURE_VIDEO_OPTIONS)[
 
 type FeatureTab = 'intel' | 'stats' | 'calendar' | 'cleaning' | 'expenses' | 'supplies'
 
-const FEATURE_TABS: Array<{ id: FeatureTab; label: string }> = [
-  { id: 'intel', label: 'Veille informationnelle sur votre logement' },
-  { id: 'stats', label: "Statistiques encaissement + taux d'occupation" },
-  { id: 'calendar', label: 'Calendrier' },
-  { id: 'cleaning', label: 'Prestataire menage' },
-  { id: 'expenses', label: 'Tableau des charges' },
-  { id: 'supplies', label: 'Liste des consommables' },
-]
+const FEATURE_TAB_LABELS: Record<Locale, Record<FeatureTab, string>> = {
+  fr: {
+    intel: 'Veille informationnelle sur votre logement',
+    stats: "Statistiques encaissement + taux d'occupation",
+    calendar: 'Calendrier',
+    cleaning: 'Prestataire ménage',
+    expenses: 'Tableau des charges',
+    supplies: 'Liste des consommables',
+  },
+  en: {
+    intel: 'Local intelligence for your property',
+    stats: 'Revenue stats + occupancy rate',
+    calendar: 'Calendar',
+    cleaning: 'Cleaning provider',
+    expenses: 'Expense table',
+    supplies: 'Supplies list',
+  },
+  es: {
+    intel: 'Vigilancia informativa de tu alojamiento',
+    stats: 'Estadísticas de cobro + ocupación',
+    calendar: 'Calendario',
+    cleaning: 'Proveedor de limpieza',
+    expenses: 'Tabla de gastos',
+    supplies: 'Lista de consumibles',
+  },
+  de: {
+    intel: 'Lokale Informationsanalyse der Unterkunft',
+    stats: 'Umsatzstatistik + Auslastung',
+    calendar: 'Kalender',
+    cleaning: 'Reinigungsdienstleister',
+    expenses: 'Kostentabelle',
+    supplies: 'Verbrauchsmaterialliste',
+  },
+  it: {
+    intel: 'Monitoraggio informativo dell’alloggio',
+    stats: 'Statistiche incassi + tasso di occupazione',
+    calendar: 'Calendario',
+    cleaning: 'Fornitore pulizie',
+    expenses: 'Tabella spese',
+    supplies: 'Lista consumabili',
+  },
+}
 
 export function FeaturesVideoPage() {
   const { locale } = useLanguage()
+  const featureTabs: Array<{ id: FeatureTab; label: string }> = [
+    { id: 'intel', label: FEATURE_TAB_LABELS[locale].intel },
+    { id: 'stats', label: FEATURE_TAB_LABELS[locale].stats },
+    { id: 'calendar', label: FEATURE_TAB_LABELS[locale].calendar },
+    { id: 'cleaning', label: FEATURE_TAB_LABELS[locale].cleaning },
+    { id: 'expenses', label: FEATURE_TAB_LABELS[locale].expenses },
+    { id: 'supplies', label: FEATURE_TAB_LABELS[locale].supplies },
+  ]
   const videoLang = normalizeFeatureLocale(locale)
   const videoSrc = FEATURE_VIDEO_OPTIONS.find((o) => o.lang === videoLang)?.src ?? FEATURE_VIDEO_OPTIONS[0].src
   const statsVideoSrc = STATS_VIDEO_OPTIONS.find((o) => o.lang === videoLang)?.src ?? STATS_VIDEO_OPTIONS[0].src
   const [activeTab, setActiveTab] = useState<FeatureTab | null>(null)
   const introSkipSeconds = 2.2
+  const ui =
+    locale === 'fr'
+      ? {
+          premium: 'Fonctionnalités premium',
+          interactiveDemo: 'Démo interactive StayPilot',
+          subtitle: 'Explorez chaque module avec une expérience visuelle fluide et un rendu haut de gamme.',
+          trustTitle: 'Une expérience pensée pour inspirer confiance',
+          proactiveSupport: 'Support proactif',
+          back: 'Retour',
+        }
+      : locale === 'es'
+        ? {
+            premium: 'Funciones premium',
+            interactiveDemo: 'Demo interactiva StayPilot',
+            subtitle: 'Explora cada módulo con una experiencia visual fluida y de alta calidad.',
+            trustTitle: 'Una experiencia diseñada para inspirar confianza',
+            proactiveSupport: 'Soporte proactivo',
+            back: 'Volver',
+          }
+        : locale === 'de'
+          ? {
+              premium: 'Premium-Funktionen',
+              interactiveDemo: 'Interaktive StayPilot-Demo',
+              subtitle: 'Entdecken Sie jedes Modul mit flüssiger visueller Erfahrung und hochwertiger Darstellung.',
+              trustTitle: 'Eine Erfahrung, die Vertrauen schafft',
+              proactiveSupport: 'Proaktiver Support',
+              back: 'Zurück',
+            }
+          : locale === 'it'
+            ? {
+                premium: 'Funzionalità premium',
+                interactiveDemo: 'Demo interattiva StayPilot',
+                subtitle: "Esplora ogni modulo con un'esperienza visiva fluida e di alto livello.",
+                trustTitle: 'Un’esperienza pensata per ispirare fiducia',
+                proactiveSupport: 'Supporto proattivo',
+                back: 'Indietro',
+              }
+            : {
+                premium: 'Premium features',
+                interactiveDemo: 'Interactive StayPilot demo',
+                subtitle: 'Explore each module with a smooth visual experience and premium rendering.',
+                trustTitle: 'An experience designed to build trust',
+                proactiveSupport: 'Proactive support',
+                back: 'Back',
+              }
   const explainer =
     videoLang === 'fr'
       ? {
@@ -81,15 +169,15 @@ export function FeaturesVideoPage() {
     <section className="min-h-screen bg-gradient-to-b from-[#f8fbff] via-white to-[#f6f8fc] px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-5 rounded-3xl border border-[#dbe7ff] bg-white/90 px-5 py-5 shadow-[0_10px_30px_rgba(74,134,247,0.10)] backdrop-blur sm:px-6 sm:py-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4a86f7]">Fonctionnalites premium</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">Demo interactive StayPilot</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4a86f7]">{ui.premium}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{ui.interactiveDemo}</h1>
           <p className="mt-2 max-w-3xl text-sm text-zinc-600 sm:text-[15px]">
-            Explorez chaque module avec une experience visuelle fluide et un rendu haut de gamme.
+            {ui.subtitle}
           </p>
         </div>
 
         <div className="relative z-20 mb-5 grid grid-cols-1 gap-3 pointer-events-auto sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURE_TABS.map((tab) => (
+          {featureTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -125,12 +213,12 @@ export function FeaturesVideoPage() {
 
         <div className="mb-6 rounded-3xl border border-[#dbe7ff] bg-white/90 p-4 shadow-[0_10px_24px_rgba(74,134,247,0.08)] sm:p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4a86f7]">Trust & social proof</p>
-          <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">Une expérience pensée pour inspirer confiance</h2>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">{ui.trustTitle}</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">Airbnb ready</span>
             <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">Booking.com ready</span>
             <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">Channel Manager compatible</span>
-            <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">Support proactif</span>
+            <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">{ui.proactiveSupport}</span>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
             <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -161,7 +249,7 @@ export function FeaturesVideoPage() {
             </article>
             <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
               <div className="relative h-44 overflow-hidden">
-                <img src="/trust-cleaning-detail.png" alt="Detail menage et confort" className="h-full w-full object-cover" />
+                <img src="/trust-cleaning-detail.png" alt="Détail ménage et confort" className="h-full w-full object-cover" />
                 <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent" />
                 <div className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">Confiance client</div>
               </div>
@@ -182,7 +270,7 @@ export function FeaturesVideoPage() {
               onClick={() => setActiveTab(null)}
               className="mb-3 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-sm"
             >
-              Retour
+              {ui.back}
             </button>
             <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-inner">
               <video
@@ -220,7 +308,7 @@ export function FeaturesVideoPage() {
               onClick={() => setActiveTab(null)}
               className="mb-3 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-sm"
             >
-              Retour
+              {ui.back}
             </button>
             <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-inner">
               <video key={`stats-${videoLang}`} className="h-auto w-full" controls playsInline preload="metadata" src={statsVideoSrc}>
@@ -237,7 +325,7 @@ export function FeaturesVideoPage() {
               onClick={() => setActiveTab(null)}
               className="mb-3 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-sm"
             >
-              Retour
+              {ui.back}
             </button>
             <BookingCalendarOverview />
           </div>

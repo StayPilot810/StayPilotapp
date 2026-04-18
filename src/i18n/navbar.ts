@@ -95,7 +95,7 @@ export const translations: Record<Locale, NavbarCopy> = {
     brand: 'StayPilot',
     whyUs: 'Mehr kassieren',
     features: 'Umsatz-Hebel',
-    reviews: 'Beweise',
+    reviews: 'Bewertungen',
     pricing: 'Preise',
     faq: 'FAQ',
     support: 'Support',

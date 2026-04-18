@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
-import { OFFICIAL_CHANNEL_SYNC_KEY } from '../utils/officialChannelData'
+import { OFFICIAL_CHANNEL_SYNC_KEY, readOfficialChannelSyncData } from '../utils/officialChannelData'
+import { readScopedStorage, scopedStorageKey, writeScopedStorage } from '../utils/sessionStorageScope'
+import { getCurrentPlanTier, getListingLimitForPlan } from '../utils/subscriptionAccess'
 import {
   extractCalendarNameFromIcalText,
   fetchIcalBody,
@@ -18,17 +20,17 @@ const LODGIFY_TUTORIAL_VO_STORAGE = 'staypilot_lodgify_tutorial_vo_lang'
 const CHANNEL_MANAGER_PROVIDER_KEY = 'staypilot_channel_manager_provider'
 
 const BEDS24_TUTORIAL_VO_OPTIONS = [
-  { lang: 'fr', label: 'Francais', src: '/beds24-staypilot-connection-tutorial.mp4' },
+  { lang: 'fr', label: 'Français', src: '/beds24-staypilot-connection-tutorial.mp4' },
   { lang: 'en', label: 'English', src: '/beds24-staypilot-connection-tutorial.en.mp4' },
-  { lang: 'es', label: 'Espanol', src: '/beds24-staypilot-connection-tutorial.es.mp4' },
+  { lang: 'es', label: 'Español', src: '/beds24-staypilot-connection-tutorial.es.mp4' },
   { lang: 'de', label: 'Deutsch', src: '/beds24-staypilot-connection-tutorial.de.mp4' },
   { lang: 'it', label: 'Italiano', src: '/beds24-staypilot-connection-tutorial.it.mp4' },
 ] as const
 
 const LODGIFY_TUTORIAL_VO_OPTIONS = [
-  { lang: 'fr', label: 'Francais', src: '/lodgify-staypilot-connection-tutorial.mp4' },
+  { lang: 'fr', label: 'Français', src: '/lodgify-staypilot-connection-tutorial.mp4' },
   { lang: 'en', label: 'English', src: '/lodgify-staypilot-connection-tutorial.en.mp4' },
-  { lang: 'es', label: 'Espanol', src: '/lodgify-staypilot-connection-tutorial.es.mp4' },
+  { lang: 'es', label: 'Español', src: '/lodgify-staypilot-connection-tutorial.es.mp4' },
   { lang: 'de', label: 'Deutsch', src: '/lodgify-staypilot-connection-tutorial.de.mp4' },
   { lang: 'it', label: 'Italiano', src: '/lodgify-staypilot-connection-tutorial.it.mp4' },
 ] as const
@@ -58,8 +60,8 @@ function sanitizeAccessInputsForStorage(
   return {
     airbnb: { ...inputs.airbnb, apiToken: '', accountId: '' },
     booking: { ...inputs.booking, apiToken: '', accountId: '' },
-    // Keep channel manager credentials persisted until explicit disconnect.
-    channelManager: { ...inputs.channelManager },
+    // Never persist API credentials in local storage.
+    channelManager: { ...inputs.channelManager, apiToken: '', accountId: '' },
   }
 }
 
@@ -77,7 +79,7 @@ function renderOtaLinkCell(state: boolean | undefined) {
   return (
     <span
       className="text-xs text-zinc-400"
-      title="Detail non renvoye par l API du channel manager. Reconnectez pour actualiser."
+      title="Détail non renvoyé par l'API du channel manager. Reconnectez pour actualiser."
     >
       —
     </span>
@@ -85,10 +87,83 @@ function renderOtaLinkCell(state: boolean | undefined) {
 }
 
 export function DashboardConnectPage() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const c = {
+    fr: {
+      tutorialTitle: 'Vidéo tutorielle channel manager (voix, plusieurs langues)',
+      tutorialBody: 'Choisissez votre channel manager et la langue de la vidéo, puis ouvrez la lecture.',
+      hideVideo: 'Masquer la vidéo',
+      showVideo: 'Voir la vidéo',
+      videoHint: 'Beds24 et Lodgify : vidéo guide avec voix disponible. Hostaway, Guesty : vidéo à venir.',
+      videoFallback: 'Votre navigateur ne lit pas la vidéo MP4.',
+      videoOnlyFor:
+        "La vidéo pas à pas avec voix est disponible pour Beds24 et Lodgify. Sélectionnez l'un de ces channel managers pour afficher la vidéo.",
+      removeConnection: 'Supprimer la connexion au channel manager',
+      listing: 'Logement',
+      cancel: 'Annuler',
+      deleteConnection: 'Supprimer la connexion',
+    },
+    en: {
+      tutorialTitle: 'Channel manager tutorial video (voice, multiple languages)',
+      tutorialBody: 'Choose your channel manager and video language, then play.',
+      hideVideo: 'Hide video',
+      showVideo: 'Show video',
+      videoHint: 'Beds24 and Lodgify: guided voice video available. Hostaway, Guesty: coming soon.',
+      videoFallback: 'Your browser does not support MP4 video playback.',
+      videoOnlyFor:
+        'The step-by-step voice video is available for Beds24 and Lodgify. Select one of these managers to display it.',
+      removeConnection: 'Remove channel manager connection',
+      listing: 'Listing',
+      cancel: 'Cancel',
+      deleteConnection: 'Delete connection',
+    },
+    es: {
+      tutorialTitle: 'Video tutorial de channel manager (voz, varios idiomas)',
+      tutorialBody: 'Elige tu channel manager y el idioma del video, luego abre la reproducción.',
+      hideVideo: 'Ocultar video',
+      showVideo: 'Ver video',
+      videoHint: 'Beds24 y Lodgify: video guiado con voz disponible. Hostaway, Guesty: próximamente.',
+      videoFallback: 'Tu navegador no admite reproducción de video MP4.',
+      videoOnlyFor:
+        'El video paso a paso con voz está disponible para Beds24 y Lodgify. Selecciona uno para mostrarlo.',
+      removeConnection: 'Eliminar conexión con channel manager',
+      listing: 'Alojamiento',
+      cancel: 'Cancelar',
+      deleteConnection: 'Eliminar conexión',
+    },
+    de: {
+      tutorialTitle: 'Channel-Manager-Tutorialvideo (Voice-over, mehrere Sprachen)',
+      tutorialBody: 'Wählen Sie Ihren Channel Manager und die Sprache, dann starten Sie das Video.',
+      hideVideo: 'Video ausblenden',
+      showVideo: 'Video anzeigen',
+      videoHint: 'Beds24 und Lodgify: Sprachvideo verfügbar. Hostaway, Guesty: folgt.',
+      videoFallback: 'Ihr Browser unterstützt keine MP4-Videowiedergabe.',
+      videoOnlyFor:
+        'Das Schritt-für-Schritt-Video mit Stimme ist für Beds24 und Lodgify verfügbar. Wählen Sie einen davon aus.',
+      removeConnection: 'Channel-Manager-Verbindung entfernen',
+      listing: 'Unterkunft',
+      cancel: 'Abbrechen',
+      deleteConnection: 'Verbindung löschen',
+    },
+    it: {
+      tutorialTitle: 'Video tutorial channel manager (voce, più lingue)',
+      tutorialBody: 'Scegli il tuo channel manager e la lingua del video, poi avvia la riproduzione.',
+      hideVideo: 'Nascondi video',
+      showVideo: 'Mostra video',
+      videoHint: 'Beds24 e Lodgify: video guida con voce disponibile. Hostaway, Guesty: in arrivo.',
+      videoFallback: 'Il tuo browser non supporta la riproduzione MP4.',
+      videoOnlyFor:
+        'Il video passo-passo con voce è disponibile per Beds24 e Lodgify. Seleziona uno di questi manager.',
+      removeConnection: 'Rimuovi connessione channel manager',
+      listing: 'Alloggio',
+      cancel: 'Annulla',
+      deleteConnection: 'Elimina connessione',
+    },
+  }[ll]
   const [selectedProvider, setSelectedProvider] = useState(() => {
     try {
-      const saved = (localStorage.getItem(CHANNEL_MANAGER_PROVIDER_KEY) || '').trim().toLowerCase()
+      const saved = (readScopedStorage(CHANNEL_MANAGER_PROVIDER_KEY) || '').trim().toLowerCase()
       if (saved === 'beds24' || saved === 'hostaway' || saved === 'guesty' || saved === 'lodgify') return saved
     } catch {
       /* ignore */
@@ -121,7 +196,7 @@ export function DashboardConnectPage() {
       { ical: string; apiToken: string; accountId: string; nightlyRate: string; commissionRate: string }
     >
   >(() => {
-    const raw = localStorage.getItem(RESERVATION_ACCESS_KEY)
+    const raw = readScopedStorage(RESERVATION_ACCESS_KEY)
     if (!raw) {
       return {
         airbnb: { ical: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
@@ -151,8 +226,8 @@ export function DashboardConnectPage() {
         },
         channelManager: {
           ical: parsed.channelManager?.ical ?? '',
-          apiToken: parsed.channelManager?.apiToken ?? '',
-          accountId: parsed.channelManager?.accountId ?? '',
+          apiToken: '',
+          accountId: '',
           nightlyRate: parsed.channelManager?.nightlyRate ?? '',
           commissionRate: parsed.channelManager?.commissionRate ?? '',
         },
@@ -167,7 +242,9 @@ export function DashboardConnectPage() {
   })
 
   const [connectedChannels, setConnectedChannels] = useState<Record<ChannelKey, boolean>>(() => {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = readScopedStorage(STORAGE_KEY)
+    const official = readOfficialChannelSyncData()
+    const hasOfficialListings = Array.isArray(official?.properties) && official.properties.length > 0
     if (!raw) return { airbnb: false, booking: false, channelManager: false }
 
     try {
@@ -175,10 +252,10 @@ export function DashboardConnectPage() {
       return {
         airbnb: Boolean(parsed.airbnb),
         booking: Boolean(parsed.booking),
-        channelManager: Boolean(parsed.channelManager),
+        channelManager: Boolean(parsed.channelManager) || hasOfficialListings,
       }
     } catch {
-      return { airbnb: false, booking: false, channelManager: false }
+      return { airbnb: false, booking: false, channelManager: hasOfficialListings }
     }
   })
   const [connectionFeedback, setConnectionFeedback] = useState<Record<ChannelKey, 'idle' | 'success' | 'error'>>({
@@ -195,13 +272,20 @@ export function DashboardConnectPage() {
     const data = accessInputs[platform]
     const hasToken = data.apiToken.trim().length > 0
     const hasAccountId = data.accountId.trim().length > 0
-    if (platform === 'channelManager' && selectedProvider === 'lodgify') return hasToken
+    if (platform === 'channelManager' && (selectedProvider === 'lodgify' || selectedProvider === 'beds24')) return hasToken
     return hasToken && hasAccountId
   }
 
   const detectedListings = getConnectedApartmentsFromStorage()
   const channelManagerListings = detectedListings.filter((l) => l.platform === 'channelManager')
   const nonChannelManagerListings = detectedListings.filter((l) => l.platform !== 'channelManager')
+
+  useEffect(() => {
+    if (connectedChannels.channelManager || channelManagerListings.length === 0) return
+    const nextConnected = { ...connectedChannels, channelManager: true }
+    setConnectedChannels(nextConnected)
+    writeScopedStorage(STORAGE_KEY, JSON.stringify(nextConnected))
+  }, [channelManagerListings.length, connectedChannels])
 
   useEffect(() => {
     // Prevent stale listings from staying visible when credentials are gone.
@@ -223,13 +307,13 @@ export function DashboardConnectPage() {
       channelManager: connectedChannels.channelManager,
     }
     setConnectedChannels(nextConnected)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
+    writeScopedStorage(STORAGE_KEY, JSON.stringify(nextConnected))
 
-    const rawNames = localStorage.getItem(APARTMENT_NAME_KEY)
+    const rawNames = readScopedStorage(APARTMENT_NAME_KEY)
     const prevNames = rawNames ? (JSON.parse(rawNames) as Partial<Record<ChannelKey, string>>) : {}
     if (staleAirbnb) delete prevNames.airbnb
     if (staleBooking) delete prevNames.booking
-    localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
+    writeScopedStorage(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
 
     notifyConnectionsUpdated()
   }, [accessInputs, connectedChannels])
@@ -237,8 +321,8 @@ export function DashboardConnectPage() {
   const onSaveConnections = () => {
     // Keep "connected" status tied to successful provider sync only.
     // Saving credentials alone should not mark channels as connected.
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(connectedChannels))
-    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
+    writeScopedStorage(STORAGE_KEY, JSON.stringify(connectedChannels))
+    writeScopedStorage(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
     notifyConnectionsUpdated()
   }
 
@@ -248,38 +332,61 @@ export function DashboardConnectPage() {
       setConnectionErrorMessage(
         selectedProvider === 'lodgify'
           ? 'Champs obligatoires manquants : cle API Lodgify.'
-          : 'Champs obligatoires manquants : cle API (ou invite code Beds24) et identifiant compte du channel manager.',
+          : selectedProvider === 'beds24'
+            ? 'Champs obligatoires manquants : cle API (ou invite code) Beds24.'
+            : 'Champs obligatoires manquants : cle API et identifiant compte du channel manager.',
       )
       setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
       return
     }
     setConnectionFeedback((prev) => ({ ...prev, [platform]: 'idle' }))
     setConnectionErrorMessage('')
-    localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
+    writeScopedStorage(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
 
     if (isValid) {
       try {
-        const syncRes = await fetch('/api/channel-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: selectedProvider,
-            apiToken: accessInputs[platform].apiToken,
-            accountId: accessInputs[platform].accountId,
-          }),
-        })
-        const syncJson = (await syncRes.json().catch(() => ({}))) as {
+        const payload = {
+          provider: selectedProvider,
+          apiToken: accessInputs[platform].apiToken,
+          accountId: accessInputs[platform].accountId,
+        }
+        const callSync = async (url: string) => {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const json = (await res.json().catch(() => ({}))) as {
+            ok?: boolean
+            error?: string
+            message?: string
+            data?: { properties?: unknown[]; bookings?: unknown[]; syncedAt?: string; connectionToken?: string }
+          }
+          return { res, json }
+        }
+
+        const localCall = await callSync('/api/channel-sync')
+        let syncRes = localCall.res
+        let syncJson: {
           ok?: boolean
           error?: string
           message?: string
           data?: { properties?: unknown[]; bookings?: unknown[]; syncedAt?: string; connectionToken?: string }
-        }
+        } = localCall.json
+
+        // Browser always calls local API route only.
+        // DNS/network fallback to Vercel is handled server-side in vite middleware.
         if (!syncRes.ok || !syncJson?.ok || !syncJson?.data) {
           const reverted = { ...connectedChannels, [platform]: false }
           setConnectedChannels(reverted)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(reverted))
+          writeScopedStorage(STORAGE_KEY, JSON.stringify(reverted))
+          const providerDetail = typeof syncJson?.message === 'string' && syncJson.message.trim()
+            ? syncJson.message.trim()
+            : typeof syncJson?.error === 'string' && syncJson.error.trim()
+              ? syncJson.error.trim()
+              : ''
           setConnectionErrorMessage(
-            syncJson?.message ||
+            providerDetail ||
               (syncJson?.error === 'financial_scopes_required'
                 ? 'Scopes financiers manquants sur le provider. Activez les droits finance complets.'
                 : 'Connexion API refusee par le provider. Verifiez token/API v2 et droits.'),
@@ -287,12 +394,15 @@ export function DashboardConnectPage() {
           setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
           return
         }
-        const syncedProperties = Array.isArray(syncJson.data.properties) ? syncJson.data.properties : []
+        const syncedPropertiesRaw = Array.isArray(syncJson.data.properties) ? syncJson.data.properties : []
+        const planTier = getCurrentPlanTier()
+        const listingLimit = getListingLimitForPlan(planTier)
+        const syncedProperties = listingLimit == null ? syncedPropertiesRaw : syncedPropertiesRaw.slice(0, listingLimit)
         if (syncedProperties.length === 0) {
           const reverted = { ...connectedChannels, [platform]: false }
           setConnectedChannels(reverted)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(reverted))
-          localStorage.removeItem(OFFICIAL_CHANNEL_SYNC_KEY)
+          writeScopedStorage(STORAGE_KEY, JSON.stringify(reverted))
+          localStorage.removeItem(scopedStorageKey(OFFICIAL_CHANNEL_SYNC_KEY))
           setConnectionErrorMessage(
             selectedProvider === 'beds24'
               ? 'Connexion etablie mais aucun logement remonte. Verifiez les droits du token (Proprietes + Inventaire + Reservations) et les proprietes autorisees dans Beds24.'
@@ -301,13 +411,33 @@ export function DashboardConnectPage() {
           setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
           return
         }
-        localStorage.setItem(
+        const allowedPropertyIds = new Set(
+          syncedProperties
+            .map((p) => {
+              if (!p || typeof p !== 'object') return ''
+              const rec = p as Record<string, unknown>
+              return String(rec.id ?? '').trim()
+            })
+            .filter(Boolean),
+        )
+        const bookingsRaw = Array.isArray(syncJson.data.bookings) ? syncJson.data.bookings : []
+        const limitedBookings =
+          listingLimit == null
+            ? bookingsRaw
+            : bookingsRaw.filter((b) => {
+                if (!b || typeof b !== 'object') return false
+                const rec = b as Record<string, unknown>
+                const propertyId = String(rec.propertyId ?? '').trim()
+                return propertyId ? allowedPropertyIds.has(propertyId) : true
+              })
+
+        writeScopedStorage(
           OFFICIAL_CHANNEL_SYNC_KEY,
           JSON.stringify({
             provider: selectedProvider,
             syncedAt: syncJson.data.syncedAt || new Date().toISOString(),
             properties: syncedProperties,
-            bookings: Array.isArray(syncJson.data.bookings) ? syncJson.data.bookings : [],
+            bookings: limitedBookings,
           }),
         )
         if (selectedProvider === 'beds24' && typeof syncJson.data.connectionToken === 'string' && syncJson.data.connectionToken.trim()) {
@@ -316,21 +446,23 @@ export function DashboardConnectPage() {
               ...prev,
               [platform]: { ...prev[platform], apiToken: syncJson.data!.connectionToken!.trim() },
             }
-            localStorage.setItem(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(next)))
+            writeScopedStorage(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(next)))
             return next
           })
         }
         const nextConnected = { ...connectedChannels, [platform]: true }
         setConnectedChannels(nextConnected)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
-        localStorage.setItem(CHANNEL_MANAGER_PROVIDER_KEY, selectedProvider)
+        writeScopedStorage(STORAGE_KEY, JSON.stringify(nextConnected))
+        writeScopedStorage(CHANNEL_MANAGER_PROVIDER_KEY, selectedProvider)
         setConnectionErrorMessage('')
         setConnectionFeedback((prev) => ({ ...prev, [platform]: 'success' }))
-      } catch {
+      } catch (e) {
         const reverted = { ...connectedChannels, [platform]: false }
         setConnectedChannels(reverted)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(reverted))
-        setConnectionErrorMessage('Erreur reseau pendant la verification du provider.')
+        writeScopedStorage(STORAGE_KEY, JSON.stringify(reverted))
+        setConnectionErrorMessage(
+          e instanceof Error && e.message ? e.message : 'Erreur reseau pendant la verification du provider.',
+        )
         setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
         return
       }
@@ -339,9 +471,9 @@ export function DashboardConnectPage() {
       if (body) {
         const name = extractCalendarNameFromIcalText(body)
         if (name) {
-          const raw = localStorage.getItem(APARTMENT_NAME_KEY)
+          const raw = readScopedStorage(APARTMENT_NAME_KEY)
           const prev = raw ? (JSON.parse(raw) as Partial<Record<ChannelKey, string>>) : {}
-          localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify({ ...prev, [platform]: name }))
+          writeScopedStorage(APARTMENT_NAME_KEY, JSON.stringify({ ...prev, [platform]: name }))
         }
       }
     }
@@ -359,13 +491,13 @@ export function DashboardConnectPage() {
       ...prev,
       [platform]: { ical: '', apiToken: '', accountId: '', nightlyRate: '', commissionRate: '' },
     }))
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextConnected))
+    writeScopedStorage(STORAGE_KEY, JSON.stringify(nextConnected))
 
-    const rawAccess = localStorage.getItem(RESERVATION_ACCESS_KEY)
+    const rawAccess = readScopedStorage(RESERVATION_ACCESS_KEY)
     const prevAccess = rawAccess
       ? (JSON.parse(rawAccess) as Partial<Record<ChannelKey, { ical?: string; apiToken?: string; accountId?: string; nightlyRate?: string; commissionRate?: string }>>)
       : {}
-    localStorage.setItem(
+    writeScopedStorage(
       RESERVATION_ACCESS_KEY,
       JSON.stringify(
         sanitizeAccessInputsForStorage({
@@ -395,13 +527,13 @@ export function DashboardConnectPage() {
       ),
     )
 
-    const rawNames = localStorage.getItem(APARTMENT_NAME_KEY)
+    const rawNames = readScopedStorage(APARTMENT_NAME_KEY)
     const prevNames = rawNames ? (JSON.parse(rawNames) as Partial<Record<ChannelKey, string>>) : {}
     delete prevNames[platform]
-    localStorage.setItem(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
-    localStorage.removeItem(OFFICIAL_CHANNEL_SYNC_KEY)
+    writeScopedStorage(APARTMENT_NAME_KEY, JSON.stringify(prevNames))
+    localStorage.removeItem(scopedStorageKey(OFFICIAL_CHANNEL_SYNC_KEY))
     if (platform === 'channelManager') {
-      localStorage.removeItem(CHANNEL_MANAGER_PROVIDER_KEY)
+      localStorage.removeItem(scopedStorageKey(CHANNEL_MANAGER_PROVIDER_KEY))
       setSelectedProvider('beds24')
     }
     notifyConnectionsUpdated()
@@ -429,17 +561,17 @@ export function DashboardConnectPage() {
         <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
           <h2 className="text-lg font-bold text-zinc-900">Options pour connecter vos logements</h2>
           <p className="mt-1 text-sm text-zinc-600">
-            Connexion uniquement via Channel Manager / PMS pour centraliser toutes les donnees officielles.
+            Connexion uniquement via Channel Manager / PMS pour centraliser toutes les données officielles.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-1">
             <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <p className="text-sm font-semibold text-zinc-900">Canal unique - PMS / Channel Manager</p>
               <p className="mt-1 text-xs text-zinc-600">
-                Source complete pour stats, reservations, logements, statuts et synchronisation avancee.
+              Source complète pour stats, réservations, logements, statuts et synchronisation avancée.
               </p>
               <p className="mt-2 text-[11px] font-semibold text-emerald-700">Exemples: Hostaway, Guesty, Lodgify, Beds24.</p>
               <p className="mt-2 text-[11px] font-semibold text-zinc-700">
-                Le client se connecte lui-meme: aucune saisie manuelle de ta part.
+                Le client se connecte lui-même: aucune saisie manuelle de ta part.
               </p>
             </article>
           </div>
@@ -448,9 +580,9 @@ export function DashboardConnectPage() {
         <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-zinc-900">Video tutorielle channel manager (voix, plusieurs langues)</h2>
+              <h2 className="text-lg font-bold text-zinc-900">{c.tutorialTitle}</h2>
               <p className="mt-1 text-sm text-zinc-600">
-                Choisissez votre channel manager et la langue de la video, puis ouvrez la lecture.
+                {c.tutorialBody}
               </p>
             </div>
             <button
@@ -458,7 +590,7 @@ export function DashboardConnectPage() {
               onClick={() => setShowTutorialVideo((v) => !v)}
               className="inline-flex rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
             >
-              {showTutorialVideo ? 'Masquer la video' : 'Voir la video'}
+              {showTutorialVideo ? c.hideVideo : c.showVideo}
             </button>
           </div>
 
@@ -518,7 +650,7 @@ export function DashboardConnectPage() {
             </label>
           </div>
           <p className="mt-2 text-[11px] text-zinc-500">
-            Beds24 et Lodgify : video guide avec voix disponible. Hostaway, Guesty : video a venir.
+            {c.videoHint}
           </p>
 
           {showTutorialVideo ? (
@@ -554,13 +686,12 @@ export function DashboardConnectPage() {
                       }
                     }}
                   >
-                    Votre navigateur ne lit pas la video MP4.
+                    {c.videoFallback}
                   </video>
                 </div>
               ) : (
                 <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">
-                  La video pas a pas avec voix est disponible pour <span className="font-semibold">Beds24</span> et{' '}
-                  <span className="font-semibold">Lodgify</span>. Selectionnez l un de ces channel managers pour afficher la video.
+                  {c.videoOnlyFor}
                 </p>
               )}
             </div>
@@ -605,16 +736,16 @@ export function DashboardConnectPage() {
                 </li>
                 <li>
                   Dans <span className="font-medium text-zinc-800">Compte / Account</span> Beds24, relevez votre{' '}
-                  <span className="font-medium text-zinc-800">numero proprietaire (Owner id)</span> : vous le recopierez dans StayPilot comme{' '}
-                  <span className="font-medium text-zinc-800">identifiant compte</span> (champ obligatoire).
+                  <span className="font-medium text-zinc-800">numero proprietaire (Owner id)</span> : vous pouvez le recopier dans StayPilot comme{' '}
+                  <span className="font-medium text-zinc-800">identifiant compte</span> (optionnel mais recommande).
                 </li>
                 <li>
                   Dans StayPilot, verifiez le <span className="font-medium text-zinc-800">channel manager</span> dans le menu au-dessus de
                   cette liste, puis en bas de page collez la cle API ou l invite code dans le premier champ du formulaire de connexion.
                 </li>
                 <li>
-                  Renseignez l&apos;identifiant compte <span className="font-medium text-zinc-800">Beds24</span> (Owner id) dans le second
-                  champ.
+                  Si vous le connaissez, renseignez l&apos;identifiant compte <span className="font-medium text-zinc-800">Beds24</span> (Owner id)
+                  dans le second champ.
                 </li>
                 <li>
                   Cliquez sur <span className="font-medium text-zinc-800">Connecter</span> : StayPilot convertit automatiquement un invite
@@ -634,7 +765,7 @@ export function DashboardConnectPage() {
             <p className="font-semibold">Connexion officielle via Channel Manager / PMS uniquement.</p>
             <p className="mt-1">
               {selectedProvider === 'beds24'
-                ? 'Pour Beds24 : cle API ou invite code (StayPilot convertit l invite si besoin) + identifiant compte Beds24 obligatoire (numero proprietaire / Owner id).'
+                ? 'Pour Beds24 : cle API ou invite code (StayPilot convertit l invite si besoin). Identifiant compte optionnel (Owner id recommande).'
                 : selectedProvider === 'lodgify'
                   ? 'Pour Lodgify : cle API obligatoire. Numero de compte optionnel (si renseigne, il doit correspondre a la cle API).'
                   : 'Cle API + identifiant compte obligatoires.'}
@@ -696,7 +827,7 @@ export function DashboardConnectPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-600">
-                Identifiant compte {selectedProvider} {selectedProvider === 'lodgify' ? '(optionnel)' : '(obligatoire)'}
+                Identifiant compte {selectedProvider} {selectedProvider === 'hostaway' || selectedProvider === 'guesty' ? '(obligatoire)' : '(optionnel)'}
               </label>
               <input
                 type="text"
@@ -735,7 +866,7 @@ export function DashboardConnectPage() {
                   onClick={() => setDisconnectChannelManagerOpen(true)}
                   className="ml-2 inline-flex rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
                 >
-                  Supprimer la connexion au channel manager
+                  {c.removeConnection}
                 </button>
               ) : null}
               {connectionFeedback.channelManager === 'success' ? (
@@ -777,7 +908,7 @@ export function DashboardConnectPage() {
                       <table className="w-full min-w-[280px] text-left text-sm">
                         <thead>
                           <tr className="border-b border-zinc-200 bg-zinc-50 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
-                            <th className="px-3 py-2">Logement</th>
+                            <th className="px-3 py-2">{c.listing}</th>
                             <th className="px-3 py-2">Airbnb</th>
                             <th className="px-3 py-2">Booking.com</th>
                           </tr>
@@ -850,14 +981,14 @@ export function DashboardConnectPage() {
                 onClick={() => setDisconnectChannelManagerOpen(false)}
                 className="inline-flex rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
               >
-                Annuler
+                {c.cancel}
               </button>
               <button
                 type="button"
                 onClick={confirmDisconnectChannelManager}
                 className="inline-flex rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100"
               >
-                Supprimer la connexion
+                {c.deleteConnection}
               </button>
             </div>
           </div>

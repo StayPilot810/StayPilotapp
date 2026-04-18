@@ -1,5 +1,6 @@
 import { CalendarDays, Filter } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useLanguage } from '../hooks/useLanguage'
 
 type CalendarBooking = {
   id: string
@@ -39,6 +40,80 @@ function weekdayLabel(day: number) {
 }
 
 export function MorningCalendarSimulation() {
+  const { locale } = useLanguage()
+  const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const c = {
+    fr: {
+      title: 'Calendrier des réservations',
+      thisMonth: 'Ce mois',
+      lastMonth: 'Mois dernier',
+      nextMonth: 'Mois prochain',
+      customDates: 'Dates personnalisées',
+      allApartments: 'Tous les appartements',
+      filterAria: 'Filtrer',
+      occupancy: "Taux d'occupation",
+      totalBookings: 'Total des réservations',
+      bookedNights: 'Nuits réservées',
+      nights: 'nuits',
+      ref: 'ref',
+    },
+    en: {
+      title: 'Reservation calendar',
+      thisMonth: 'This month',
+      lastMonth: 'Last month',
+      nextMonth: 'Next month',
+      customDates: 'Custom dates',
+      allApartments: 'All listings',
+      filterAria: 'Filter',
+      occupancy: 'Occupancy rate',
+      totalBookings: 'Total bookings',
+      bookedNights: 'Booked nights',
+      nights: 'nights',
+      ref: 'ref',
+    },
+    es: {
+      title: 'Calendario de reservas',
+      thisMonth: 'Este mes',
+      lastMonth: 'Mes anterior',
+      nextMonth: 'Mes siguiente',
+      customDates: 'Fechas personalizadas',
+      allApartments: 'Todos los alojamientos',
+      filterAria: 'Filtrar',
+      occupancy: 'Tasa de ocupación',
+      totalBookings: 'Total de reservas',
+      bookedNights: 'Noches reservadas',
+      nights: 'noches',
+      ref: 'ref',
+    },
+    de: {
+      title: 'Reservierungskalender',
+      thisMonth: 'Diesen Monat',
+      lastMonth: 'Letzter Monat',
+      nextMonth: 'Nächster Monat',
+      customDates: 'Benutzerdefinierte Daten',
+      allApartments: 'Alle Unterkünfte',
+      filterAria: 'Filtern',
+      occupancy: 'Belegungsrate',
+      totalBookings: 'Reservierungen gesamt',
+      bookedNights: 'Gebuchte Nächte',
+      nights: 'Nächte',
+      ref: 'Ref',
+    },
+    it: {
+      title: 'Calendario prenotazioni',
+      thisMonth: 'Questo mese',
+      lastMonth: 'Mese scorso',
+      nextMonth: 'Mese prossimo',
+      customDates: 'Date personalizzate',
+      allApartments: 'Tutti gli alloggi',
+      filterAria: 'Filtra',
+      occupancy: 'Tasso di occupazione',
+      totalBookings: 'Prenotazioni totali',
+      bookedNights: 'Notti prenotate',
+      nights: 'notti',
+      ref: 'rif',
+    },
+  }[ll]
   const [hoveredBooking, setHoveredBooking] = useState<CalendarBooking | null>(null)
 
   const stats = useMemo(() => {
@@ -56,7 +131,7 @@ export function MorningCalendarSimulation() {
       <div className="border-b border-zinc-100 px-4 py-4 sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-[30px] font-bold leading-none tracking-tight text-zinc-900">Calendrier des réservations</h3>
+            <h3 className="text-[30px] font-bold leading-none tracking-tight text-zinc-900">{c.title}</h3>
             <p className="mt-2 text-sm text-zinc-500">Avril 2026</p>
           </div>
           <div className="flex items-center gap-4 pt-1 text-sm">
@@ -73,22 +148,22 @@ export function MorningCalendarSimulation() {
       <div className="px-4 pb-4 pt-4 sm:px-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="inline-flex items-center gap-2">
-            <button className="rounded-md bg-[#4a86f7] px-3 py-1.5 text-sm font-semibold text-white">Ce mois</button>
-            <button className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100">Mois dernier</button>
-            <button className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100">Mois prochain</button>
+            <button className="rounded-md bg-[#4a86f7] px-3 py-1.5 text-sm font-semibold text-white">{c.thisMonth}</button>
+            <button className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100">{c.lastMonth}</button>
+            <button className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100">{c.nextMonth}</button>
             <button className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100">
               <CalendarDays className="h-3.5 w-3.5" />
-              Dates personnalisées
+              {c.customDates}
             </button>
           </div>
           <div className="inline-flex items-center gap-2">
             <button className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-sm">
-              Tous les appartements <span className="text-[10px] text-zinc-400">▼</span>
+              {c.allApartments} <span className="text-[10px] text-zinc-400">▼</span>
             </button>
             <button
               type="button"
               className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50"
-              aria-label="Filtrer"
+              aria-label={c.filterAria}
             >
               <Filter className="h-4 w-4" />
             </button>
@@ -130,7 +205,7 @@ export function MorningCalendarSimulation() {
                       >
                         <p className="truncate text-[11px] font-semibold leading-tight">{b.guest}</p>
                         <p className="truncate text-[10px] opacity-90">
-                          {b.nights} nuits · {b.code}
+                          {b.nights} {c.nights} · {b.code}
                         </p>
                       </div>
                     ))}
@@ -145,11 +220,11 @@ export function MorningCalendarSimulation() {
           <div className="flex flex-wrap items-center gap-5">
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays className="h-3.5 w-3.5 text-zinc-400" />
-              Taux d'occupation <span className="text-[#1d6fe9]">{stats.occupancy}%</span>
+              {c.occupancy} <span className="text-[#1d6fe9]">{stats.occupancy}%</span>
             </span>
-            <span>Total des réservations : {stats.totalReservations}</span>
+            <span>{c.totalBookings} : {stats.totalReservations}</span>
             <span>
-              Nuits réservées : {stats.reservedNights} / {stats.totalNights}
+              {c.bookedNights} : {stats.reservedNights} / {stats.totalNights}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-5">
@@ -164,7 +239,7 @@ export function MorningCalendarSimulation() {
         {hoveredBooking ? (
           <div className="mt-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm">
             <span className="font-semibold text-zinc-900">{hoveredBooking.guest}</span> · {hoveredBooking.apartment} ·{' '}
-            {hoveredBooking.nights} nuits · {hoveredBooking.source === 'airbnb' ? 'Airbnb' : 'Booking.com'} · ref {hoveredBooking.code}
+            {hoveredBooking.nights} {c.nights} · {hoveredBooking.source === 'airbnb' ? 'Airbnb' : 'Booking.com'} · {c.ref} {hoveredBooking.code}
           </div>
         ) : null}
       </div>

@@ -49,7 +49,7 @@ const fr: FaqCopy = {
     },
     {
       question: "La prestataire de ménage a-t-elle un accès dédié ?",
-      answer: `Oui, chaque intervenant (prestataire de ménage, prestataire) dispose d'un accès personnalisé et restreint uniquement aux logements auxquels il est assigné. Cela garantit la confidentialité des données et facilite leur travail : ils voient uniquement ce qui les concerne (tâches, notes, horaires, photos à ajouter). Vous gardez le contrôle total tout en simplifiant la communication et le suivi des interventions.`,
+      answer: `Oui, chaque intervenant (prestataire de ménage, autre prestataire) dispose d'un accès personnalisé et restreint uniquement aux logements auxquels il est assigné. Cela garantit la confidentialité des données et facilite leur travail : ils voient uniquement ce qui les concerne (tâches, notes, horaires, photos à ajouter). Vous gardez le contrôle total tout en simplifiant la communication et le suivi des interventions.`,
     },
     {
       question: 'Puis-je gérer les consommables et achats ?',

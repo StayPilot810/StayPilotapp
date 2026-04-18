@@ -35,12 +35,39 @@ function safeParse(raw: string | null): StoredHostReview[] {
   }
 }
 
+function dedupeOneReviewPerAccount(reviews: StoredHostReview[]): StoredHostReview[] {
+  const sorted = [...reviews].sort(
+    (a, b) => new Date(b.submittedAtIso).getTime() - new Date(a.submittedAtIso).getTime(),
+  )
+  const seen = new Set<string>()
+  const out: StoredHostReview[] = []
+  for (const r of sorted) {
+    const k = (r.accountKey || '').trim().toLowerCase()
+    if (!k) {
+      out.push(r)
+      continue
+    }
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(r)
+  }
+  return out
+}
+
 export function readStoredHostReviews(): StoredHostReview[] {
   try {
-    return safeParse(localStorage.getItem(HOST_PUBLISHED_REVIEWS_LS_KEY)).map((r) => ({
+    const raw = localStorage.getItem(HOST_PUBLISHED_REVIEWS_LS_KEY)
+    let list = safeParse(raw).map((r) => ({
       ...r,
       stars: Math.min(5, Math.max(1, Math.round(Number(r.stars)))) as ReviewEntry['stars'],
     }))
+    const deduped = dedupeOneReviewPerAccount(list)
+    if (deduped.length !== list.length) {
+      localStorage.setItem(HOST_PUBLISHED_REVIEWS_LS_KEY, JSON.stringify(deduped))
+      list = deduped
+      window.dispatchEvent(new Event(HOST_REVIEWS_UPDATED_EVENT))
+    }
+    return list
   } catch {
     return []
   }
@@ -53,33 +80,51 @@ export function readHostReviewsSorted(): StoredHostReview[] {
   )
 }
 
-function normalizeQuoteKey(s: string) {
-  return s.trim().replace(/\s+/g, ' ').toLowerCase()
+function normalizeAccountKey(s: string) {
+  return String(s || '').trim().toLowerCase()
 }
 
+export function getHostReviewForAccount(accountKey: string): StoredHostReview | null {
+  const k = normalizeAccountKey(accountKey)
+  if (!k) return null
+  const all = readStoredHostReviews()
+  const mine = all.filter((r) => normalizeAccountKey(r.accountKey) === k)
+  if (!mine.length) return null
+  return mine.sort((a, b) => new Date(b.submittedAtIso).getTime() - new Date(a.submittedAtIso).getTime())[0]
+}
+
+export function removeHostPublishedReviewForAccount(accountKey: string): boolean {
+  const k = normalizeAccountKey(accountKey)
+  if (!k) return false
+  const prev = readStoredHostReviews()
+  const next = prev.filter((p) => normalizeAccountKey(p.accountKey) !== k)
+  if (next.length === prev.length) return false
+  localStorage.setItem(HOST_PUBLISHED_REVIEWS_LS_KEY, JSON.stringify(next))
+  window.dispatchEvent(new Event(HOST_REVIEWS_UPDATED_EVENT))
+  return true
+}
+
+/** Un seul avis par compte : un nouvel envoi remplace l’ancien pour la même `accountKey`. */
 export function appendHostPublishedReview(
   entry: ReviewEntry & { accountKey: string },
-): { ok: true } | { ok: false; error: string } {
+): { ok: true; replaced: boolean } | { ok: false; error: string } {
+  const acct = normalizeAccountKey(entry.accountKey)
+  if (!acct) {
+    return { ok: false as const, error: 'Compte invalide pour publier un avis.' }
+  }
   const id = `hr-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   const submittedAtIso = new Date().toISOString()
   const full: StoredHostReview = {
     ...entry,
+    accountKey: acct,
     id,
     submittedAtIso,
   }
   const prev = readStoredHostReviews()
-  const key = normalizeQuoteKey(full.quote)
-  const dup = prev.some(
-    (p) =>
-      p.accountKey === full.accountKey &&
-      normalizeQuoteKey(p.quote) === key &&
-      Date.now() - new Date(p.submittedAtIso).getTime() < 86400000,
-  )
-  if (dup) {
-    return { ok: false as const, error: 'Un avis identique a deja ete enregistre recemment pour ce compte.' }
-  }
-  const next = [full, ...prev].slice(0, 80)
+  const hadExisting = prev.some((p) => normalizeAccountKey(p.accountKey) === acct)
+  const withoutSameAccount = prev.filter((p) => normalizeAccountKey(p.accountKey) !== acct)
+  const next = [full, ...withoutSameAccount].slice(0, 80)
   localStorage.setItem(HOST_PUBLISHED_REVIEWS_LS_KEY, JSON.stringify(next))
   window.dispatchEvent(new Event(HOST_REVIEWS_UPDATED_EVENT))
-  return { ok: true as const }
+  return { ok: true as const, replaced: hadExisting }
 }

@@ -31,11 +31,11 @@ const fr: FooterCopy = {
     'StayPilot : plus de nuits payées, plus de cash sur le compte — moins de soirées perdues sur Airbnb.',
   footerWhyTitle: 'Pourquoi StayPilot',
   footerWhyDescription:
-    "Une experience premium pour piloter vos locations avec clarte : calendrier unifie, suivi business en temps reel et decisions plus rapides, sans complexite inutile.",
-  footerChatbotKicker: 'Nouvelle fonctionnalite',
+    "Une expérience premium pour piloter vos locations avec clarté : calendrier unifié, suivi business en temps réel et décisions plus rapides, sans complexité inutile.",
+  footerChatbotKicker: 'Nouvelle fonctionnalité',
   footerChatbotTitle: 'Chatbot commercial StayPilot',
   footerChatbotDescription:
-    "Posez vos questions en direct pour obtenir une recommandation rapide (offre Starter, Pro ou Scale), une aide sur vos blocages, ou un plan d'action concret. Ouvrez le bouton en bas a droite.",
+    "Posez vos questions en direct pour obtenir une recommandation rapide (offre Starter, Pro ou Scale), une aide sur vos blocages, ou un plan d’action concret. Ouvrez le bouton en bas à droite.",
   footerChatbotHint: 'Chatbot en bas a droite',
   footerColProduct: 'Produit',
   footerColCompany: 'Entreprise',
@@ -87,9 +87,9 @@ const en: FooterCopy = {
 const es: FooterCopy = {
   footerTagline:
     'StayPilot: más noches pagadas, más cash en cuenta — menos noches perdidas en Airbnb.',
-  footerWhyTitle: 'Por que StayPilot',
+  footerWhyTitle: 'Por qué StayPilot',
   footerWhyDescription:
-    'Una experiencia premium para gestionar alquileres vacacionales: calendario unificado, visibilidad en tiempo real y decisiones mas rapidas sin complejidad innecesaria.',
+    'Una experiencia premium para gestionar alquileres vacacionales: calendario unificado, visibilidad en tiempo real y decisiones más rápidas sin complejidad innecesaria.',
   footerChatbotKicker: 'Nueva funcionalidad',
   footerChatbotTitle: 'Chatbot comercial StayPilot',
   footerChatbotDescription:
@@ -118,7 +118,7 @@ const de: FooterCopy = {
     'StayPilot: mehr bezahlte Nächte, mehr Cash auf dem Konto — weniger Abende mit Airbnb-Refresh.',
   footerWhyTitle: 'Warum StayPilot',
   footerWhyDescription:
-    'Ein Premium-Erlebnis fur die Vermietung: einheitlicher Kalender, Echtzeit-Transparenz und schnellere Entscheidungen ohne unnötige Komplexität.',
+    'Ein Premium-Erlebnis für die Vermietung: einheitlicher Kalender, Echtzeit-Transparenz und schnellere Entscheidungen ohne unnötige Komplexität.',
   footerChatbotKicker: 'Neue Funktion',
   footerChatbotTitle: 'StayPilot Vertriebs-Chatbot',
   footerChatbotDescription:
@@ -145,10 +145,10 @@ const de: FooterCopy = {
 const it: FooterCopy = {
   footerTagline:
     'StayPilot: più notti pagate, più cash in conto — meno serate buttate su Airbnb.',
-  footerWhyTitle: 'Perche StayPilot',
+  footerWhyTitle: 'Perché StayPilot',
   footerWhyDescription:
-    'Un’esperienza premium per gestire gli affitti brevi: calendario unificato, visibilita in tempo reale e decisioni piu rapide senza complessita inutile.',
-  footerChatbotKicker: 'Nuova funzionalita',
+    'Un’esperienza premium per gestire gli affitti brevi: calendario unificato, visibilità in tempo reale e decisioni più rapide senza complessità inutile.',
+  footerChatbotKicker: 'Nuova funzionalità',
   footerChatbotTitle: 'Chatbot commerciale StayPilot',
   footerChatbotDescription:
     "Fate domande in tempo reale per ottenere una raccomandazione rapida (Starter, Pro o Scale), aiuto sui blocchi e un prossimo passo concreto. Aprite il pulsante in basso a destra.",

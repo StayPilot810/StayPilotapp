@@ -1,10 +1,52 @@
-const BEDS24_BASE_URL = 'https://beds24.com/api/v2'
+import https from 'node:https'
+import { Resolver } from 'node:dns/promises'
+
+const BEDS24_BASE_URLS = ['https://api.beds24.com/v2', 'https://beds24.com/api/v2']
 const HOSTAWAY_BASE_URL = 'https://api.hostaway.com/v1'
 const GUESTY_BASE_URL = 'https://open-api.guesty.com'
 const LODGIFY_BASE_URL = 'https://api.lodgify.com/v2'
 
 function pickString(v) {
   return typeof v === 'string' ? v.trim() : ''
+}
+
+function normalizeBeds24Credential(rawValue) {
+  const compact = pickString(rawValue).replace(/\s+/g, '')
+  const raw = compact.replace(/^\/+/, '').replace(/\/+$/, '')
+  if (!raw) return ''
+  // Accept copied values like "beds24.com/...." without protocol.
+  if (!/^https?:\/\//i.test(raw) && /beds24\.com/i.test(raw)) {
+    try {
+      const withProtocol = `https://${raw.replace(/^\/+/, '')}`
+      const url = new URL(withProtocol)
+      const fromQuery =
+        pickString(url.searchParams.get('code')) ||
+        pickString(url.searchParams.get('token')) ||
+        pickString(url.searchParams.get('inviteCode')) ||
+        pickString(url.searchParams.get('invite')) ||
+        pickString(url.searchParams.get('access_token'))
+      if (fromQuery) return fromQuery
+      const lastSegment = pickString(url.pathname.split('/').filter(Boolean).pop())
+      return lastSegment || raw
+    } catch {
+      return raw
+    }
+  }
+  if (!/^https?:\/\//i.test(raw)) return raw
+  try {
+    const url = new URL(raw)
+    const fromQuery =
+      pickString(url.searchParams.get('code')) ||
+      pickString(url.searchParams.get('token')) ||
+      pickString(url.searchParams.get('inviteCode')) ||
+      pickString(url.searchParams.get('invite')) ||
+      pickString(url.searchParams.get('access_token'))
+    if (fromQuery) return fromQuery
+    const lastSegment = pickString(url.pathname.split('/').filter(Boolean).pop())
+    return lastSegment || raw
+  } catch {
+    return raw
+  }
 }
 
 function normalizeProvider(provider) {
@@ -74,6 +116,112 @@ function pickNumber(value) {
   return 0
 }
 
+async function httpsGetJson(url, headers, insecure = false) {
+  return await new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: 'GET',
+        headers,
+        rejectUnauthorized: !insecure,
+      },
+      (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8')
+          let json = {}
+          try {
+            json = raw ? JSON.parse(raw) : {}
+          } catch {
+            json = { raw }
+          }
+          resolve({
+            ok: (res.statusCode || 500) >= 200 && (res.statusCode || 500) < 300,
+            status: res.statusCode || 500,
+            json,
+          })
+        })
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}
+
+async function resolveHostWithDoh(hostname) {
+  const providers = [
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=A`,
+    `https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`,
+  ]
+  for (const url of providers) {
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/dns-json' },
+      })
+      if (!res.ok) continue
+      const json = await res.json().catch(() => ({}))
+      const answers = Array.isArray(json?.Answer) ? json.Answer : []
+      const a = answers.find((r) => typeof r?.data === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(r.data))
+      if (a?.data) return a.data
+    } catch {
+      // try next provider
+    }
+  }
+  return ''
+}
+
+async function resolveHostWithPublicDns(hostname) {
+  try {
+    const resolver = new Resolver()
+    resolver.setServers(['1.1.1.1', '8.8.8.8'])
+    const records = await resolver.resolve4(hostname)
+    const first = Array.isArray(records) ? records.find((ip) => typeof ip === 'string' && ip.trim()) : ''
+    return first || ''
+  } catch {
+    return ''
+  }
+}
+
+async function httpsGetJsonViaIp(urlString, headers, ip, insecure = false) {
+  return await new Promise((resolve, reject) => {
+    const target = new URL(urlString)
+    const req = https.request(
+      {
+        protocol: target.protocol,
+        hostname: ip,
+        port: target.port ? Number(target.port) : 443,
+        method: 'GET',
+        path: `${target.pathname}${target.search}`,
+        headers: { ...headers, Host: target.hostname },
+        servername: target.hostname,
+        rejectUnauthorized: !insecure,
+      },
+      (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8')
+          let json = {}
+          try {
+            json = raw ? JSON.parse(raw) : {}
+          } catch {
+            json = { raw }
+          }
+          resolve({
+            ok: (res.statusCode || 500) >= 200 && (res.statusCode || 500) < 300,
+            status: res.statusCode || 500,
+            json,
+          })
+        })
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}
+
 function normalizePayments(input) {
   const list = pickArray(input)
   return list.map((p, idx) => ({
@@ -117,28 +265,67 @@ function buildFinancialBundle(source) {
   const otherFees = pickNumber(source?.otherFees || source?.extraFees || source?.serviceFee)
   const payout = pickNumber(source?.payout || source?.hostPayout || source?.netPayout)
   const revenueNetDetaille = payout || gross - platformFees - taxes - cleaningFee - otherFees
+  const currency = pickString(source?.currency || source?.currencyCode) || 'EUR'
+  const platformFeePercent =
+    gross + cleaningFee > 0 ? Number((((platformFees / (gross + cleaningFee)) * 100).toFixed(2))) : 0
 
   return {
+    prixTotalVoyageur: {
+      amount: gross,
+      currency,
+    },
+    fraisMenage: {
+      amount: cleaningFee,
+      currency,
+    },
+    autresFrais: {
+      amount: otherFees,
+      currency,
+    },
     revenuNetDetaille: {
       amount: revenueNetDetaille,
-      currency: pickString(source?.currency || source?.currencyCode) || 'EUR',
+      currency,
       formula: 'gross - platformFees - taxes - cleaningFee - otherFees',
     },
     fraisPlateforme: {
       amount: platformFees,
-      currency: pickString(source?.currency || source?.currencyCode) || 'EUR',
+      percent: platformFeePercent,
+      currency,
       detail: pickString(source?.feeDescription || source?.commissionType || ''),
     },
     taxesTva: {
       totalTaxes: taxes,
       vatAmount: pickNumber(source?.vatAmount || source?.vat),
       vatRate: pickNumber(source?.vatRate || source?.taxRate),
-      currency: pickString(source?.currency || source?.currencyCode) || 'EUR',
+      currency,
     },
     paiements: normalizePayments(source?.payments || source?.transactions || source?.charges),
     messagesVoyageurs: normalizeMessages(source?.messages || source?.conversation || source?.guestMessages),
     notesInternes: normalizeNotes(source?.notes || source?.internalNotes),
   }
+}
+
+function inferReservationChannel(source) {
+  const candidates = [
+    source?.channel,
+    source?.channelName,
+    source?.channelType,
+    source?.source,
+    source?.sourceName,
+    source?.origin,
+    source?.ota,
+    source?.otaName,
+    source?.bookingChannel,
+    source?.reservationSource,
+  ]
+  const merged = candidates
+    .map((v) => pickString(v).toLowerCase())
+    .filter(Boolean)
+    .join(' ')
+  if (!merged) return ''
+  if (merged.includes('airbnb')) return 'airbnb'
+  if (merged.includes('booking.com') || merged.includes('bookingcom') || merged.includes('booking')) return 'booking'
+  return ''
 }
 
 function completenessFromBundle(bundle) {
@@ -156,24 +343,87 @@ function completenessFromBundle(bundle) {
 }
 
 async function fetchBeds24Json(path, token) {
-  const res = await fetch(`${BEDS24_BASE_URL}${path}`, {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-      token,
-    },
-  })
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const message =
-      pickString(json?.message) ||
-      pickString(json?.error) ||
-      pickString(json?.error_description) ||
-      pickString(json?.details) ||
-      'beds24_request_failed'
-    return { ok: false, status: res.status, error: message }
+  let lastNetworkError = ''
+  let lastHttpError = { status: 502, error: 'beds24_request_failed' }
+  let hasHttpError = false
+  for (const baseUrl of BEDS24_BASE_URLS) {
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          token,
+        },
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const message =
+          pickString(json?.message) ||
+          pickString(json?.error) ||
+          pickString(json?.error_description) ||
+          pickString(json?.details) ||
+          'beds24_request_failed'
+        lastHttpError = { status: res.status, error: message }
+        hasHttpError = true
+        continue
+      }
+      return { ok: true, status: 200, data: json }
+    } catch (e) {
+      lastNetworkError = e instanceof Error ? e.message : 'beds24_network_error'
+      try {
+        const strictRes = await httpsGetJson(`${baseUrl}${path}`, { accept: 'application/json', token }, false)
+        if (strictRes.ok) return { ok: true, status: strictRes.status, data: strictRes.json }
+        const strictMessage =
+          pickString(strictRes.json?.message) ||
+          pickString(strictRes.json?.error) ||
+          pickString(strictRes.json?.error_description) ||
+          pickString(strictRes.json?.details) ||
+          'beds24_request_failed'
+        lastHttpError = { status: strictRes.status, error: strictMessage }
+        hasHttpError = true
+      } catch (strictErr) {
+        lastNetworkError = strictErr instanceof Error ? strictErr.message : lastNetworkError
+        try {
+          const insecureRes = await httpsGetJson(`${baseUrl}${path}`, { accept: 'application/json', token }, true)
+          if (insecureRes.ok) return { ok: true, status: insecureRes.status, data: insecureRes.json }
+          const insecureMessage =
+            pickString(insecureRes.json?.message) ||
+            pickString(insecureRes.json?.error) ||
+            pickString(insecureRes.json?.error_description) ||
+            pickString(insecureRes.json?.details) ||
+            'beds24_request_failed'
+          lastHttpError = { status: insecureRes.status, error: insecureMessage }
+          hasHttpError = true
+        } catch (insecureErr) {
+          lastNetworkError = insecureErr instanceof Error ? insecureErr.message : lastNetworkError
+          const dnsFailed = String(lastNetworkError).toLowerCase().includes('enotfound')
+          if (dnsFailed) {
+            try {
+              const host = new URL(baseUrl).hostname
+              const ip = (await resolveHostWithPublicDns(host)) || (await resolveHostWithDoh(host))
+              if (ip) {
+                const viaIpRes = await httpsGetJsonViaIp(`${baseUrl}${path}`, { accept: 'application/json', token }, ip, true)
+                if (viaIpRes.ok) return { ok: true, status: viaIpRes.status, data: viaIpRes.json }
+                const viaIpMessage =
+                  pickString(viaIpRes.json?.message) ||
+                  pickString(viaIpRes.json?.error) ||
+                  pickString(viaIpRes.json?.error_description) ||
+                  pickString(viaIpRes.json?.details) ||
+                  'beds24_request_failed'
+                lastHttpError = { status: viaIpRes.status, error: viaIpMessage }
+                hasHttpError = true
+              }
+            } catch {
+              // keep original network error
+            }
+          }
+        }
+      }
+    }
   }
-  return { ok: true, status: 200, data: json }
+  if (hasHttpError) return { ok: false, status: lastHttpError.status, error: lastHttpError.error }
+  if (lastNetworkError) return { ok: false, status: 502, error: lastNetworkError }
+  return { ok: false, status: lastHttpError.status, error: lastHttpError.error }
 }
 
 function hasMeaningfulChannelIdValue(val) {
@@ -319,6 +569,7 @@ function normalizeBeds24Bookings(raw) {
         pickString(item?.name) ||
         'Guest'
       const status = pickString(item?.status).toLowerCase() || 'reserved'
+      const channel = inferReservationChannel(item)
       if (!id || !propertyId || !checkIn || !checkOut) return null
       const financial = buildFinancialBundle(item)
       return {
@@ -327,6 +578,7 @@ function normalizeBeds24Bookings(raw) {
         checkIn,
         checkOut,
         guestName,
+        channel,
         status,
         ...financial,
         financeAvancee: {
@@ -342,7 +594,7 @@ function normalizeBeds24Bookings(raw) {
 }
 
 async function syncBeds24({ apiToken }) {
-  let token = pickString(apiToken).replace(/\s+/g, '')
+  let token = normalizeBeds24Credential(apiToken)
   if (!token) return { status: 400, ok: false, error: 'missing_api_token' }
   let exchangedFromInviteCode = false
 
@@ -353,20 +605,48 @@ async function syncBeds24({ apiToken }) {
   let bookingsRes = await fetchBeds24Json('/bookings', token)
 
   if (!propertiesRes.ok || !bookingsRes.ok) {
-    const setupRes = await fetch(`${BEDS24_BASE_URL}/authentication/setup`, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        code: token,
-      },
-    })
-    const setupJson = await setupRes.json().catch(() => ({}))
-    const exchanged = pickString(setupJson?.token)
-    if (setupRes.ok && exchanged) {
-      token = exchanged
-      exchangedFromInviteCode = true
-      propertiesRes = await fetchBeds24Json(beds24PropertiesPath, token)
-      bookingsRes = await fetchBeds24Json('/bookings', token)
+    for (const baseUrl of BEDS24_BASE_URLS) {
+      let setupOk = false
+      let exchanged = ''
+      try {
+        const setupRes = await fetch(`${baseUrl}/authentication/setup`, {
+          method: 'GET',
+          headers: {
+            accept: 'application/json',
+            code: token,
+          },
+        })
+        const setupJson = await setupRes.json().catch(() => ({}))
+        exchanged = pickString(setupJson?.token)
+        setupOk = setupRes.ok
+      } catch {
+        try {
+          const setupRes = await httpsGetJson(`${baseUrl}/authentication/setup`, { accept: 'application/json', code: token }, true)
+          exchanged = pickString(setupRes.json?.token)
+          setupOk = setupRes.ok
+        } catch {
+          try {
+            const host = new URL(baseUrl).hostname
+            const ip = (await resolveHostWithPublicDns(host)) || (await resolveHostWithDoh(host))
+            if (ip) {
+              const setupRes = await httpsGetJsonViaIp(`${baseUrl}/authentication/setup`, { accept: 'application/json', code: token }, ip, true)
+              exchanged = pickString(setupRes.json?.token)
+              setupOk = setupRes.ok
+            } else {
+              setupOk = false
+            }
+          } catch {
+            setupOk = false
+          }
+        }
+      }
+      if (setupOk && exchanged) {
+        token = exchanged
+        exchangedFromInviteCode = true
+        propertiesRes = await fetchBeds24Json(beds24PropertiesPath, token)
+        bookingsRes = await fetchBeds24Json('/bookings', token)
+        break
+      }
     }
   }
 
@@ -471,6 +751,7 @@ function normalizeHostawayReservations(raw) {
         pickString(item?.guestFirstName && item?.guestLastName ? `${item.guestFirstName} ${item.guestLastName}` : '') ||
         'Guest'
       const status = pickString(item?.status).toLowerCase() || 'reserved'
+      const channel = inferReservationChannel(item)
       if (!id || !propertyId || !checkIn || !checkOut) return null
       const financial = buildFinancialBundle(item)
       return {
@@ -479,6 +760,7 @@ function normalizeHostawayReservations(raw) {
         checkIn,
         checkOut,
         guestName,
+        channel,
         status,
         ...financial,
         financeAvancee: {
@@ -586,6 +868,7 @@ function normalizeGuestyBookings(raw) {
         pickString(item?.guest?.firstName && item?.guest?.lastName ? `${item.guest.firstName} ${item.guest.lastName}` : '') ||
         'Guest'
       const status = pickString(item?.status).toLowerCase() || 'reserved'
+      const channel = inferReservationChannel(item)
       if (!id || !propertyId || !checkIn || !checkOut) return null
       const financial = buildFinancialBundle(item)
       return {
@@ -594,6 +877,7 @@ function normalizeGuestyBookings(raw) {
         checkIn,
         checkOut,
         guestName,
+        channel,
         status,
         ...financial,
         financeAvancee: {
@@ -667,6 +951,7 @@ function normalizeLodgifyBookings(raw) {
         pickString(item?.firstName && item?.lastName ? `${item.firstName} ${item.lastName}` : '') ||
         'Guest'
       const status = pickString(item?.status).toLowerCase() || 'reserved'
+      const channel = inferReservationChannel(item)
       if (!id || !propertyId || !checkIn || !checkOut) return null
       const financial = buildFinancialBundle(item)
       return {
@@ -675,6 +960,7 @@ function normalizeLodgifyBookings(raw) {
         checkIn,
         checkOut,
         guestName,
+        channel,
         status,
         ...financial,
         financeAvancee: {
@@ -732,7 +1018,8 @@ export async function syncOfficialChannelData(body) {
   const accountId = pickString(body?.accountId)
   const ical = pickString(body?.ical)
   if (!provider) return { status: 400, ok: false, error: 'invalid_provider' }
-  if (!apiToken || (provider !== 'lodgify' && !accountId)) {
+  const needsAccountId = provider === 'hostaway' || provider === 'guesty'
+  if (!apiToken || (needsAccountId && !accountId)) {
     return { status: 400, ok: false, error: 'missing_required_fields' }
   }
 
@@ -748,12 +1035,16 @@ export async function syncOfficialChannelData(body) {
     ).length
     if (missingFinanceCount > 0) {
       return {
-        status: 412,
-        ok: false,
-        error: 'financial_scopes_required',
-        message:
-          'Des scopes financiers obligatoires sont manquants sur le provider. Activez les droits finance complets pour remonter 100% des donnees.',
-        missingFinanceCount,
+        ...result,
+        data: {
+          ...result.data,
+          scopeWarning: {
+            code: 'financial_scopes_partial',
+            missingFinanceCount,
+            message:
+              'Connexion reussie, mais des scopes financiers manquent sur certaines reservations. Activez les droits finance complets pour remonter 100% des donnees.',
+          },
+        },
       }
     }
     return result

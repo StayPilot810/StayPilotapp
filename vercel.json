@@ -4,9 +4,18 @@
     { "source": "/inscription", "destination": "/index.html" },
     { "source": "/a-propos", "destination": "/index.html" },
     { "source": "/blog", "destination": "/index.html" },
+    { "source": "/pourquoi-staypilot", "destination": "/index.html" },
+    { "source": "/nouveautes", "destination": "/index.html" },
     { "source": "/carrieres", "destination": "/index.html" },
     { "source": "/centre-aide", "destination": "/index.html" },
     { "source": "/contact", "destination": "/index.html" },
+    { "source": "/support", "destination": "/index.html" },
+    { "source": "/fonctionnalites", "destination": "/index.html" },
+    { "source": "/reserver-un-appel", "destination": "/index.html" },
+    { "source": "/mentions-legales", "destination": "/index.html" },
+    { "source": "/confidentialite", "destination": "/index.html" },
+    { "source": "/cgu", "destination": "/index.html" },
+    { "source": "/profil", "destination": "/index.html" },
     { "source": "/dashboard", "destination": "/index.html" },
     { "source": "/dashboard/:path*", "destination": "/index.html" }
   ]

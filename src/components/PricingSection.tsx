@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import { useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
+import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur, type PlanKey } from '../utils/planPricing'
 import { easePremium, Reveal, StaggerReveal, staggerItem } from './motion'
 
 const primary = '#4a86f7'
@@ -35,25 +36,21 @@ function FeatureRow({
 }
 
 type PlanInnerProps = {
-  planKey: 'starter' | 'pro' | 'scale'
+  planKey: PlanKey
   variant: PlanVariant
   roiBadge?: string
   popularBadge?: string
   name: string
   range: string
   outcome: string
-  price: string
   priceSuffix: string
   trial: string
   features: string[]
   cta: string
-  onCheckout?: (planKey: 'starter' | 'pro' | 'scale') => void
+  loadingLabel: string
+  locale: 'fr' | 'en' | 'es' | 'de' | 'it'
+  onCheckout?: (planKey: PlanKey) => void
   loading?: boolean
-}
-
-function parseEuroAmount(label: string) {
-  const numeric = Number(label.replace(/[^\d,.-]/g, '').replace(',', '.'))
-  return Number.isFinite(numeric) ? numeric : 0
 }
 
 function PlanCardInner({
@@ -63,19 +60,20 @@ function PlanCardInner({
   name,
   range,
   outcome,
-  price,
   priceSuffix,
   trial,
   features,
   cta,
+  loadingLabel,
   planKey,
+  locale,
   onCheckout,
   loading = false,
 }: PlanInnerProps) {
   const isFeatured = variant === 'featured'
   const reduceMotion = useReducedMotion()
-  const ttc = parseEuroAmount(price)
-  const ht = ttc > 0 ? ttc / 1.2 : 0
+  const ttc = getPlanMonthlyTtcEur(planKey)
+  const ht = computeHtFromTtc(ttc, 20)
 
   return (
     <>
@@ -122,14 +120,14 @@ function PlanCardInner({
           <span
             className={`font-bold tracking-tight ${isFeatured ? 'text-4xl sm:text-[2.35rem]' : 'text-3xl sm:text-[2rem]'}`}
           >
-            {`${ht.toFixed(2)}€`}
+            {formatEuroForLocale(locale, ht)}
           </span>
           <span className={`text-sm font-semibold ${isFeatured ? 'text-white/90' : 'text-zinc-700'}`}>
             HT {priceSuffix}
           </span>
         </p>
         <p className={`mt-1 text-xs ${isFeatured ? 'text-white/80' : 'text-zinc-500'}`}>
-          {`${ttc.toFixed(2)}€ TTC`}
+          {`${formatEuroForLocale(locale, ttc)} TTC`}
         </p>
         <p
           className={`mt-2 text-sm font-semibold ${isFeatured ? 'text-white' : ''}`}
@@ -155,7 +153,7 @@ function PlanCardInner({
           } disabled:cursor-not-allowed disabled:opacity-60`}
           style={isFeatured ? { color: primary } : undefined}
         >
-          {loading ? 'Redirection...' : cta}
+          {loading ? loadingLabel : cta}
         </button>
       </div>
     </>
@@ -163,9 +161,16 @@ function PlanCardInner({
 }
 
 export function PricingSection() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const reduceMotion = useReducedMotion()
   const [loadingPlan, setLoadingPlan] = useState<null | 'starter' | 'pro' | 'scale'>(null)
+  const loadingLabel = {
+    fr: 'Redirection...',
+    en: 'Redirecting...',
+    es: 'Redirigiendo...',
+    de: 'Weiterleitung...',
+    it: 'Reindirizzamento...',
+  }[locale]
 
   async function startCheckout(planKey: 'starter' | 'pro' | 'scale') {
     try {
@@ -191,11 +196,12 @@ export function PricingSection() {
       name: t.starterName,
       range: t.starterRange,
       outcome: t.starterOutcome,
-      price: t.starterPrice,
       priceSuffix: t.starterPriceSuffix,
       trial: t.planTrial,
       features: [...t.starterFeatures],
       cta: t.planCta,
+      loadingLabel,
+      locale,
     },
     {
       planKey: 'pro',
@@ -205,11 +211,12 @@ export function PricingSection() {
       name: t.proName,
       range: t.proRange,
       outcome: t.proOutcome,
-      price: t.proPrice,
       priceSuffix: t.proPriceSuffix,
       trial: t.planTrial,
       features: [...t.proFeatures],
       cta: t.planCta,
+      loadingLabel,
+      locale,
     },
     {
       planKey: 'scale',
@@ -217,11 +224,12 @@ export function PricingSection() {
       name: t.scaleName,
       range: t.scaleRange,
       outcome: t.scaleOutcome,
-      price: t.scalePrice,
       priceSuffix: t.scalePriceSuffix,
       trial: t.planTrial,
       features: [...t.scaleFeatures],
       cta: t.planCta,
+      loadingLabel,
+      locale,
     },
   ]
 
@@ -242,6 +250,9 @@ export function PricingSection() {
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-600 sm:text-base">
               {t.pricingSubtitle}
+            </p>
+            <p className="mx-auto mt-2 max-w-3xl text-[12px] font-normal text-zinc-500 sm:text-[13px]">
+              {t.mandatoryChannelManagerNote}
             </p>
           </header>
         </Reveal>

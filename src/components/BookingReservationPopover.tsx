@@ -1,12 +1,11 @@
-import { Check, Star } from 'lucide-react'
+import { Check } from 'lucide-react'
+import { useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import type { BookingCalendarCopy } from '../i18n/bookingCalendar'
 import type { Locale } from '../i18n/navbar'
 
 const airbnbRed = '#ef4444'
 const bookingBlue = '#006ce4'
-const payoutGreen = '#16a34a'
-
 const BCP47: Record<Locale, string> = {
   fr: 'fr-FR',
   es: 'es-ES',
@@ -45,6 +44,7 @@ type Props = {
   locale: Locale
   referenceYear: number
   referenceMonthIndex: number
+  referenceStartDate?: Date
   apartmentLabel: (n: number) => string
   nightsLabel: (n: number) => string
   restrictedView?: boolean
@@ -59,6 +59,7 @@ export function BookingReservationPopover({
   locale,
   referenceYear,
   referenceMonthIndex,
+  referenceStartDate,
   apartmentLabel,
   nightsLabel,
   restrictedView = false,
@@ -66,9 +67,19 @@ export function BookingReservationPopover({
   onMouseLeave,
 }: Props) {
   const bcp47 = BCP47[locale]
-  const fmtEur = new Intl.NumberFormat(bcp47, { style: 'currency', currency: 'EUR' })
-  const fmtDate = (dayOfMonth: number) => {
-    const d = new Date(referenceYear, referenceMonthIndex, dayOfMonth)
+  const fmtMoney = useMemo(
+    () =>
+      new Intl.NumberFormat(bcp47, {
+        style: 'currency',
+        currency: 'EUR',
+        maximumFractionDigits: 0,
+      }),
+    [bcp47],
+  )
+  const fmtDate = (dayIndex: number) => {
+    const d = referenceStartDate
+      ? new Date(referenceStartDate.getFullYear(), referenceStartDate.getMonth(), referenceStartDate.getDate() + (dayIndex - 1))
+      : new Date(referenceYear, referenceMonthIndex, dayIndex)
     return capitalizeFirst(
       new Intl.DateTimeFormat(bcp47, { day: 'numeric', month: 'long', year: 'numeric' }).format(d),
     )
@@ -76,6 +87,7 @@ export function BookingReservationPopover({
 
   const checkInDay = booking.start
   const checkOutDay = booking.end + 1
+  const platformFeeLabel = t.popoverPlatformFee.replace('{pct}', booking.platformFeePercent.toFixed(1))
 
   const popoverWidth = 320
   const centerX = anchor.left + anchor.width / 2
@@ -93,38 +105,35 @@ export function BookingReservationPopover({
       onMouseLeave={onMouseLeave}
       role="tooltip"
     >
-      {restrictedView ? null : <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#a1a1aa]">
-            {t.reservationNumberLabel}
-          </p>
-          <span className="inline-block max-w-full truncate rounded-full bg-gray-100 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-[#3f3f46]">
-            {booking.reservationId}
-          </span>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-          <Check className="h-3 w-3" strokeWidth={2.5} />
-          {t.popoverStatusConfirmed}
+      <div className="flex items-start justify-between gap-2">
+        <span className="inline-block max-w-full truncate rounded-xl border border-zinc-200 bg-gray-100 px-3 py-1.5 font-mono text-[12px] font-semibold tracking-wide text-[#3f3f46]">
+          {booking.reservationId}
         </span>
-      </div>}
+        <div className="flex flex-col items-end gap-1">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+            <Check className="h-3 w-3" strokeWidth={2.5} />
+            {t.popoverStatusConfirmed}
+          </span>
+          {booking.channel === 'airbnb' ? (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ backgroundColor: '#fee2e2', color: airbnbRed }}
+            >
+              {t.legendAirbnb}
+            </span>
+          ) : (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ backgroundColor: '#dbeafe', color: bookingBlue }}
+            >
+              {t.legendBooking}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <h4 className="text-lg font-bold leading-tight text-[#1a1a1a]">{booking.guest}</h4>
-        {booking.channel === 'airbnb' ? (
-          <span
-            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-            style={{ backgroundColor: '#fee2e2', color: airbnbRed }}
-          >
-            {t.legendAirbnb}
-          </span>
-        ) : (
-          <span
-            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-            style={{ backgroundColor: '#dbeafe', color: bookingBlue }}
-          >
-            {t.legendBooking}
-          </span>
-        )}
         {booking.channel === 'booking' && booking.bookingGenius ? (
           <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
             {t.badgeGenius}
@@ -145,50 +154,44 @@ export function BookingReservationPopover({
           <p className="mt-0.5 text-sm font-bold text-[#1a1a1a]">{fmtDate(checkOutDay)}</p>
         </div>
       </div>
-      <p className="mt-3 text-sm text-[#71717a]">
-        {t.popoverDuration}{' '}
-        <span className="font-bold text-[#1a1a1a]">{nightsLabel(booking.nights)}</span>
-      </p>
 
-      {restrictedView ? null : <hr className="my-3 border-gray-100" />}
+      <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-50 px-2.5 py-2">
+        <p className="text-xs font-medium text-[#71717a]">{t.popoverDuration}</p>
+        <p className="text-xs font-semibold text-[#1a1a1a]">{nightsLabel(booking.nights)}</p>
+      </div>
 
-      {restrictedView ? null : <p className="text-[10px] font-semibold uppercase tracking-wider text-[#a1a1aa]">
-        {t.popoverFinancialTitle}
-      </p>}
-      {restrictedView ? null : <ul className="mt-2 space-y-2 text-sm">
-        <li className="flex justify-between gap-2">
-          <span className="text-[#71717a]">{t.popoverTotalGuestPrice}</span>
-          <span className="font-semibold text-[#1a1a1a]">{fmtEur.format(booking.totalGuestEur)}</span>
-        </li>
-        <li className="flex justify-between gap-2">
-          <span className="text-[#71717a]">{t.popoverCleaningFee}</span>
-          <span className="font-semibold text-[#1a1a1a]">{fmtEur.format(booking.cleaningEur)}</span>
-        </li>
-        <li className="flex justify-between gap-2">
-          <span className="text-[#71717a]">
-            {t.popoverPlatformFee.replace('{pct}', String(booking.platformFeePercent))}
-          </span>
-          <span className="font-semibold text-red-600">
-            −{fmtEur.format(booking.platformFeeEur)}
-          </span>
-        </li>
-      </ul>}
+      {!restrictedView ? (
+        <>
+          <hr className="my-3 border-gray-100" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#a1a1aa]">{t.popoverFinancialTitle}</p>
 
-      {!restrictedView && booking.channel === 'booking' && booking.bookingGenius ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-medium leading-snug text-amber-950">
-          <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" />
-          {t.popoverGeniusBanner}
-        </div>
+          <div className="mt-2 space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-[#71717a]">{t.popoverTotalGuestPrice}</p>
+              <p className="text-sm font-semibold text-[#1a1a1a]">{fmtMoney.format(booking.totalGuestEur)}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-[#71717a]">{t.popoverCleaningFee}</p>
+              <p className="text-sm font-semibold text-[#1a1a1a]">{fmtMoney.format(booking.cleaningEur)}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-[#71717a]">{platformFeeLabel}</p>
+              <p className="text-sm font-semibold text-[#dc2626]">-{fmtMoney.format(booking.platformFeeEur)}</p>
+            </div>
+            <div className="mt-1 h-px bg-zinc-100" />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium text-[#3f3f46]">{t.popoverNetPayout}</p>
+              <p className="text-sm font-bold text-emerald-600">{fmtMoney.format(booking.netPayoutEur)}</p>
+            </div>
+          </div>
+
+          {booking.channel === 'booking' && booking.bookingGenius ? (
+            <p className="mt-3 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] font-medium text-amber-900">
+              {t.popoverGeniusBanner}
+            </p>
+          ) : null}
+        </>
       ) : null}
-
-      {restrictedView ? null : <hr className="my-3 border-gray-100" />}
-
-      {restrictedView ? null : <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-bold text-[#1a1a1a]">{t.popoverNetPayout}</span>
-        <span className="text-lg font-bold" style={{ color: payoutGreen }}>
-          {fmtEur.format(booking.netPayoutEur)}
-        </span>
-      </div>}
     </div>
   )
 

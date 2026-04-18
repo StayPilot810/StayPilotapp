@@ -235,7 +235,7 @@ const deCareers: CareersPageCopy = {
 }
 
 const itCareers: CareersPageCopy = {
-  careersBackLink: "Torna all'home",
+  careersBackLink: 'Torna alla home',
   careersPageTitle: 'Carriere',
   introParagraphs: [
     'Sviluppiamo una soluzione dedicata alla gestione degli affitti brevi, con un’ambizione chiara: strutturare un’attività spesso complessa e offrire una visione affidabile, leggibile e subito operativa.',
@@ -245,7 +245,7 @@ const itCareers: CareersPageCopy = {
     {
       title: 'La nostra visione',
       paragraphs: [
-        'Riteniamo che la gestione locativa non deba limitarsi a una successione di compiti operativi, ma costituisca una vera leva di governo.',
+        'Riteniamo che la gestione locativa non debba limitarsi a una successione di compiti operativi, ma costituisca una vera leva di governo.',
         'Il nostro obiettivo è proporre uno standard di gestione più chiaro, più strutturato e più efficace, in grado di accompagnare l’evoluzione del mercato e le crescenti richieste dei professionisti.',
       ],
     },

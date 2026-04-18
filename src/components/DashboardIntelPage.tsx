@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { enrichReservationAccessAddressesFromIcal } from '../utils/icalAddress'
+import { writeScopedStorage } from '../utils/sessionStorageScope'
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 
 type CityPoint = {
@@ -293,6 +294,18 @@ function normalizeTutorialLocale(locale: string): (typeof INTEL_TUTORIAL_VO_OPTI
   if (value.startsWith('de')) return 'de'
   if (value.startsWith('it')) return 'it'
   return 'fr'
+}
+
+const MAX_LOCAL_EVENT_RADIUS_KM = 15
+
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return 2 * 6371 * Math.asin(Math.sqrt(a))
 }
 
 export function DashboardIntelPage() {
@@ -676,7 +689,7 @@ export function DashboardIntelPage() {
   const namedEventRanges: NamedEventRange[] = [
     { start: `${currentYear}-01-16`, end: `${currentYear}-01-21`, label: 'Paris Fashion Week (Homme)', city: 'paris' },
     { start: `${currentYear}-02-24`, end: `${currentYear}-03-03`, label: 'Paris Fashion Week (Femme)', city: 'paris' },
-    { start: `${currentYear}-05-14`, end: `${currentYear}-05-25`, label: 'Festival de Cannes' },
+    { start: `${currentYear}-05-14`, end: `${currentYear}-05-25`, label: 'Festival de Cannes', city: 'cannes' },
     { start: `${currentYear}-06-30`, end: `${currentYear}-07-13`, label: 'Wimbledon Championships', city: 'london' },
     { start: `${currentYear}-09-20`, end: `${currentYear}-09-28`, label: 'London Fashion Week', city: 'london' },
     { start: `${currentYear}-09-23`, end: `${currentYear}-10-01`, label: 'Paris Fashion Week', city: 'paris' },
@@ -686,6 +699,7 @@ export function DashboardIntelPage() {
       start: `${currentYear}-07-20`,
       end: `${currentYear}-08-20`,
       label: 'Jeux olympiques (annee officielle)',
+      city: 'paris',
     })
   }
   const cities: CityPoint[] = [
@@ -765,6 +779,16 @@ export function DashboardIntelPage() {
     cities.find((city) => city.id === selectedCityId) ??
     (filteredCities.length === 1 ? filteredCities[0] : null)
   const selectedListing = myListings.find((listing) => listing.id === selectedListingId) ?? null
+  useEffect(() => {
+    if (myListings.length === 0) {
+      setSelectedListingId(null)
+      return
+    }
+    if (!selectedListingId) return
+    if (!myListings.some((listing) => listing.id === selectedListingId)) {
+      setSelectedListingId(myListings[0].id)
+    }
+  }, [myListings, selectedListingId])
   const activeLocationLabel =
     selectedCity?.name || searchedLabel || (targetPosition ? `${targetPosition[0]}, ${targetPosition[1]}` : locationContext.city)
   const activeLocationAddress =
@@ -794,6 +818,22 @@ export function DashboardIntelPage() {
       : ''
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'long' })
   const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+  const localAddressNeedle = `${locationContext.city} ${locationContext.country}`.toLowerCase()
+  const matchesLocalArea = (text: string) => {
+    const normalized = (text || '').toLowerCase()
+    if (!normalized.trim()) return false
+    return (
+      normalized.includes(locationContext.city.toLowerCase()) ||
+      normalized.includes(locationContext.country.toLowerCase()) ||
+      normalized.includes(localAddressNeedle)
+    )
+  }
+  const isWithinLocalRadius = (lat: number | null | undefined, lng: number | null | undefined) => {
+    if (lat == null || lng == null) return false
+    const [originLat, originLng] = targetPosition ?? [selectedCity?.lat ?? null, selectedCity?.lng ?? null]
+    if (originLat == null || originLng == null) return false
+    return haversineDistanceKm(originLat, originLng, lat, lng) <= MAX_LOCAL_EVENT_RADIUS_KM
+  }
 
   const countryToCode: Record<string, string> = {
     france: 'FR',
@@ -902,165 +942,13 @@ export function DashboardIntelPage() {
       }
 
       try {
-        const query = `${locationContext.city} ${locationContext.country}`
-        const newsRes = await fetch(
-          `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
-            query,
-          )}&mode=ArtList&format=json&maxrecords=100&sort=DateDesc`,
-        )
-        const newsData = (await newsRes.json()) as { articles?: GdeltArticle[] }
         const dateCounts: Record<string, number> = {}
         const conflictCounts: Record<string, number> = {}
         const typedSignals: Record<string, LiveSignalDay> = {}
-        let total = 0
-        ;(newsData.articles ?? []).forEach((article) => {
-          if (!article.seendate) return
-          const iso = `${article.seendate.slice(0, 4)}-${article.seendate.slice(4, 6)}-${article.seendate.slice(6, 8)}`
-          dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
-          total += 1
+        const total = 0
 
-          const title = (article.title ?? '').toLowerCase()
-          if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
-          const rawTitle = (article.title ?? '').trim()
-          const rawTitleLower = rawTitle.toLowerCase()
-          if (
-            title.includes('concert') ||
-            title.includes('festival') ||
-            title.includes('live') ||
-            title.includes('music') ||
-            title.includes('spectacle')
-          ) {
-            typedSignals[iso].concerts += 1
-            if (!typedSignals[iso].sources.includes('GDELT-concerts')) typedSignals[iso].sources.push('GDELT-concerts')
-            if (rawTitle && typedSignals[iso].concertLabels.length < 3) typedSignals[iso].concertLabels.push(rawTitle)
-          }
-          const artistBoost = MEGA_ARTISTS.find((artist) => rawTitleLower.includes(artist))
-          if (artistBoost) {
-            typedSignals[iso].concerts += 3
-            if (!typedSignals[iso].sources.includes('GDELT-mega-artist')) typedSignals[iso].sources.push('GDELT-mega-artist')
-            if (typedSignals[iso].concertLabels.length < 5) {
-              typedSignals[iso].concertLabels.push(`Concert majeur: ${artistBoost.toUpperCase()}`)
-            }
-          }
-          if (
-            title.includes('match') ||
-            title.includes('football') ||
-            title.includes('soccer') ||
-            title.includes('rugby') ||
-            title.includes('basket') ||
-            MAJOR_SPORT_KEYWORDS.some((k) => title.includes(k))
-          ) {
-            typedSignals[iso].sports += 1
-            if (!typedSignals[iso].sources.includes('GDELT-sports')) typedSignals[iso].sources.push('GDELT-sports')
-            if (rawTitle && typedSignals[iso].sportsLabels.length < 3) typedSignals[iso].sportsLabels.push(rawTitle)
-          }
-          if (
-            title.includes('expo') ||
-            title.includes('conference') ||
-            title.includes('summit') ||
-            title.includes('convention') ||
-            title.includes('salon')
-          ) {
-            typedSignals[iso].business += 1
-            if (!typedSignals[iso].sources.includes('GDELT-business')) typedSignals[iso].sources.push('GDELT-business')
-            if (rawTitle && typedSignals[iso].businessLabels.length < 3) typedSignals[iso].businessLabels.push(rawTitle)
-          }
-          if (
-            title.includes('war') ||
-            title.includes('guerre') ||
-            title.includes('conflict') ||
-            title.includes('attaque') ||
-            title.includes('military') ||
-            title.includes('strike')
-          ) {
-            conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 1
-          }
-        })
-
-        const newsApiKey = import.meta.env.VITE_NEWSAPI_KEY as string | undefined
-        if (newsApiKey) {
-          const naRes = await fetch(
-            `https://newsapi.org/v2/everything?q=${encodeURIComponent(
-              `${locationContext.city} OR ${locationContext.country}`,
-            )}&sortBy=publishedAt&pageSize=100&apiKey=${newsApiKey}`,
-          )
-          if (naRes.ok) {
-            status.NewsAPI = 'connected'
-            const naData = (await naRes.json()) as NewsApiResponse
-            for (const article of naData.articles ?? []) {
-              const iso = normalizeIsoDate(article.publishedAt)
-              if (!iso) continue
-              dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
-              const title = (article.title ?? '').toLowerCase()
-              if (
-                title.includes('war') ||
-                title.includes('guerre') ||
-                title.includes('conflict') ||
-                title.includes('attaque') ||
-                title.includes('terror') ||
-                title.includes('riot')
-              ) {
-                conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 2
-              }
-            }
-          } else {
-            status.NewsAPI = 'error'
-          }
-        } else status.NewsAPI = 'missing_key'
-
-        const nytKey = import.meta.env.VITE_NYT_API_KEY as string | undefined
-        if (nytKey) {
-          const nytRes = await fetch(
-            `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${encodeURIComponent(
-              locationContext.city,
-            )}&sort=newest&api-key=${nytKey}`,
-          )
-          if (nytRes.ok) {
-            status.NYT = 'connected'
-            const nytData = (await nytRes.json()) as NytResponse
-            for (const doc of nytData.response?.docs ?? []) {
-              const iso = normalizeIsoDate(doc.pub_date)
-              if (!iso) continue
-              dateCounts[iso] = (dateCounts[iso] ?? 0) + 1
-              const title = (doc.headline?.main ?? '').toLowerCase()
-              if (
-                title.includes('war') ||
-                title.includes('conflict') ||
-                title.includes('attack') ||
-                title.includes('terror')
-              ) {
-                conflictCounts[iso] = (conflictCounts[iso] ?? 0) + 2
-              }
-            }
-          } else {
-            status.NYT = 'error'
-          }
-        } else status.NYT = 'missing_key'
-
-        const leagueIds = ['4328', '4331', '4332', '4334', '4337']
-        const sportsResponses = await Promise.allSettled(
-          leagueIds.map((id) => fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=${id}`)),
-        )
-        for (const settled of sportsResponses) {
-          if (settled.status !== 'fulfilled') continue
-          const data = (await settled.value.json()) as {
-            events?: Array<{ dateEvent?: string; strEvent?: string; strHomeTeam?: string; strAwayTeam?: string }>
-          }
-          for (const event of data.events ?? []) {
-            const iso = event.dateEvent
-            if (!iso) continue
-            if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
-            typedSignals[iso].sports += 2
-            if (!typedSignals[iso].sources.includes('TheSportsDB')) typedSignals[iso].sources.push('TheSportsDB')
-            const versusLabel =
-              event.strHomeTeam && event.strAwayTeam
-                ? `${runtimeText.matchOf} ${event.strHomeTeam} vs ${event.strAwayTeam}`
-                : event.strEvent
-                  ? `${runtimeText.matchOf} ${event.strEvent}`
-                  : `${runtimeText.matchOf} major detected`
-            if (typedSignals[iso].sportsLabels.length < 5) typedSignals[iso].sportsLabels.push(versusLabel)
-          }
-        }
+        status.NewsAPI = 'missing_key'
+        status.NYT = 'missing_key'
 
         const ticketmasterKey = import.meta.env.VITE_TICKETMASTER_API_KEY as string | undefined
         if (ticketmasterKey) {
@@ -1071,6 +959,13 @@ export function DashboardIntelPage() {
             status.Ticketmaster = 'connected'
             const tmData = (await tmRes.json()) as TicketmasterResponse
             for (const event of tmData._embedded?.events ?? []) {
+              const venue = event._embedded?.venues?.[0] as
+                | { city?: { name?: string }; location?: { latitude?: string; longitude?: string } }
+                | undefined
+              const lat = venue?.location?.latitude ? Number(venue.location.latitude) : null
+              const lng = venue?.location?.longitude ? Number(venue.location.longitude) : null
+              const venueCity = venue?.city?.name ?? ''
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(`${event.name ?? ''} ${venueCity}`))) continue
               const iso = event.dates?.start?.localDate
               if (!iso) continue
               if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
@@ -1105,6 +1000,10 @@ export function DashboardIntelPage() {
             status.SeatGeek = 'connected'
             const sgData = (await sgRes.json()) as SeatgeekResponse
             for (const event of sgData.events ?? []) {
+              const lat = typeof event.venue?.location?.lat === 'number' ? event.venue.location.lat : null
+              const lng = typeof event.venue?.location?.lon === 'number' ? event.venue.location.lon : null
+              const venueCity = event.venue?.city ?? ''
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(`${event.title ?? ''} ${venueCity}`))) continue
               const date = event.datetime_local?.slice(0, 10)
               if (!date) continue
               if (!typedSignals[date]) typedSignals[date] = emptyLiveSignalDay()
@@ -1139,6 +1038,9 @@ export function DashboardIntelPage() {
             status.PredictHQ = 'connected'
             const phqData = (await phqRes.json()) as PredictHQResponse
             for (const event of phqData.results ?? []) {
+              const phqLat = Array.isArray(event.location) ? Number(event.location[1]) : null
+              const phqLng = Array.isArray(event.location) ? Number(event.location[0]) : null
+              if (!(isWithinLocalRadius(phqLat, phqLng) || matchesLocalArea(event.title ?? ''))) continue
               const date = event.start?.slice(0, 10)
               if (!date) continue
               if (!typedSignals[date]) typedSignals[date] = emptyLiveSignalDay()
@@ -1176,6 +1078,12 @@ export function DashboardIntelPage() {
             status.Eventbrite = 'connected'
             const ebData = (await ebRes.json()) as EventbriteResponse
             for (const event of ebData.events ?? []) {
+              const venue = event.venue as { address?: { city?: string }; latitude?: string; longitude?: string } | undefined
+              const lat = venue?.latitude ? Number(venue.latitude) : null
+              const lng = venue?.longitude ? Number(venue.longitude) : null
+              const venueCity = venue?.address?.city ?? ''
+              const eventName = event.name?.text ?? ''
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(`${eventName} ${venueCity}`))) continue
               const iso = normalizeIsoDate(event.start?.local ?? event.start?.utc)
               if (!iso) continue
               if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
@@ -1203,6 +1111,10 @@ export function DashboardIntelPage() {
             }
             const biData = (await biRes.json()) as BandsintownEvent[]
             for (const event of biData ?? []) {
+              const lat = typeof event.venue?.latitude === 'number' ? event.venue.latitude : null
+              const lng = typeof event.venue?.longitude === 'number' ? event.venue.longitude : null
+              const venueCity = event.venue?.city ?? ''
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(`${event.title ?? ''} ${venueCity}`))) continue
               const iso = normalizeIsoDate(event.datetime)
               if (!iso) continue
               if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
@@ -1214,61 +1126,8 @@ export function DashboardIntelPage() {
           }
         } else status.Bandsintown = 'missing_key'
 
-        const songkickApiKey = import.meta.env.VITE_SONGKICK_API_KEY as string | undefined
-        if (songkickApiKey) {
-          const skRes = await fetch(
-            `https://api.songkick.com/api/3.0/events.json?apikey=${songkickApiKey}&location=sk:${encodeURIComponent(
-              locationContext.city,
-            )}`,
-          )
-          if (skRes.ok) {
-            status.Songkick = 'connected'
-            const skData = (await skRes.json()) as SongkickResponse
-            for (const event of skData.resultsPage?.results?.event ?? []) {
-              const iso = normalizeIsoDate(event.start?.date)
-              if (!iso) continue
-              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
-              typedSignals[iso].concerts += 2
-              if (!typedSignals[iso].sources.includes('Songkick')) typedSignals[iso].sources.push('Songkick')
-              const label = event.displayName?.trim()
-              if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
-            }
-          } else {
-            status.Songkick = 'error'
-          }
-        } else status.Songkick = 'missing_key'
-
-        const allEventsApiKey = import.meta.env.VITE_ALLEVENTS_API_KEY as string | undefined
-        if (allEventsApiKey) {
-          const aeRes = await fetch(
-            `https://api.allevents.in/events?city=${encodeURIComponent(locationContext.city)}&from=${encodeURIComponent(
-              rangeStart,
-            )}&to=${encodeURIComponent(rangeEnd)}`,
-            { headers: { Authorization: allEventsApiKey } },
-          )
-          if (aeRes.ok) {
-            status.AllEvents = 'connected'
-            const aeData = (await aeRes.json()) as { events?: Array<{ eventname?: string; start_time?: string; category?: string }> }
-            for (const event of aeData.events ?? []) {
-              const iso = normalizeIsoDate(event.start_time)
-              if (!iso) continue
-              if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
-              const category = (event.category ?? '').toLowerCase()
-              const label = (event.eventname ?? '').trim()
-              if (category.includes('music') || category.includes('concert')) {
-                typedSignals[iso].concerts += 2
-                if (!typedSignals[iso].sources.includes('AllEvents')) typedSignals[iso].sources.push('AllEvents')
-                if (label && typedSignals[iso].concertLabels.length < 8) typedSignals[iso].concertLabels.push(label)
-              } else {
-                typedSignals[iso].business += 1
-                if (!typedSignals[iso].sources.includes('AllEvents')) typedSignals[iso].sources.push('AllEvents')
-                if (label && typedSignals[iso].businessLabels.length < 8) typedSignals[iso].businessLabels.push(label)
-              }
-            }
-          } else {
-            status.AllEvents = 'error'
-          }
-        } else status.AllEvents = 'missing_key'
+        status.Songkick = 'missing_key'
+        status.AllEvents = 'missing_key'
 
         const meetupToken = import.meta.env.VITE_MEETUP_API_TOKEN as string | undefined
         if (meetupToken) {
@@ -1279,6 +1138,9 @@ export function DashboardIntelPage() {
             status.Meetup = 'connected'
             const meetupData = (await meetupRes.json()) as MeetupResponse
             for (const event of meetupData.events ?? []) {
+              const lat = event.venue?.lat ?? null
+              const lng = event.venue?.lon ?? null
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(event.name ?? ''))) continue
               const iso = normalizeIsoDate(event.dateTime)
               if (!iso) continue
               if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
@@ -1307,6 +1169,9 @@ export function DashboardIntelPage() {
             status.Fever = 'connected'
             const feverData = (await feverRes.json()) as { events?: Array<{ name?: string; start_time?: string; category?: string }> }
             for (const event of feverData.events ?? []) {
+              const lat = (event as { venue?: { lat?: number } }).venue?.lat ?? null
+              const lng = (event as { venue?: { lon?: number } }).venue?.lon ?? null
+              if (!(isWithinLocalRadius(lat, lng) || matchesLocalArea(event.name ?? ''))) continue
               const iso = normalizeIsoDate(event.start_time)
               if (!iso) continue
               if (!typedSignals[iso]) typedSignals[iso] = emptyLiveSignalDay()
@@ -1352,6 +1217,10 @@ export function DashboardIntelPage() {
               >),
             ] as Array<Record<string, unknown>>
             for (const row of candidateRows) {
+              const rowLat = pickFirstNumber(row.lat, row.latitude, row.event_lat, row.venue_lat)
+              const rowLng = pickFirstNumber(row.lng, row.lon, row.longitude, row.event_lng, row.venue_lng)
+              const rowNameForLocal = pickFirstString(row.event_name, row.name, row.title, row.description, row.city)
+              if (!(isWithinLocalRadius(rowLat, rowLng) || matchesLocalArea(rowNameForLocal))) continue
               const iso = normalizeIsoDate(
                 pickFirstString(
                   row.date,
@@ -1390,38 +1259,6 @@ export function DashboardIntelPage() {
         } else status.PriceLabs = 'missing_key'
 
         const globalSignals: Record<string, { worldAlerts: number; labels: string[] }> = {}
-
-        const globalNewsRes = await fetch(
-          `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(
-            'concert OR festival OR match OR football OR summit OR conference OR expo',
-          )}&mode=ArtList&format=json&maxrecords=120&sort=DateDesc`,
-        )
-        const globalNewsData = (await globalNewsRes.json()) as { articles?: GdeltArticle[] }
-        ;(globalNewsData.articles ?? []).forEach((article) => {
-          if (!article.seendate) return
-          const iso = `${article.seendate.slice(0, 4)}-${article.seendate.slice(4, 6)}-${article.seendate.slice(6, 8)}`
-          if (!globalSignals[iso]) globalSignals[iso] = { worldAlerts: 0, labels: [] }
-          globalSignals[iso].worldAlerts += 1
-          if (article.title && globalSignals[iso].labels.length < 3) globalSignals[iso].labels.push(article.title)
-        })
-
-        const quakesRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
-        const quakesData = (await quakesRes.json()) as { features?: EarthquakeFeature[] }
-        ;(quakesData.features ?? []).forEach((feature) => {
-          const time = feature.properties?.time
-          if (!time) return
-          const date = new Date(time)
-          const iso = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(
-            date.getUTCDate(),
-          ).padStart(2, '0')}`
-          if (!globalSignals[iso]) globalSignals[iso] = { worldAlerts: 0, labels: [] }
-          globalSignals[iso].worldAlerts += 1
-          const mag = feature.properties?.mag ?? 0
-          const place = feature.properties?.place ?? 'zone inconnue'
-          if (mag >= 4 && globalSignals[iso].labels.length < 5) {
-            globalSignals[iso].labels.push(`Alerte mondiale: seisme M${mag.toFixed(1)} (${place})`)
-          }
-        })
 
         setNewsByDate(dateCounts)
         setConflictByDate(conflictCounts)
@@ -1767,7 +1604,7 @@ export function DashboardIntelPage() {
       summaryLines: monthlyWatchSummary,
       highEvents,
     }
-    localStorage.setItem(LS_WATCH_INTEL_SUMMARY, JSON.stringify(payload))
+    writeScopedStorage(LS_WATCH_INTEL_SUMMARY, JSON.stringify(payload))
   }, [displayedAnalyzedAddress, displayedMonth, monthlyWatchSummary])
 
   const onSearch = async (e: FormEvent) => {
@@ -2043,7 +1880,38 @@ export function DashboardIntelPage() {
             ) : (
               <div className="mt-3 space-y-2">
                 {myListings.length > 0 ? (
-                  myListings.map((listing) => {
+                  <>
+                    {myListings.length > 3 ? (
+                      <select
+                        value={selectedListingId ?? myListings[0].id}
+                        onChange={(e) => {
+                          const nextId = e.target.value
+                          const listing = myListings.find((l) => l.id === nextId)
+                          if (!listing) return
+                          setSelectedListingId(listing.id)
+                          setIsBroadCityAnalysis(false)
+                          const geoHint = listing.addressResolved ? listing.address : listing.name
+                          setSearchedLabel(listing.addressResolved ? listing.address : '')
+                          const cityMatch = cities.find((city) => geoHint.toLowerCase().includes(city.name.toLowerCase()))
+                          if (cityMatch) {
+                            setSelectedCityId(cityMatch.id)
+                            setTargetPosition([cityMatch.lat, cityMatch.lng])
+                            const code = countryToCode[cityMatch.country.toLowerCase()] ?? 'FR'
+                            setLocationContext({ city: cityMatch.name, country: cityMatch.country, countryCode: code })
+                          } else {
+                            setSelectedCityId(null)
+                          }
+                        }}
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-[#4a86f7]"
+                      >
+                        {myListings.map((listing) => (
+                          <option key={listing.id} value={listing.id}>
+                            {listing.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    {(myListings.length > 3 ? myListings.filter((l) => l.id === (selectedListingId ?? myListings[0].id)) : myListings).map((listing) => {
                     const platformLabel =
                       listing.platform === 'airbnb'
                         ? copy.platformAirbnb
@@ -2081,7 +1949,8 @@ export function DashboardIntelPage() {
                         <p className="text-zinc-600">{listing.address}</p>
                       </article>
                     )
-                  })
+                  })}
+                  </>
                 ) : (
                   <p className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-500">
                     {copy.myListingsEmpty}

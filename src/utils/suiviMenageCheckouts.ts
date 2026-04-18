@@ -1,9 +1,5 @@
-import {
-  DEMO_APARTMENT_ROW_COUNT,
-  DEMO_MONTH_INDEX,
-  DEMO_YEAR,
-  MOCK_BOOKINGS,
-} from '../data/demoCalendarBookings'
+import type { ConnectedApartment } from './connectedApartments'
+import { readOfficialChannelSyncData } from './officialChannelData'
 
 export type SuiviCheckoutEvent = {
   id: string
@@ -11,33 +7,58 @@ export type SuiviCheckoutEvent = {
   checkoutIso: string
   guest: string
   reservationId: string
-  channel: 'airbnb' | 'booking'
+  channel: 'airbnb' | 'booking' | 'other'
 }
 
-function isoDateUtc(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+function normalizeChannel(raw?: string): SuiviCheckoutEvent['channel'] {
+  const value = (raw || '').trim().toLowerCase()
+  if (value === 'airbnb') return 'airbnb'
+  if (value === 'booking') return 'booking'
+  return 'other'
 }
 
-/**
- * Check-outs dérivés du même calendrier démo que le dashboard (voir `BookingCalendarOverview`).
- * Quand le calendrier réel sera branché sur l’iCal, cette fonction pourra être remplacée par les vrais départs.
- */
-export function getDemoCheckoutEventsForSuivi(apartmentRowCount: number): SuiviCheckoutEvent[] {
-  const count = Math.max(apartmentRowCount, DEMO_APARTMENT_ROW_COUNT)
+function normalizeIsoDate(raw: string): string {
+  const text = raw.trim()
+  if (!text) return ''
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (isoMatch?.[1]) return isoMatch[1]
+  const parsed = new Date(text)
+  if (Number.isNaN(parsed.getTime())) return ''
+  const y = parsed.getFullYear()
+  const m = String(parsed.getMonth() + 1).padStart(2, '0')
+  const d = String(parsed.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function getOfficialCheckoutEventsForSuivi(apartments: ConnectedApartment[]): SuiviCheckoutEvent[] {
+  if (!apartments.length) return []
+  const official = readOfficialChannelSyncData()
+  if (!official?.bookings?.length) return []
+
+  const apartmentIndexByPropertyId = new Map<string, number>()
+  apartments.forEach((apartment, index) => {
+    if (!apartment.id.startsWith('channelManager:')) return
+    const propertyId = apartment.id.slice('channelManager:'.length).trim()
+    if (propertyId) apartmentIndexByPropertyId.set(propertyId, index)
+  })
+
+  if (!apartmentIndexByPropertyId.size) return []
+
   const out: SuiviCheckoutEvent[] = []
-  for (const b of MOCK_BOOKINGS) {
-    if (b.apt >= count) continue
-    const checkout = new Date(DEMO_YEAR, DEMO_MONTH_INDEX, b.end + 1)
+  for (const booking of official.bookings) {
+    const aptIndex = apartmentIndexByPropertyId.get((booking.propertyId || '').trim())
+    if (typeof aptIndex !== 'number') continue
+    const checkoutIso = normalizeIsoDate(booking.checkOut || '')
+    if (!checkoutIso) continue
+    const reservationId = (booking.id || '').trim()
+    const guest = (booking.guestName || '').trim()
     out.push({
-      id: `${b.reservationId}|apt${b.apt}`,
-      aptIndex: b.apt,
-      checkoutIso: isoDateUtc(checkout),
-      guest: b.guest,
-      reservationId: b.reservationId,
-      channel: b.channel,
+      id: reservationId ? `${reservationId}|apt${aptIndex}` : `${booking.propertyId}|${checkoutIso}|apt${aptIndex}`,
+      aptIndex,
+      checkoutIso,
+      guest: guest || 'Voyageur',
+      reservationId: reservationId || '-',
+      channel: normalizeChannel(booking.channel),
     })
   }
   return out.sort((a, b) => (a.checkoutIso < b.checkoutIso ? 1 : a.checkoutIso > b.checkoutIso ? -1 : 0))

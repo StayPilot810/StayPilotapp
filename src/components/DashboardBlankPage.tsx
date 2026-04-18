@@ -11,6 +11,9 @@ export function DashboardBlankPage() {
       >
         {t.dashboardBackToHub}
       </a>
+      <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Cette section n'est pas incluse dans votre forfait actuel. Augmentez votre forfait pour y accéder.
+      </div>
     </section>
   )
 }

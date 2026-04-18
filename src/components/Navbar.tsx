@@ -162,13 +162,13 @@ function DesktopNavCenter() {
       <a href="/fonctionnalites" className={linkGray}>
         {t.features}
       </a>
-      <a href="#avis" className={linkGray}>
+      <a href="/#avis" className={linkGray}>
         {t.reviews}
       </a>
-      <a href="#tarifs" className={linkGray}>
+      <a href="/#tarifs" className={linkGray}>
         {t.pricing}
       </a>
-      <a href="#faq" className={linkGray}>
+      <a href="/#faq" className={linkGray}>
         {t.faq}
       </a>
       <a href="/support" className={linkGray}>
@@ -284,19 +284,19 @@ export function Navbar() {
               className="mx-auto flex max-w-[1200px] flex-col gap-0.5 px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 sm:gap-1 sm:px-6 sm:pb-4 sm:pt-4"
               aria-label={t.navMobileLabel}
             >
-              <a href="#pourquoi-nous" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/#pourquoi-nous" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.whyUs}
               </a>
               <a href="/fonctionnalites" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.features}
               </a>
-              <a href="#avis" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/#avis" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.reviews}
               </a>
-              <a href="#tarifs" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/#tarifs" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.pricing}
               </a>
-              <a href="#faq" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
+              <a href="/#faq" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>
                 {t.faq}
               </a>
               <a href="/support" onClick={closeMobile} className={`${linkGray} rounded-lg px-3 py-3.5`}>

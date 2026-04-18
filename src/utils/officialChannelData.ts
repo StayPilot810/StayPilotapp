@@ -1,3 +1,4 @@
+import { readScopedStorage } from './sessionStorageScope'
 export const OFFICIAL_CHANNEL_SYNC_KEY = 'staypilot_official_channel_sync'
 
 export type OfficialChannelOtaLinks = {
@@ -19,9 +20,13 @@ export type OfficialSyncedBooking = {
   checkIn: string
   checkOut: string
   guestName: string
+  channel?: 'airbnb' | 'booking' | string
   status: string
+  prixTotalVoyageur?: { amount: number; currency: string }
+  fraisMenage?: { amount: number; currency: string }
+  autresFrais?: { amount: number; currency: string }
   revenuNetDetaille?: { amount: number; currency: string; formula?: string }
-  fraisPlateforme?: { amount: number; currency: string; detail?: string }
+  fraisPlateforme?: { amount: number; percent?: number; currency: string; detail?: string }
   taxesTva?: { totalTaxes: number; vatAmount: number; vatRate: number; currency: string }
   paiements?: Array<{ id: string; amount: number; currency: string; status: string; paidAt?: string; method?: string }>
   messagesVoyageurs?: Array<{ id: string; sender?: string; body?: string; sentAt?: string }>
@@ -41,7 +46,7 @@ export type OfficialChannelSyncData = {
 
 export function readOfficialChannelSyncData(): OfficialChannelSyncData | null {
   try {
-    const raw = localStorage.getItem(OFFICIAL_CHANNEL_SYNC_KEY)
+    const raw = readScopedStorage(OFFICIAL_CHANNEL_SYNC_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as OfficialChannelSyncData
     if (!Array.isArray(parsed?.properties) || !Array.isArray(parsed?.bookings)) return null

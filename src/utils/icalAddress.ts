@@ -1,3 +1,4 @@
+import { readScopedStorage, writeScopedStorage } from './sessionStorageScope'
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
 const CHANNEL_STORAGE_KEY = 'staypilot_connected_channels'
@@ -95,8 +96,8 @@ function shouldAutoFillAddress(stored: string | undefined) {
 }
 
 export async function enrichReservationAccessAddressesFromIcal(): Promise<boolean> {
-  const rawChannels = localStorage.getItem(CHANNEL_STORAGE_KEY)
-  const rawAccess = localStorage.getItem(ACCESS_STORAGE_KEY)
+  const rawChannels = readScopedStorage(CHANNEL_STORAGE_KEY)
+  const rawAccess = readScopedStorage(ACCESS_STORAGE_KEY)
   if (!rawAccess) return false
 
   let connected: Partial<Record<ChannelKey, boolean>> = {}
@@ -138,7 +139,7 @@ export async function enrichReservationAccessAddressesFromIcal(): Promise<boolea
   }
 
   if (changed) {
-    localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(access))
+    writeScopedStorage(ACCESS_STORAGE_KEY, JSON.stringify(access))
   }
   return changed
 }

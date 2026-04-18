@@ -1,3 +1,4 @@
+import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react'
 import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
@@ -22,7 +23,6 @@ import { DashboardWhatsAppPage } from './components/DashboardWhatsAppPage'
 import { DashboardEarlyAccessPage } from './components/DashboardEarlyAccessPage'
 import { DashboardExpensesPage } from './components/DashboardExpensesPage'
 import { DashboardCleaningPage } from './components/DashboardCleaningPage'
-import { DashboardCompanyPage } from './components/DashboardCompanyPage'
 import { AboutPage } from './components/AboutPage'
 import { BlogPage } from './components/BlogPage'
 import { CareersPage } from './components/CareersPage'
@@ -39,6 +39,52 @@ import { AiChatWidget } from './components/AiChatWidget'
 import { ProfilePage } from './components/ProfilePage'
 import { FeaturesVideoPage } from './components/FeaturesVideoPage'
 import { useAppPathname } from './hooks/useAppPathname'
+import { canAccessDashboardPath, getPlanTierFromValue } from './utils/subscriptionAccess'
+
+function DashboardSocieteRedirect() {
+  useEffect(() => {
+    window.location.replace('/dashboard')
+  }, [])
+  return null
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error('App render error:', error, info)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="flex min-h-screen items-center justify-center bg-[#f8fafc] px-4">
+          <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 text-center">
+            <h1 className="text-xl font-bold text-zinc-900">Une erreur est survenue</h1>
+            <p className="mt-2 text-sm text-zinc-600">
+              Rechargez la page. Si le probleme persiste, reconnectez-vous puis reessayez.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+            >
+              Recharger
+            </button>
+          </div>
+        </section>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function App() {
   const pathname = useAppPathname()
@@ -87,12 +133,16 @@ export default function App() {
   const isDashboardExpensesPage = pathname === '/dashboard/tableau-charges'
   const isDashboardCompanyPage = pathname === '/dashboard/societe'
   const isDashboardSubPage = pathname.startsWith('/dashboard/')
+  const currentPlanRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_plan') || 'Pro' : 'Pro'
+  const planTier = getPlanTierFromValue(currentPlanRaw)
+  const hostPlanAllowsPath = !isCleanerSession && canAccessDashboardPath(planTier, pathname)
 
   return (
-    <LazyMotion features={domAnimation}>
-      <MotionConfig reducedMotion="user">
-      <LanguageProvider>
-      <div className="flex min-h-screen min-w-0 flex-col bg-pm-app text-zinc-900 antialiased">
+    <AppErrorBoundary>
+      <LazyMotion features={domAnimation}>
+        <MotionConfig reducedMotion="user">
+        <LanguageProvider>
+        <div className="flex min-h-screen min-w-0 flex-col bg-pm-app text-zinc-900 antialiased">
         <Navbar />
         <main className="flex min-w-0 flex-1 flex-col">
           {isLoginPage ? (
@@ -162,6 +212,8 @@ export default function App() {
             <ProfilePage />
           ) : (isDashboardPage || isDashboardSubPage) && isCleanerSession && !cleanerDashboardAllowed ? (
             <DashboardBlankPage />
+          ) : (isDashboardPage || isDashboardSubPage) && !isCleanerSession && !hostPlanAllowsPath ? (
+            <DashboardBlankPage />
           ) : isDashboardPage ? (
             billingSuspended ? (
               <ProfilePage />
@@ -226,7 +278,7 @@ export default function App() {
             billingSuspended ? (
               <ProfilePage />
             ) : (
-            <DashboardCompanyPage />
+            <DashboardSocieteRedirect />
             )
           ) : isDashboardSubPage ? (
             billingSuspended ? (
@@ -248,9 +300,10 @@ export default function App() {
           )}
         </main>
         <AiChatWidget />
-      </div>
-      </LanguageProvider>
-      </MotionConfig>
-    </LazyMotion>
+        </div>
+        </LanguageProvider>
+        </MotionConfig>
+      </LazyMotion>
+    </AppErrorBoundary>
   )
 }

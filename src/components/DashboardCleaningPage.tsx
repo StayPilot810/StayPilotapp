@@ -1,13 +1,12 @@
 import { ClipboardList, Copy, FileText, ImagePlus, Inbox, Link2, ListChecks, Receipt, Send, Wallet, X } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEMO_APARTMENT_ROW_COUNT, DEMO_MONTH_INDEX, DEMO_YEAR } from '../data/demoCalendarBookings'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Locale } from '../i18n/navbar'
 import { getStoredAccounts } from '../lib/accounts'
+import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
-import { isTestModeEnabled } from '../utils/testMode'
-import { getDemoCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
+import { getOfficialCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
 
 type InvoiceDirection = 'received' | 'sent'
 type CleaningPanel = 'overview' | 'providers' | 'invoices' | 'chat' | 'tasks' | 'suivi'
@@ -29,7 +28,10 @@ type CleaningInvoice = {
 
 type CleaningChatMessage = {
   id: string
-  provider: string
+  hostUsername: string
+  cleanerUsername: string
+  senderUsername: string
+  recipientUsername: string
   sender: 'manager' | 'provider'
   text: string
   imageDataUrl?: string
@@ -45,8 +47,11 @@ const VAT_RATE_BY_COUNTRY: Record<string, number> = {
 type CleaningTaskItem = {
   id: string
   label: string
+  cadence: TaskFrequency
   done: boolean
   doneAt?: string
+  weeklyChecks?: [boolean, boolean, boolean, boolean]
+  weeklyDoneAt?: [string?, string?, string?, string?]
 }
 
 type CleaningTaskBoard = {
@@ -54,6 +59,7 @@ type CleaningTaskBoard = {
   apartmentId: string
   apartmentName: string
   month: string
+  ownerUsername?: string
   frequency: TaskFrequency
   provider: string
   tasks: CleaningTaskItem[]
@@ -68,6 +74,7 @@ const PROVIDER_ASSIGNMENTS_KEY = 'staypilot_cleaning_provider_assignments_v1'
 const LS_CURRENT_USER = 'staypilot_current_user'
 const LS_CURRENT_ROLE = 'staypilot_current_role'
 const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
+const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 const MAX_CHAT_IMAGE_DATA_URL_LEN = 500_000
 
 const cleaningCopy: Record<
@@ -248,6 +255,101 @@ const cleaningCopy: Record<
   },
 }
 
+const cleaningUiCopy: Record<
+  Locale,
+  {
+    cleanerProviderTitle: string
+    cleanerWorkspaceTitle: string
+    cleanerChatTitle: string
+    cleanerTasksTitle: string
+    cleanerTrackingTitle: string
+    backToCleaningTools: string
+    photoPlaceholder: string
+    noProviderYet: string
+    removePhotoAria: string
+    addPhotos: string
+    yes: string
+    no: string
+    notProvided: string
+  }
+> = {
+  fr: {
+    cleanerProviderTitle: 'Prestataire menage',
+    cleanerWorkspaceTitle: 'Espace prestataire menage',
+    cleanerChatTitle: 'Tchat prestataire menage',
+    cleanerTasksTitle: 'Taches menage (hebdomadaire / mensuel)',
+    cleanerTrackingTitle: 'Suivi menage',
+    backToCleaningTools: '← Retour aux outils prestataire menage',
+    photoPlaceholder: 'Ecrire un message... (photo optionnelle)',
+    noProviderYet: 'Aucun prestataire enregistre',
+    removePhotoAria: 'Retirer la photo',
+    addPhotos: 'Ajouter des photos',
+    yes: 'Oui',
+    no: 'Non',
+    notProvided: 'Non renseigne',
+  },
+  en: {
+    cleanerProviderTitle: 'Cleaning provider',
+    cleanerWorkspaceTitle: 'Cleaning provider space',
+    cleanerChatTitle: 'Provider chat',
+    cleanerTasksTitle: 'Cleaning tasks (weekly / monthly)',
+    cleanerTrackingTitle: 'Cleaning tracking',
+    backToCleaningTools: '← Back to cleaning tools',
+    photoPlaceholder: 'Write a message... (optional photo)',
+    noProviderYet: 'No provider registered',
+    removePhotoAria: 'Remove photo',
+    addPhotos: 'Add photos',
+    yes: 'Yes',
+    no: 'No',
+    notProvided: 'Not provided',
+  },
+  es: {
+    cleanerProviderTitle: 'Proveedor de limpieza',
+    cleanerWorkspaceTitle: 'Espacio del proveedor de limpieza',
+    cleanerChatTitle: 'Chat del proveedor',
+    cleanerTasksTitle: 'Tareas de limpieza (semanal / mensual)',
+    cleanerTrackingTitle: 'Seguimiento de limpieza',
+    backToCleaningTools: '← Volver a herramientas de limpieza',
+    photoPlaceholder: 'Escribir un mensaje... (foto opcional)',
+    noProviderYet: 'Ningun proveedor registrado',
+    removePhotoAria: 'Quitar foto',
+    addPhotos: 'Agregar fotos',
+    yes: 'Si',
+    no: 'No',
+    notProvided: 'Sin indicar',
+  },
+  de: {
+    cleanerProviderTitle: 'Reinigungsdienst',
+    cleanerWorkspaceTitle: 'Bereich Reinigungsdienst',
+    cleanerChatTitle: 'Dienstleister-Chat',
+    cleanerTasksTitle: 'Reinigungsaufgaben (wochentlich / monatlich)',
+    cleanerTrackingTitle: 'Reinigungsnachverfolgung',
+    backToCleaningTools: '← Zuruck zu Reinigungs-Tools',
+    photoPlaceholder: 'Nachricht schreiben... (optionales Foto)',
+    noProviderYet: 'Kein Dienstleister registriert',
+    removePhotoAria: 'Foto entfernen',
+    addPhotos: 'Fotos hinzufugen',
+    yes: 'Ja',
+    no: 'Nein',
+    notProvided: 'Nicht angegeben',
+  },
+  it: {
+    cleanerProviderTitle: 'Fornitore pulizie',
+    cleanerWorkspaceTitle: 'Spazio fornitore pulizie',
+    cleanerChatTitle: 'Chat fornitore',
+    cleanerTasksTitle: 'Attivita pulizie (settimanale / mensile)',
+    cleanerTrackingTitle: 'Monitoraggio pulizie',
+    backToCleaningTools: '← Torna agli strumenti pulizie',
+    photoPlaceholder: 'Scrivi un messaggio... (foto opzionale)',
+    noProviderYet: 'Nessun fornitore registrato',
+    removePhotoAria: 'Rimuovi foto',
+    addPhotos: 'Aggiungi foto',
+    yes: 'Si',
+    no: 'No',
+    notProvided: 'Non indicato',
+  },
+}
+
 type CleanerInvite = {
   code: string
   hostUsername: string
@@ -256,7 +358,9 @@ type CleanerInvite = {
 
 function readCleanerInvites(): CleanerInvite[] {
   try {
-    const raw = localStorage.getItem(CLEANER_INVITES_KEY)
+    // Cleaner signup is public (no host session), so invite codes must be readable
+    // without scoped storage.
+    const raw = localStorage.getItem(CLEANER_INVITES_KEY) || readScopedStorage(CLEANER_INVITES_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? (parsed as CleanerInvite[]) : []
@@ -267,6 +371,7 @@ function readCleanerInvites(): CleanerInvite[] {
 
 function saveCleanerInvites(invites: CleanerInvite[]) {
   localStorage.setItem(CLEANER_INVITES_KEY, JSON.stringify(invites))
+  writeScopedStorage(CLEANER_INVITES_KEY, JSON.stringify(invites))
 }
 
 function createInviteCode() {
@@ -341,7 +446,7 @@ function formatChatDayLabel(iso: string): string {
 
 function readInvoices(): CleaningInvoice[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = readScopedStorage(STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -352,57 +457,43 @@ function readInvoices(): CleaningInvoice[] {
 }
 
 function saveInvoices(invoices: CleaningInvoice[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices))
+  writeScopedStorage(STORAGE_KEY, JSON.stringify(invoices))
 }
 
 function readChatMessages(): CleaningChatMessage[] {
   try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+    const raw = readScopedStorage(CHAT_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(Boolean).map((row: CleaningChatMessage) => {
+    return parsed.filter(Boolean).map((row: Partial<CleaningChatMessage> & { provider?: string }) => {
       const img =
         typeof row.imageDataUrl === 'string' && row.imageDataUrl.startsWith('data:image/jpeg;base64,')
           ? row.imageDataUrl
           : undefined
       return {
-        ...row,
+        id: typeof row.id === 'string' ? row.id : randomId(),
+        hostUsername: typeof row.hostUsername === 'string' ? row.hostUsername.trim().toLowerCase() : '',
+        cleanerUsername: typeof row.cleanerUsername === 'string' ? row.cleanerUsername.trim().toLowerCase() : '',
+        senderUsername: typeof row.senderUsername === 'string' ? row.senderUsername.trim().toLowerCase() : '',
+        recipientUsername: typeof row.recipientUsername === 'string' ? row.recipientUsername.trim().toLowerCase() : '',
+        sender: row.sender === 'provider' ? 'provider' : 'manager',
         text: typeof row.text === 'string' ? row.text : '',
         imageDataUrl: img,
+        createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date().toISOString(),
       }
-    })
+    }).filter((row) => row.hostUsername && row.cleanerUsername && row.senderUsername && row.recipientUsername)
   } catch {
     return []
   }
 }
 
 function saveChatMessages(messages: CleaningChatMessage[]) {
-  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages))
+  writeScopedStorage(CHAT_STORAGE_KEY, JSON.stringify(messages))
 }
 
 function randomId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-}
-
-function defaultTaskLabels(frequency: TaskFrequency): string[] {
-  if (frequency === 'weekly') {
-    return [
-      'Vider et nettoyer les poubelles',
-      'Dépoussiérer meubles et surfaces visibles',
-      'Aspirer puis passer la serpillière (sols)',
-      'Nettoyer salle de bain (lavabo, miroir, douche)',
-      'Vérifier le stock papier toilette et essuie-tout',
-    ]
-  }
-  return [
-    'Nettoyer les vitres (côté intérieur)',
-    'Nettoyer plinthes, coins et zones peu passées',
-    'Détartrer bouilloire / cafetière',
-    'Nettoyer hottes, filtres simples et extérieurs d’électroménager',
-    'Aspirer sous canapé / lit (accès possible)',
-    'Dépoussiérer interrupteurs, poignées de portes et rampes',
-  ]
 }
 
 function newTaskBoard(
@@ -411,17 +502,18 @@ function newTaskBoard(
   month: string,
   frequency: TaskFrequency,
   provider: string,
+  ownerUsername?: string,
 ): CleaningTaskBoard {
-  const labels = defaultTaskLabels(frequency)
   const now = new Date().toISOString()
   return {
     id: randomId(),
     apartmentId,
     apartmentName,
     month,
+    ownerUsername: (ownerUsername || '').trim().toLowerCase(),
     frequency,
     provider: provider.trim(),
-    tasks: labels.map((label) => ({ id: randomId(), label, done: false })),
+    tasks: [],
     updatedAt: now,
   }
 }
@@ -436,14 +528,29 @@ function normalizeTaskBoard(row: Partial<CleaningTaskBoard>): CleaningTaskBoard 
     .map((t) => ({
       id: typeof t.id === 'string' ? t.id : randomId(),
       label: String(t.label),
+      cadence: t.cadence === 'weekly' || t.cadence === 'monthly' ? t.cadence : row.frequency,
       done: Boolean(t.done),
       doneAt: typeof t.doneAt === 'string' ? t.doneAt : undefined,
+      weeklyChecks:
+        Array.isArray(t.weeklyChecks) && t.weeklyChecks.length === 4
+          ? (t.weeklyChecks.map((v) => Boolean(v)) as [boolean, boolean, boolean, boolean])
+          : [false, false, false, false],
+      weeklyDoneAt:
+        Array.isArray(t.weeklyDoneAt) && t.weeklyDoneAt.length === 4
+          ? (t.weeklyDoneAt.map((v) => (typeof v === 'string' ? v : undefined)) as [
+              string?,
+              string?,
+              string?,
+              string?,
+            ])
+          : [undefined, undefined, undefined, undefined],
     }))
   return {
     id: typeof row.id === 'string' ? row.id : randomId(),
     apartmentId: row.apartmentId,
     apartmentName: typeof row.apartmentName === 'string' ? row.apartmentName : '',
     month: row.month,
+    ownerUsername: typeof row.ownerUsername === 'string' ? row.ownerUsername.trim().toLowerCase() : undefined,
     frequency: row.frequency,
     provider: typeof row.provider === 'string' ? row.provider : '',
     tasks,
@@ -453,7 +560,7 @@ function normalizeTaskBoard(row: Partial<CleaningTaskBoard>): CleaningTaskBoard 
 
 function readTaskBoards(): CleaningTaskBoard[] {
   try {
-    const raw = localStorage.getItem(TASK_BOARDS_KEY)
+    const raw = readScopedStorage(TASK_BOARDS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -464,12 +571,12 @@ function readTaskBoards(): CleaningTaskBoard[] {
 }
 
 function saveTaskBoards(boards: CleaningTaskBoard[]) {
-  localStorage.setItem(TASK_BOARDS_KEY, JSON.stringify(boards))
+  writeScopedStorage(TASK_BOARDS_KEY, JSON.stringify(boards))
 }
 
 function readProviderAssignments(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(PROVIDER_ASSIGNMENTS_KEY)
+    const raw = readScopedStorage(PROVIDER_ASSIGNMENTS_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
@@ -484,7 +591,7 @@ function readProviderAssignments(): Record<string, string> {
 }
 
 function saveProviderAssignments(map: Record<string, string>) {
-  localStorage.setItem(PROVIDER_ASSIGNMENTS_KEY, JSON.stringify(map))
+  writeScopedStorage(PROVIDER_ASSIGNMENTS_KEY, JSON.stringify(map))
 }
 
 type SuiviMenageReport = {
@@ -510,7 +617,7 @@ function sanitizeSuiviPhotoList(raw: unknown): string[] {
 
 function readSuiviReports(): Record<string, SuiviMenageReport> {
   try {
-    const raw = localStorage.getItem(SUIVI_STORAGE_KEY)
+    const raw = readScopedStorage(SUIVI_STORAGE_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Record<string, Partial<SuiviMenageReport>>
     const out: Record<string, SuiviMenageReport> = {}
@@ -534,7 +641,7 @@ function readSuiviReports(): Record<string, SuiviMenageReport> {
 }
 
 function saveSuiviReports(map: Record<string, SuiviMenageReport>) {
-  localStorage.setItem(SUIVI_STORAGE_KEY, JSON.stringify(map))
+  writeScopedStorage(SUIVI_STORAGE_KEY, JSON.stringify(map))
 }
 
 function todayIsoLocal(): string {
@@ -612,6 +719,9 @@ function downloadInvoicePdf(invoice: CleaningInvoice, vatRate: number) {
 export function DashboardCleaningPage() {
   const { t, locale } = useLanguage()
   const cc = cleaningCopy[locale] || cleaningCopy.fr
+  const ui = cleaningUiCopy[locale] || cleaningUiCopy.en
+  const l = (fr: string, en: string, es: string, de: string, it: string) =>
+    ({ fr, en, es, de, it }[locale] || en)
   const [activePanel, setActivePanel] = useState<CleaningPanel>('overview')
   const [invoices, setInvoices] = useState<CleaningInvoice[]>(() => readInvoices())
   const [listTab, setListTab] = useState<InvoiceDirection>('received')
@@ -630,7 +740,7 @@ export function DashboardCleaningPage() {
   const [fileName, setFileName] = useState('')
   const [providerFilter, setProviderFilter] = useState('all')
   const [chatMessages, setChatMessages] = useState<CleaningChatMessage[]>(() => readChatMessages())
-  const [chatProvider, setChatProvider] = useState('')
+  const [chatCleanerUsername, setChatCleanerUsername] = useState('')
   const [chatInput, setChatInput] = useState('')
   const [pendingChatImage, setPendingChatImage] = useState<string | null>(null)
   const [chatImageError, setChatImageError] = useState('')
@@ -639,15 +749,16 @@ export function DashboardCleaningPage() {
   const [taskBoards, setTaskBoards] = useState<CleaningTaskBoard[]>(() => readTaskBoards())
   const [apartments, setApartments] = useState<ConnectedApartment[]>(() => getConnectedApartmentsFromStorage())
   const [taskApartmentId, setTaskApartmentId] = useState('')
-  const [taskMonth, setTaskMonth] = useState(() => {
+  const [taskHistoryMonth, setTaskHistoryMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
-  const [taskFrequency, setTaskFrequency] = useState<TaskFrequency>('monthly')
-  const [taskAssignedProvider, setTaskAssignedProvider] = useState('')
+  const [taskMonthTab, setTaskMonthTab] = useState<'current' | 'history'>('current')
+  const [taskFrequency] = useState<TaskFrequency>('monthly')
   const [taskViewerRole, setTaskViewerRole] = useState<'owner' | 'provider'>('owner')
   const [taskViewerProvider, setTaskViewerProvider] = useState('')
   const [taskNewLabel, setTaskNewLabel] = useState('')
+  const [taskNewCadence, setTaskNewCadence] = useState<TaskFrequency>('monthly')
 
   const [suiviReports, setSuiviReports] = useState<Record<string, SuiviMenageReport>>(() => readSuiviReports())
   const [selectedSuiviEventId, setSelectedSuiviEventId] = useState('')
@@ -669,6 +780,10 @@ export function DashboardCleaningPage() {
   const [selectedProviderLink, setSelectedProviderLink] = useState('')
   const [selectedApartmentLink, setSelectedApartmentLink] = useState('')
   const [providerLinkMsg, setProviderLinkMsg] = useState('')
+  const [hasNewInvoiceNotice, setHasNewInvoiceNotice] = useState(false)
+  const [pendingChatCount, setPendingChatCount] = useState(0)
+  const lastSeenReceivedInvoiceAtRef = useRef(0)
+  const lastSeenReceivedChatAtRef = useRef(0)
 
   const currentUser =
     (
@@ -700,6 +815,10 @@ export function DashboardCleaningPage() {
       .filter((a) => (providerAssignments[a.id] || '').trim().toLowerCase() === cleanerDisplayName.trim().toLowerCase())
       .map((a) => a.name)
   }, [apartments, providerAssignments, isHostSession, cleanerDisplayName])
+  const cleanerHasNoAssignedListings = useMemo(
+    () => !isHostSession && cleanerAssignedApartmentNames.length === 0,
+    [isHostSession, cleanerAssignedApartmentNames.length],
+  )
   const cleanerHostLabel = useMemo(() => {
     const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return 'Votre hôte'
@@ -711,6 +830,34 @@ export function DashboardCleaningPage() {
   const cleanerInviteLink = cleanerInviteCode
     ? `${window.location.origin}/inscription?role=cleaner&inviteCode=${encodeURIComponent(cleanerInviteCode)}`
     : ''
+  const inscriptionSignupBaseUrl = useMemo(() => {
+    if (typeof window === 'undefined') return ''
+    return `${window.location.origin}/inscription`
+  }, [])
+  const cleanerInviteLinkDisplayed = cleanerInviteLink || inscriptionSignupBaseUrl
+
+  async function copyInscriptionLinkToClipboard() {
+    const url = cleanerInviteLink || inscriptionSignupBaseUrl
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   function refreshCleanerInviteState(hostUsername: string) {
     const invites = readCleanerInvites()
@@ -748,7 +895,6 @@ export function DashboardCleaningPage() {
     return uniq.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
   }, [invoices])
   const hasRegisteredProviders = providerOptions.length > 0
-  const chatProviderOptions = providerOptions
   const cleanerInvoiceProviderName = cleanerDisplayName.trim() || currentAccount?.username?.trim() || ''
   const effectiveInvoiceProvider = isHostSession ? provider.trim() : cleanerInvoiceProviderName
   const currentUsername = (currentAccount?.username || currentUser || '').trim().toLowerCase()
@@ -766,6 +912,21 @@ export function DashboardCleaningPage() {
       }))
       .filter((r) => r.username && r.label)
   }, [hostCleanerAccounts])
+  const assignableCleanerOptions = useMemo(
+    () => hostCleanerOptions.slice().sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })),
+    [hostCleanerOptions],
+  )
+  const chatCleanerOptions = assignableCleanerOptions
+  const hasPendingCleanerInvite = Boolean(cleanerInviteCode) && assignableCleanerOptions.length === 0
+  const currentHostUsername = isHostSession ? currentUsername : (currentAccount?.hostUsername || '').trim().toLowerCase()
+  const currentCleanerUsername = isHostSession ? chatCleanerUsername : currentUsername
+  const selectedChatProvider = useMemo(() => {
+    const username = (isHostSession ? currentCleanerUsername : currentHostUsername).trim().toLowerCase()
+    if (!username) return ''
+    const account = getStoredAccounts().find((a) => a.username.trim().toLowerCase() === username)
+    if (!account) return username
+    return `${account.firstName || ''} ${account.lastName || ''}`.trim() || account.username
+  }, [isHostSession, currentCleanerUsername, currentHostUsername])
   const hostDisplayName = useMemo(() => {
     const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return ''
@@ -800,7 +961,7 @@ export function DashboardCleaningPage() {
     return invoices
       .filter((i) => {
         const owner = (i.ownerUsername || '').trim().toLowerCase()
-        if (!owner || !currentUsername) return true
+        if (!currentUsername) return false
         return owner === currentUsername
       })
       .filter((i) => i.direction === listTab)
@@ -814,14 +975,87 @@ export function DashboardCleaningPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [invoices, listTab, monthFilter, providerFilter, isHostSession, cleanerInvoiceProviderName, currentUsername])
 
-  const selectedChatProvider = chatProvider || chatProviderOptions[0] || ''
+  useEffect(() => {
+    if (!isHostSession) {
+      setChatCleanerUsername('')
+      return
+    }
+    if (chatCleanerUsername && chatCleanerOptions.some((o) => o.username.trim().toLowerCase() === chatCleanerUsername)) return
+    setChatCleanerUsername(chatCleanerOptions[0]?.username.trim().toLowerCase() || '')
+  }, [isHostSession, chatCleanerUsername, chatCleanerOptions])
 
   const filteredChatMessages = useMemo(() => {
-    if (!selectedChatProvider) return []
+    if (!currentHostUsername || !currentCleanerUsername) return []
     return chatMessages
-      .filter((msg) => msg.provider === selectedChatProvider)
+      .filter(
+        (msg) =>
+          msg.hostUsername === currentHostUsername &&
+          msg.cleanerUsername === currentCleanerUsername,
+      )
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-  }, [chatMessages, selectedChatProvider])
+  }, [chatMessages, currentHostUsername, currentCleanerUsername])
+
+  const receivedInvoices = useMemo(
+    () =>
+      invoices.filter(
+        (inv) =>
+          (inv.ownerUsername || '').trim().toLowerCase() === currentUsername &&
+          inv.direction === 'received',
+      ),
+    [invoices, currentUsername],
+  )
+  const receivedChatMessages = useMemo(
+    () =>
+      chatMessages.filter((msg) => msg.recipientUsername === currentUsername),
+    [chatMessages, currentUsername],
+  )
+
+  useEffect(() => {
+    if (!currentUsername) return
+    const latestReceivedInvoiceAt = receivedInvoices.reduce((max, inv) => {
+      const ts = new Date(inv.createdAt).getTime()
+      return Number.isFinite(ts) && ts > max ? ts : max
+    }, 0)
+    const latestReceivedChatAt = receivedChatMessages.reduce((max, msg) => {
+      const ts = new Date(msg.createdAt).getTime()
+      return Number.isFinite(ts) && ts > max ? ts : max
+    }, 0)
+    lastSeenReceivedInvoiceAtRef.current = latestReceivedInvoiceAt
+    lastSeenReceivedChatAtRef.current = latestReceivedChatAt
+    setHasNewInvoiceNotice(false)
+    setPendingChatCount(0)
+  }, [currentUsername])
+
+  useEffect(() => {
+    if (!currentUsername) return
+    const latestReceivedInvoiceAt = receivedInvoices.reduce((max, inv) => {
+      const ts = new Date(inv.createdAt).getTime()
+      return Number.isFinite(ts) && ts > max ? ts : max
+    }, 0)
+    if (activePanel === 'invoices') {
+      lastSeenReceivedInvoiceAtRef.current = latestReceivedInvoiceAt
+      setHasNewInvoiceNotice(false)
+      return
+    }
+    setHasNewInvoiceNotice(latestReceivedInvoiceAt > lastSeenReceivedInvoiceAtRef.current)
+  }, [activePanel, currentUsername, receivedInvoices])
+
+  useEffect(() => {
+    if (!currentUsername) return
+    const latestReceivedChatAt = receivedChatMessages.reduce((max, msg) => {
+      const ts = new Date(msg.createdAt).getTime()
+      return Number.isFinite(ts) && ts > max ? ts : max
+    }, 0)
+    if (activePanel === 'chat') {
+      lastSeenReceivedChatAtRef.current = latestReceivedChatAt
+      setPendingChatCount(0)
+      return
+    }
+    const unread = receivedChatMessages.filter(
+      (msg) => new Date(msg.createdAt).getTime() > lastSeenReceivedChatAtRef.current,
+    )
+    setPendingChatCount(unread.length)
+  }, [activePanel, currentUsername, receivedChatMessages])
 
   const monthLabel = useMemo(() => {
     const [y, m] = monthFilter.split('-')
@@ -850,28 +1084,22 @@ export function DashboardCleaningPage() {
     return out.reverse()
   }, [])
 
-  const taskMonthSelectOptions = useMemo(() => {
-    const now = new Date()
-    const currentIndex = now.getFullYear() * 12 + now.getMonth()
-    const startIndex = currentIndex - 60
-    const endIndex = currentIndex + 6
-    const out: Array<{ value: string; label: string }> = []
-    for (let idx = startIndex; idx <= endIndex; idx++) {
-      const year = Math.floor(idx / 12)
-      const month = idx % 12
-      const dt = new Date(year, month, 1)
-      const value = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
-      const label = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(dt)
-      out.push({ value, label })
-    }
-    return out.reverse()
-  }, [])
+  useEffect(() => {
+    if (!isHostSession) return
+    const hostInviteOwner = (currentAccount?.username || currentUser || '').trim().toLowerCase()
+    if (!hostInviteOwner) return
+    ensureCleanerInvite(hostInviteOwner)
+    refreshCleanerInviteState(hostInviteOwner)
+  }, [currentUser, currentAccount?.username, isHostSession])
 
   useEffect(() => {
-    if (!currentUser || !isHostSession) return
-    ensureCleanerInvite(currentUser)
-    refreshCleanerInviteState(currentUser)
-  }, [currentUser, isHostSession])
+    const sync = () => {
+      setInvoices(readInvoices())
+      setChatMessages(readChatMessages())
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
 
   useEffect(() => {
     saveProviderAssignments(providerAssignments)
@@ -881,30 +1109,80 @@ export function DashboardCleaningPage() {
     setApartments(getConnectedApartmentsFromStorage())
     const sync = () => setApartments(getConnectedApartmentsFromStorage())
     window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
+    window.addEventListener(CONNECTIONS_UPDATED_EVENT, sync)
+    return () => {
+      window.removeEventListener('storage', sync)
+      window.removeEventListener(CONNECTIONS_UPDATED_EVENT, sync)
+    }
   }, [])
 
+  useEffect(() => {
+    if (!apartments.length) return
+    setTaskApartmentId((prev) => {
+      if (prev && apartments.some((a) => a.id === prev)) return prev
+      return apartments[0].id
+    })
+  }, [apartments])
+
   const effectiveTaskApartmentId = taskApartmentId || apartments[0]?.id || ''
+  const selectedTaskListingLabel = useMemo(() => {
+    const a = apartments.find((x) => x.id === effectiveTaskApartmentId)
+    if (!a) return ''
+    return a.address ? `${a.name} — ${a.address}` : a.name
+  }, [apartments, effectiveTaskApartmentId])
+  const scopedTaskBoards = useMemo(() => {
+    const owner = currentUsername.trim().toLowerCase() || 'anonymous'
+    return taskBoards.filter((b) => {
+      const rowOwner = (b.ownerUsername || '').trim().toLowerCase()
+      if (!rowOwner) return owner === 'anonymous'
+      return rowOwner === owner
+    })
+  }, [taskBoards, currentUsername])
+  const taskMonthHistoryOptions = useMemo(() => {
+    const values = new Set<string>()
+    const now = new Date()
+    values.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
+    scopedTaskBoards.forEach((b) => {
+      if (b.apartmentId === effectiveTaskApartmentId && b.month) values.add(b.month)
+    })
+    return Array.from(values)
+      .sort((a, b) => b.localeCompare(a))
+      .map((value) => {
+        const [y, m] = value.split('-')
+        const dt = new Date(Number(y), Math.max(0, Number(m) - 1), 1)
+        const label = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(dt)
+        return { value, label }
+      })
+  }, [scopedTaskBoards, effectiveTaskApartmentId])
+  const currentTaskMonth = useMemo(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }, [])
+  useEffect(() => {
+    if (taskMonthTab === 'current' && taskHistoryMonth !== currentTaskMonth) {
+      setTaskHistoryMonth(currentTaskMonth)
+    }
+  }, [taskMonthTab, taskHistoryMonth, currentTaskMonth])
+  const isArchivedTaskMonth = taskHistoryMonth < currentTaskMonth
+  const isTaskBoardReadOnly = taskMonthTab === 'history' || isArchivedTaskMonth
 
   const currentTaskBoard = useMemo(() => {
-    if (!effectiveTaskApartmentId || !taskMonth) return undefined
-    return taskBoards.find(
-      (b) =>
-        b.apartmentId === effectiveTaskApartmentId && b.month === taskMonth && b.frequency === taskFrequency,
-    )
-  }, [taskBoards, effectiveTaskApartmentId, taskMonth, taskFrequency])
+    if (!effectiveTaskApartmentId) return undefined
+    return scopedTaskBoards.find((b) => b.apartmentId === effectiveTaskApartmentId && b.month === taskHistoryMonth)
+  }, [scopedTaskBoards, effectiveTaskApartmentId, taskHistoryMonth])
 
   const canProviderToggleTasks = useMemo(() => {
-    if (!currentTaskBoard || taskViewerRole !== 'provider') return false
-    const a = (isHostSession ? taskViewerProvider : cleanerDisplayName).trim().toLowerCase()
-    const b = currentTaskBoard.provider.trim().toLowerCase()
-    return Boolean(a && b && a === b)
-  }, [currentTaskBoard, taskViewerRole, taskViewerProvider, isHostSession, cleanerDisplayName])
-  const canOwnerManageTasks = isHostSession && taskViewerRole === 'owner'
+    if (!currentTaskBoard) return false
+    if (isHostSession && taskViewerRole === 'owner') return true
+    return taskViewerRole === 'provider'
+  }, [currentTaskBoard, taskViewerRole, isHostSession])
+  /** L'hôte conserve la gestion des tâches depuis sa session (sinon le bouton Ajouter disparaît). */
+  const canOwnerManageTasks = isHostSession && !isTaskBoardReadOnly
+  const taskFrequencyLabel = (frequency: TaskFrequency) =>
+    frequency === 'weekly'
+      ? l('Hebdomadaire', 'Weekly', 'Semanal', 'Wochentlich', 'Settimanale')
+      : l('Mensuel', 'Monthly', 'Mensual', 'Monatlich', 'Mensile')
 
-  useEffect(() => {
-    if (currentTaskBoard) setTaskAssignedProvider(currentTaskBoard.provider)
-  }, [currentTaskBoard?.id])
   useEffect(() => {
     if (isHostSession) {
       setTaskViewerRole('owner')
@@ -914,56 +1192,112 @@ export function DashboardCleaningPage() {
     setTaskViewerRole('provider')
   }, [isHostSession, cleanerDisplayName])
 
-  function saveTaskBoardConfig() {
-    if (!canOwnerManageTasks) return
-    const apt = apartments.find((a) => a.id === effectiveTaskApartmentId)
-    if (!apt || !taskMonth.trim() || !taskAssignedProvider.trim()) return
-    const idx = taskBoards.findIndex(
-      (b) =>
-        b.apartmentId === apt.id && b.month === taskMonth && b.frequency === taskFrequency,
-    )
-    if (idx >= 0) {
-      const next = [...taskBoards]
-      next[idx] = {
-        ...next[idx],
-        provider: taskAssignedProvider.trim(),
-        apartmentName: apt.name,
-        updatedAt: new Date().toISOString(),
-      }
-      setTaskBoards(next)
-      saveTaskBoards(next)
-      return
-    }
-    const nb = newTaskBoard(apt.id, apt.name, taskMonth, taskFrequency, taskAssignedProvider.trim())
-    const merged = [...taskBoards, nb]
-    setTaskBoards(merged)
-    saveTaskBoards(merged)
-  }
-
   function addTaskRow() {
-    if (!currentTaskBoard || !canOwnerManageTasks) return
+    if (!canOwnerManageTasks || !effectiveTaskApartmentId) return
     const label = taskNewLabel.trim()
     if (!label) return
+    const apt = apartments.find((a) => a.id === effectiveTaskApartmentId)
+    if (!apt) return
+    const ownerKey = currentUsername.trim().toLowerCase() || 'anonymous'
+    const existingIndex = taskBoards.findIndex(
+      (b) => b.apartmentId === apt.id && b.month === taskHistoryMonth,
+    )
+    const newItem = {
+      id: randomId(),
+      label,
+      cadence: taskNewCadence,
+      done: false,
+      weeklyChecks: [false, false, false, false] as [boolean, boolean, boolean, boolean],
+      weeklyDoneAt: [undefined, undefined, undefined, undefined] as [string?, string?, string?, string?],
+    }
+    let nextBoards: CleaningTaskBoard[]
+    if (existingIndex >= 0) {
+      nextBoards = taskBoards.map((b, i) =>
+        i === existingIndex
+          ? {
+              ...b,
+              apartmentName: apt.name,
+              ownerUsername: (b.ownerUsername || ownerKey).trim().toLowerCase() || ownerKey,
+              tasks: [...b.tasks, newItem],
+              updatedAt: new Date().toISOString(),
+            }
+          : b,
+      )
+    } else {
+      const board = newTaskBoard(apt.id, apt.name, taskHistoryMonth, taskFrequency, '', currentUsername)
+      nextBoards = [
+        ...taskBoards,
+        {
+          ...board,
+          tasks: [newItem],
+          updatedAt: new Date().toISOString(),
+        },
+      ]
+    }
+    setTaskBoards(nextBoards)
+    saveTaskBoards(nextBoards)
+    setTaskNewLabel('')
+  }
+
+  function updateTaskCadence(taskId: string, cadence: TaskFrequency) {
+    if (!currentTaskBoard || !canOwnerManageTasks) return
     const nextBoards = taskBoards.map((b) =>
       b.id === currentTaskBoard.id
         ? {
             ...b,
-            tasks: [...b.tasks, { id: randomId(), label, done: false }],
+            ownerUsername: (b.ownerUsername || currentUsername).trim().toLowerCase(),
+            tasks: b.tasks.map((t) => {
+              if (t.id !== taskId) return t
+              if (cadence === 'weekly') {
+                return {
+                  ...t,
+                  cadence,
+                  done: false,
+                  doneAt: undefined,
+                  weeklyChecks: t.weeklyChecks || [false, false, false, false],
+                  weeklyDoneAt: t.weeklyDoneAt || [undefined, undefined, undefined, undefined],
+                }
+              }
+              const weeklyDoneAt = t.weeklyDoneAt || [undefined, undefined, undefined, undefined]
+              const latestDoneAt = weeklyDoneAt.filter(Boolean).sort().slice(-1)[0]
+              return {
+                ...t,
+                cadence,
+                done: t.done || (t.weeklyChecks || []).some(Boolean),
+                doneAt: t.doneAt || latestDoneAt,
+              }
+            }),
             updatedAt: new Date().toISOString(),
           }
         : b,
     )
     setTaskBoards(nextBoards)
     saveTaskBoards(nextBoards)
-    setTaskNewLabel('')
   }
 
-  function removeTaskRow(taskId: string) {
+  function removeTaskRow(taskId: string, taskLabel?: string) {
     if (!currentTaskBoard || !canOwnerManageTasks) return
+    const confirmationMessage = taskLabel
+      ? l(
+          `Confirmez-vous la suppression de la tâche "${taskLabel}" ?`,
+          `Do you confirm deleting task "${taskLabel}"?`,
+          `¿Confirma la eliminación de la tarea "${taskLabel}"?`,
+          `Möchten Sie die Aufgabe "${taskLabel}" wirklich löschen?`,
+          `Confermi l'eliminazione dell'attività "${taskLabel}"?`,
+        )
+      : l(
+          'Confirmez-vous la suppression de cette tâche ?',
+          'Do you confirm deleting this task?',
+          '¿Confirma la eliminación de esta tarea?',
+          'Möchten Sie diese Aufgabe wirklich löschen?',
+          "Confermi l'eliminazione di questa attività?",
+        )
+    if (!window.confirm(confirmationMessage)) return
     const nextBoards = taskBoards.map((b) =>
       b.id === currentTaskBoard.id
         ? {
             ...b,
+            ownerUsername: (b.ownerUsername || currentUsername).trim().toLowerCase(),
             tasks: b.tasks.filter((t) => t.id !== taskId),
             updatedAt: new Date().toISOString(),
           }
@@ -973,21 +1307,45 @@ export function DashboardCleaningPage() {
     saveTaskBoards(nextBoards)
   }
 
-  function toggleTaskDone(taskId: string) {
-    if (!currentTaskBoard || !canProviderToggleTasks) return
+  function toggleTaskDone(taskId: string, weeklySlotIndex?: number) {
+    if (!currentTaskBoard || !canProviderToggleTasks || isTaskBoardReadOnly) return
     const nextBoards = taskBoards.map((b) => {
       if (b.id !== currentTaskBoard.id) return b
       return {
         ...b,
-        tasks: b.tasks.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                done: !t.done,
-                doneAt: t.done ? undefined : new Date().toISOString(),
-              }
-            : t,
-        ),
+        ownerUsername: (b.ownerUsername || currentUsername).trim().toLowerCase(),
+        tasks: b.tasks.map((t) => {
+          if (t.id !== taskId) return t
+          if (t.cadence === 'weekly') {
+            const idx = typeof weeklySlotIndex === 'number' ? weeklySlotIndex : 0
+            const checks = [...(t.weeklyChecks || [false, false, false, false])] as [
+              boolean,
+              boolean,
+              boolean,
+              boolean,
+            ]
+            const doneAt = [...(t.weeklyDoneAt || [undefined, undefined, undefined, undefined])] as [
+              string?,
+              string?,
+              string?,
+              string?,
+            ]
+            checks[idx] = !checks[idx]
+            doneAt[idx] = checks[idx] ? new Date().toISOString() : undefined
+            return {
+              ...t,
+              weeklyChecks: checks,
+              weeklyDoneAt: doneAt,
+              done: checks.every(Boolean),
+              doneAt: doneAt.filter(Boolean).sort().slice(-1)[0],
+            }
+          }
+          return {
+            ...t,
+            done: !t.done,
+            doneAt: t.done ? undefined : new Date().toISOString(),
+          }
+        }),
         updatedAt: new Date().toISOString(),
       }
     })
@@ -1022,7 +1380,15 @@ export function DashboardCleaningPage() {
       ? `${currentAccount?.firstName || ''} ${currentAccount?.lastName || ''}`.trim() || currentAccount?.username || 'Hôte'
       : cleanerInvoiceProviderName
     const confirmTarget = recipientDisplayName || recipientUsername
-    const ok = window.confirm(`Confirmez-vous l'envoi de cette facture à ${confirmTarget} ?`)
+    const ok = window.confirm(
+      l(
+        `Confirmez-vous l'envoi de cette facture à ${confirmTarget} ?`,
+        `Do you confirm sending this invoice to ${confirmTarget}?`,
+        `¿Confirma el envío de esta factura a ${confirmTarget}?`,
+        `Bestätigen Sie den Versand dieser Rechnung an ${confirmTarget}?`,
+        `Confermi l'invio di questa fattura a ${confirmTarget}?`,
+      ),
+    )
     if (!ok) return
     const baseId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
     const sentInvoice: CleaningInvoice = {
@@ -1079,13 +1445,18 @@ export function DashboardCleaningPage() {
     }
   }
 
-  function sendChatMessage(sender: 'manager' | 'provider') {
+  function sendChatMessage() {
     const text = chatInput.trim()
     const imageDataUrl = pendingChatImage ?? undefined
-    if (!selectedChatProvider || (!text && !imageDataUrl)) return
+    if (!currentHostUsername || !currentCleanerUsername || !currentUsername || (!text && !imageDataUrl)) return
+    const sender = isHostSession ? 'manager' : 'provider'
+    const recipientUsername = isHostSession ? currentCleanerUsername : currentHostUsername
     const nextMessage: CleaningChatMessage = {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      provider: selectedChatProvider,
+      hostUsername: currentHostUsername,
+      cleanerUsername: currentCleanerUsername,
+      senderUsername: currentUsername,
+      recipientUsername,
       sender,
       text,
       imageDataUrl,
@@ -1099,18 +1470,9 @@ export function DashboardCleaningPage() {
     setChatImageError('')
   }
 
-  const canSendChat = Boolean(selectedChatProvider && (chatInput.trim() || pendingChatImage))
+  const canSendChat = Boolean(currentHostUsername && currentCleanerUsername && (chatInput.trim() || pendingChatImage))
 
-  const suiviApartmentCount = useMemo(() => {
-    if (apartments.length > 0) return Math.max(apartments.length, DEMO_APARTMENT_ROW_COUNT)
-    if (isTestModeEnabled()) return Math.max(2, DEMO_APARTMENT_ROW_COUNT)
-    return DEMO_APARTMENT_ROW_COUNT
-  }, [apartments.length])
-
-  const suiviCheckoutEvents = useMemo(
-    () => getDemoCheckoutEventsForSuivi(suiviApartmentCount),
-    [suiviApartmentCount],
-  )
+  const suiviCheckoutEvents = useMemo(() => getOfficialCheckoutEventsForSuivi(apartments), [apartments])
 
   const suiviFilteredCheckoutEvents = useMemo(() => {
     let list =
@@ -1151,6 +1513,11 @@ export function DashboardCleaningPage() {
   }, [suiviFilteredCheckoutEvents])
 
   useEffect(() => {
+    if (!cleanerHasNoAssignedListings || activePanel === 'overview') return
+    setActivePanel('overview')
+  }, [cleanerHasNoAssignedListings, activePanel])
+
+  useEffect(() => {
     if (!selectedSuiviEventId) return
     const r = suiviReports[selectedSuiviEventId]
     setSuiviDraft(
@@ -1178,7 +1545,6 @@ export function DashboardCleaningPage() {
   function suiviApartmentLabel(aptIndex: number) {
     const a = apartments[aptIndex]
     if (a) return a.name
-    if (isTestModeEnabled() && (aptIndex === 0 || aptIndex === 1)) return `Logement test ${aptIndex + 1}`
     return `Logement ${aptIndex + 1}`
   }
 
@@ -1250,26 +1616,40 @@ export function DashboardCleaningPage() {
     saveSuiviReports(merged)
   }
 
-  const suiviDemoMonthLabel = useMemo(() => {
-    const raw = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
-      new Date(DEMO_YEAR, DEMO_MONTH_INDEX, 1),
-    )
-    return raw.charAt(0).toUpperCase() + raw.slice(1)
-  }, [])
-
   function linkProviderToApartment() {
-    if (!selectedProviderLink.trim()) {
-      setProviderLinkMsg("Sélectionnez d'abord un prestataire ménage.")
+    const selectedProvider = selectedProviderLink.trim()
+    if (!selectedProvider) {
+      setProviderLinkMsg(
+        l(
+          "Sélectionnez d'abord un prestataire ménage invité et inscrit.",
+          'Select an invited and registered cleaning provider first.',
+          'Primero selecciona un proveedor de limpieza invitado y registrado.',
+          'Wählen Sie zuerst einen eingeladenen und registrierten Reinigungsdienst aus.',
+          'Seleziona prima un fornitore pulizie invitato e registrato.',
+        ),
+      )
+      return
+    }
+    if (!assignableCleanerOptions.some((opt) => opt.label === selectedProvider)) {
+      setProviderLinkMsg(
+        l(
+          "Cette prestataire n'a pas encore accepté l'invitation.",
+          'This provider has not accepted the invitation yet.',
+          'Este proveedor aún no ha aceptado la invitación.',
+          'Dieser Dienstleister hat die Einladung noch nicht akzeptiert.',
+          "Questo fornitore non ha ancora accettato l'invito.",
+        ),
+      )
       return
     }
     if (!selectedApartmentLink.trim()) {
       setProviderLinkMsg('Selectionnez ensuite un logement.')
       return
     }
-    setProviderAssignments((prev) => ({ ...prev, [selectedApartmentLink]: selectedProviderLink.trim() }))
+    setProviderAssignments((prev) => ({ ...prev, [selectedApartmentLink]: selectedProvider }))
     const apt = apartments.find((a) => a.id === selectedApartmentLink)
     setProviderLinkMsg(
-      `Attribution enregistrée : ${selectedProviderLink.trim()} sur ${apt?.name || 'ce logement'}.`,
+      `${l('Attribution enregistrée', 'Assignment saved', 'Asignación guardada', 'Zuweisung gespeichert', 'Assegnazione salvata')} : ${selectedProvider} ${l('sur', 'to', 'en', 'für', 'su')} ${apt?.name || l('ce logement', 'this listing', 'este alojamiento', 'diese Unterkunft', 'questo alloggio')}.`,
     )
   }
 
@@ -1299,32 +1679,70 @@ export function DashboardCleaningPage() {
       <div className="mx-auto mt-6 w-full max-w-6xl">
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <div className="bg-gradient-to-r from-sky-500/15 via-sky-500/5 to-transparent px-5 py-4 sm:px-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Prestataire ménage</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">{ui.cleanerProviderTitle}</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
               {activePanel === 'overview'
-                ? 'Espace prestataire ménage'
+                ? ui.cleanerWorkspaceTitle
                 : activePanel === 'providers'
-                  ? 'Prestataire ménage'
+                  ? ui.cleanerProviderTitle
                 : activePanel === 'invoices'
                   ? cc.invoicesTitle
                   : activePanel === 'chat'
-                    ? 'Tchat prestataire ménage'
+                    ? ui.cleanerChatTitle
                     : activePanel === 'tasks'
-                      ? 'Tâches ménage (hebdomadaire / mensuel)'
-                      : 'Suivi ménage'}
+                      ? ui.cleanerTasksTitle
+                      : ui.cleanerTrackingTitle}
             </h1>
             <p className="mt-2 text-sm text-zinc-700">
               {activePanel === 'overview'
-                ? 'Retrouvez ici les outils liés au ménage : commencez par la vue d’ensemble, puis ouvrez l’onglet factures quand vous en avez besoin.'
+                ? cleanerHasNoAssignedListings
+                  ? l(
+                      "Aucun logement ne vous est encore attribué. Planning, tâches, factures, messagerie et suivi ménage restent fermés jusqu'à ce que votre hôte vous assigne sur au moins un logement depuis son compte (Prestataire ménage).",
+                      'No listing is assigned to you yet. Planning, tasks, invoices, chat and cleaning tracking stay closed until your host assigns you to at least one listing from their account (Cleaning provider).',
+                      'Aún no tienes ningún alojamiento asignado. Planificación, tareas, facturas, chat y seguimiento permanecen cerrados hasta que tu anfitrión te asigne al menos un alojamiento desde su cuenta.',
+                      'Ihnen ist noch keine Unterkunft zugewiesen. Planung, Aufgaben, Rechnungen, Chat und Nachverfolgung bleiben geschlossen, bis Ihr Gastgeber Sie in seinem Konto mindestens einer Unterkunft zuweist.',
+                      'Nessun alloggio ti è ancora stato assegnato. Pianificazione, attività, fatture, chat e monitoraggio restano chiusi finché il tuo host non ti assegna almeno un alloggio dal suo account.',
+                    )
+                  : l(
+                      'Retrouvez ici les outils liés au ménage : commencez par la vue d’ensemble, puis ouvrez l’onglet factures quand vous en avez besoin.',
+                      'Find all cleaning tools here: start with the overview, then open the invoices tab when needed.',
+                      'Encuentra aquí las herramientas de limpieza: empieza por la vista general y abre la pestaña de facturas cuando la necesites.',
+                      'Hier finden Sie alle Reinigungswerkzeuge: Starten Sie mit der Übersicht und öffnen Sie bei Bedarf den Rechnungsbereich.',
+                      'Trovi qui tutti gli strumenti pulizie: inizia dalla panoramica e apri la scheda fatture quando serve.',
+                    )
                 : activePanel === 'providers'
-                  ? 'Étape 1 : sélectionnez le prestataire ménage. Étape 2 : sélectionnez le logement à lui attribuer.'
+                  ? l(
+                      'Étape 1 : sélectionnez le prestataire ménage. Étape 2 : sélectionnez le logement à lui attribuer.',
+                      'Step 1: select the cleaning provider. Step 2: select the listing to assign.',
+                      'Paso 1: selecciona el proveedor de limpieza. Paso 2: selecciona el alojamiento a asignar.',
+                      'Schritt 1: Reinigungsdienst auswählen. Schritt 2: Unterkunft zur Zuweisung auswählen.',
+                      'Passo 1: seleziona il fornitore pulizie. Passo 2: seleziona l alloggio da assegnare.',
+                    )
                 : activePanel === 'invoices'
                   ? cc.invoicesSubtitle
                   : activePanel === 'chat'
-                    ? 'Discutez avec votre prestataire et sélectionnez le nom du prestataire ménage si vous en avez plusieurs.'
+                    ? l(
+                        'Discutez avec votre prestataire et sélectionnez le nom du prestataire ménage si vous en avez plusieurs.',
+                        'Chat with your provider and select the provider name if you have several.',
+                        'Habla con tu proveedor y selecciona su nombre si tienes varios.',
+                        'Chatten Sie mit Ihrem Dienstleister und wählen Sie den Namen aus, wenn Sie mehrere haben.',
+                        'Chatta con il fornitore e seleziona il nome se ne hai più di uno.',
+                      )
                     : activePanel === 'tasks'
-                      ? 'Listes par logement et par mois : la prestataire assignée peut cocher ce qui est fait (accès simulé par profil).'
-                      : `Une fiche s’ouvre à chaque départ voyageur détecté sur le calendrier (démo ${suiviDemoMonthLabel}). La prestataire ménage renseigne constats, photos et horaires.`}
+                      ? l(
+                          'Listes par logement et par mois : la prestataire assignée peut cocher ce qui est fait selon les accès de son compte.',
+                          'Listing/month checklists: the assigned provider can tick completed tasks based on their account access.',
+                          'Listas por alojamiento y mes: el proveedor asignado puede marcar lo realizado según los accesos de su cuenta.',
+                          'Listen pro Unterkunft und Monat: der zugewiesene Dienstleister kann Erledigtes entsprechend seinen Kontorechten abhaken.',
+                          'Checklist per alloggio e mese: il fornitore assegnato può spuntare le attività svolte in base agli accessi del suo account.',
+                        )
+                      : l(
+                          'Une fiche s’ouvre pour chaque départ voyageur réel détecté via le channel manager. La prestataire ménage renseigne constats, photos et horaires.',
+                          'A report opens for each real guest checkout detected via the channel manager. The cleaning provider fills observations, photos, and timing.',
+                          'Se abre una ficha para cada salida real detectada por el channel manager. El proveedor de limpieza completa observaciones, fotos y horarios.',
+                          'Für jeden echten, über den Channel Manager erkannten Check-out wird ein Bericht geöffnet. Der Reinigungsdienst ergänzt Hinweise, Fotos und Zeiten.',
+                          'Si apre una scheda per ogni check-out reale rilevato tramite channel manager. Il fornitore pulizie inserisce note, foto e orari.',
+                        )}
             </p>
           </div>
 
@@ -1341,9 +1759,15 @@ export function DashboardCleaningPage() {
                       <ClipboardList className="h-5 w-5" aria-hidden />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-zinc-900">Prestataire ménage</p>
+                      <p className="text-base font-semibold text-zinc-900">{ui.cleanerProviderTitle}</p>
                       <p className="mt-1 text-sm text-zinc-600">
-                        D'abord choisir le prestataire, puis choisir le logement à lui attribuer.
+                        {l(
+                          "D'abord choisir le prestataire, puis choisir le logement à lui attribuer.",
+                          'First choose the provider, then choose the listing to assign.',
+                          'Primero elige el proveedor y luego el alojamiento a asignar.',
+                          'Zuerst den Dienstleister wählen, dann die zuzuweisende Unterkunft.',
+                          'Prima scegli il fornitore, poi l alloggio da assegnare.',
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1359,70 +1783,126 @@ export function DashboardCleaningPage() {
                         {cleanerHostLabel} vous a attribué à :{' '}
                         {cleanerAssignedApartmentNames.length > 0
                           ? cleanerAssignedApartmentNames.join(', ')
-                          : 'Aucun logement pour le moment'}
+                          : l('Aucun logement pour le moment', 'No listing for now', 'Ningún alojamiento por ahora', 'Derzeit keine Unterkunft', 'Nessun alloggio al momento')}
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setActivePanel('invoices')}
-                  className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
-                >
-                  <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
-                    <Receipt className="h-5 w-5" aria-hidden />
-                  </span>
-                  <p className="text-base font-semibold text-zinc-900">Gérer les factures</p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Ajouter, filtrer par mois/prestataire et exporter en PDF.
-                  </p>
-                </button>
+              {cleanerHasNoAssignedListings ? null : (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel('invoices')}
+                    className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
+                  >
+                    <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <Receipt className="h-5 w-5" aria-hidden />
+                    </span>
+                    <p className="text-base font-semibold text-zinc-900">{cc.invoicesTitle}</p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {l(
+                        'Ajouter, filtrer par mois/prestataire et exporter en PDF.',
+                        'Add, filter by month/provider, and export to PDF.',
+                        'Añade, filtra por mes/proveedor y exporta en PDF.',
+                        'Hinzufügen, nach Monat/Dienstleister filtern und als PDF exportieren.',
+                        'Aggiungi, filtra per mese/fornitore ed esporta in PDF.',
+                      )}
+                    </p>
+                    {hasNewInvoiceNotice ? (
+                      <p className="mt-2 text-xs font-semibold text-rose-600">
+                        {l(
+                          'Une nouvelle facture a etait edité.',
+                          'A new invoice has been edited.',
+                          'Se ha editado una nueva factura.',
+                          'Eine neue Rechnung wurde bearbeitet.',
+                          'Una nuova fattura e stata modificata.',
+                        )}
+                      </p>
+                    ) : null}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActivePanel('chat')}
-                  className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
-                >
-                  <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
-                    <Send className="h-5 w-5" aria-hidden />
-                  </span>
-                  <p className="text-base font-semibold text-zinc-900">Tchat prestataire</p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Sélectionnez le nom du prestataire ménage et échangez des messages dans un espace dédié.
-                  </p>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel('chat')}
+                    className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
+                  >
+                    <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <Send className="h-5 w-5" aria-hidden />
+                    </span>
+                    <p className="text-base font-semibold text-zinc-900">{ui.cleanerChatTitle}</p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {l(
+                        'Sélectionnez le nom du prestataire ménage et échangez des messages dans un espace dédié.',
+                        'Select the provider name and exchange messages in a dedicated area.',
+                        'Selecciona el nombre del proveedor y envía mensajes en un espacio dedicado.',
+                        'Wählen Sie den Namen des Dienstleisters und tauschen Sie Nachrichten in einem eigenen Bereich aus.',
+                        'Seleziona il nome del fornitore e scambia messaggi in uno spazio dedicato.',
+                      )}
+                    </p>
+                    {pendingChatCount > 0 ? (
+                      <p className="mt-2 text-xs font-semibold text-rose-600">
+                        {pendingChatCount === 1
+                          ? l(
+                              '1 message en attente',
+                              '1 message pending',
+                              '1 mensaje en espera',
+                              '1 ausstehende Nachricht',
+                              '1 messaggio in attesa',
+                            )
+                          : l(
+                              `${pendingChatCount} messages en attente`,
+                              `${pendingChatCount} messages pending`,
+                              `${pendingChatCount} mensajes en espera`,
+                              `${pendingChatCount} ausstehende Nachrichten`,
+                              `${pendingChatCount} messaggi in attesa`,
+                            )}
+                      </p>
+                    ) : null}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActivePanel('tasks')}
-                  className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
-                >
-                  <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
-                    <ClipboardList className="h-5 w-5" aria-hidden />
-                  </span>
-                  <p className="text-base font-semibold text-zinc-900">Tâches hebdo / mensuel</p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Checklist par logement et par mois (vitres, plinthes…). Coches réservées à la prestataire assignée.
-                  </p>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel('tasks')}
+                    className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
+                  >
+                    <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <ClipboardList className="h-5 w-5" aria-hidden />
+                    </span>
+                    <p className="text-base font-semibold text-zinc-900">{ui.cleanerTasksTitle}</p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {l(
+                        'Checklist par logement et par mois (vitres, plinthes…). Coches réservées à la prestataire assignée.',
+                        'Checklist by listing and month (windows, baseboards...). Checkboxes reserved for the assigned provider.',
+                        'Checklist por alojamiento y por mes (ventanas, zócalos...). Casillas reservadas al proveedor asignado.',
+                        'Checkliste pro Unterkunft und Monat (Fenster, Sockelleisten ...). Häkchen nur für den zugewiesenen Dienstleister.',
+                        'Checklist per alloggio e per mese (vetri, battiscopa...). Spunte riservate al fornitore assegnato.',
+                      )}
+                    </p>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActivePanel('suivi')}
-                  className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
-                >
-                  <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
-                    <ListChecks className="h-5 w-5" aria-hidden />
-                  </span>
-                  <p className="text-base font-semibold text-zinc-900">Suivi ménage</p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Après chaque check-out : compte rendu, photos avant/après, clé en boîte, horaires sur le logement.
-                  </p>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel('suivi')}
+                    className="group rounded-2xl border border-zinc-200/80 bg-white p-5 text-left shadow-pm-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-pm-md"
+                  >
+                    <span className="mb-3 inline-flex rounded-xl bg-sky-100 p-2 text-sky-700">
+                      <ListChecks className="h-5 w-5" aria-hidden />
+                    </span>
+                    <p className="text-base font-semibold text-zinc-900">{ui.cleanerTrackingTitle}</p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {l(
+                        'Après chaque check-out : compte rendu, photos avant/après, clé en boîte, horaires sur le logement.',
+                        'After each checkout: report, before/after photos, key box, and listing timing.',
+                        'Después de cada check-out: informe, fotos antes/después, llave en caja y horarios del alojamiento.',
+                        'Nach jedem Check-out: Bericht, Vorher/Nachher-Fotos, Schlüsselbox und Zeiten zur Unterkunft.',
+                        'Dopo ogni check-out: report, foto prima/dopo, cassetta chiavi e orari sull alloggio.',
+                      )}
+                    </p>
+                  </button>
+                </div>
+              )}
 
               <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3">
                 {isHostSession ? (
@@ -1431,24 +1911,40 @@ export function DashboardCleaningPage() {
                       <div>
                         <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-900">
                           <Link2 className="h-4 w-4" aria-hidden />
-                          Lien d&apos;inscription prestataire ménage
+                          {l(
+                            "Lien d'inscription prestataire ménage",
+                            'Cleaning provider signup link',
+                            'Enlace de registro del proveedor de limpieza',
+                            'Anmeldelink für Reinigungsdienst',
+                            'Link iscrizione fornitore pulizie',
+                          )}
                         </p>
                         <p className="mt-1 break-all text-xs text-sky-800">
-                          {cleanerInviteLink ||
-                            "Impossible de générer le lien : connectez-vous avec un compte hôte enregistré."}
+                          {cleanerInviteLinkDisplayed ||
+                            l(
+                              'Impossible de générer le lien : connectez-vous avec un compte hôte enregistré.',
+                              'Unable to generate link: log in with a registered host account.',
+                              'No se puede generar el enlace: inicia sesión con una cuenta de anfitrión registrada.',
+                              'Link kann nicht erstellt werden: Melden Sie sich mit einem registrierten Gastgeberkonto an.',
+                              'Impossibile generare il link: accedi con un account host registrato.',
+                            )}
                         </p>
                         <p className="mt-1 text-[11px] text-sky-700">
-                          Code hote unique: <strong>{cleanerInviteCode || '...'}</strong> (le meme code peut servir
-                          a inviter plusieurs prestataires menage)
+                          {l('Code hote unique:', 'Unique host code:', 'Código único de anfitrión:', 'Eindeutiger Gastgebercode:', 'Codice host univoco:')}{' '}
+                          <strong>{cleanerInviteCode || '...'}</strong>{' '}
+                          {l(
+                            '(le meme code peut servir a inviter plusieurs prestataires menage)',
+                            '(the same code can be used to invite multiple cleaning providers)',
+                            '(el mismo código puede servir para invitar a varios proveedores de limpieza)',
+                            '(derselbe Code kann verwendet werden, um mehrere Reinigungsdienste einzuladen)',
+                            '(lo stesso codice può essere usato per invitare più fornitori di pulizia)',
+                          )}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!cleanerInviteLink) return
-                            void navigator.clipboard.writeText(cleanerInviteLink)
-                          }}
+                          onClick={() => void copyInscriptionLinkToClipboard()}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100"
                         >
                           <Copy className="h-3.5 w-3.5" aria-hidden />
@@ -1458,17 +1954,31 @@ export function DashboardCleaningPage() {
                     </div>
                   </div>
                 ) : null}
-                <p className="text-sm font-semibold text-zinc-800">{cc.importantInfo}</p>
-                <p className="mt-1 text-sm leading-relaxed text-zinc-700">
-                  {cc.importantInfoBody}
-                </p>
+                {cleanerHasNoAssignedListings ? (
+                  <p className="text-sm text-zinc-700">
+                    {l(
+                      "Demandez à votre hôte de vous attribuer au moins un logement dans StayPilot (Prestataire ménage) : vos outils s'ouvriront automatiquement après l'attribution.",
+                      'Ask your host to assign you to at least one listing in StayPilot (Cleaning provider): your tools open automatically after assignment.',
+                      'Pide a tu anfitrión que te asigne al menos un alojamiento en StayPilot (Proveedor de limpieza): tus herramientas se abrirán solas tras la asignación.',
+                      'Bitten Sie Ihren Gastgeber, Sie in StayPilot (Reinigungsdienst) mindestens einer Unterkunft zuzuweisen: Danach werden Ihre Tools automatisch freigeschaltet.',
+                      'Chiedi al tuo host di assegnarti almeno un alloggio in StayPilot (Fornitore pulizie): gli strumenti si aprono automaticamente dopo l’assegnazione.',
+                    )}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-zinc-800">{cc.importantInfo}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-700">{cc.importantInfoBody}</p>
+                  </>
+                )}
               </div>
             </div>
           ) : null}
 
           <div
             className={
-              activePanel !== 'providers' ? 'hidden px-5 py-5 sm:px-6 sm:py-6' : 'px-5 py-5 sm:px-6 sm:py-6'
+              activePanel !== 'providers' || cleanerHasNoAssignedListings
+                ? 'hidden px-5 py-5 sm:px-6 sm:py-6'
+                : 'px-5 py-5 sm:px-6 sm:py-6'
             }
           >
             <button
@@ -1476,44 +1986,105 @@ export function DashboardCleaningPage() {
               onClick={() => setActivePanel('overview')}
               className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
             >
-              ← Retour aux outils prestataire ménage
+              {ui.backToCleaningTools}
             </button>
 
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
-              <p className="text-sm font-semibold text-zinc-900">Étape 1 : sélectionner le prestataire ménage</p>
-              <select
-                value={selectedProviderLink}
-                onChange={(e) => setSelectedProviderLink(e.target.value)}
-                className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-              >
-                <option value="">{hasRegisteredProviders ? 'Choisir un prestataire' : 'Aucun prestataire enregistré'}</option>
-                {providerOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-
-                <p className="mt-4 text-sm font-semibold text-zinc-900">Étape 2 : sélectionner le logement</p>
-              <select
-                value={selectedApartmentLink}
-                onChange={(e) => setSelectedApartmentLink(e.target.value)}
-                disabled={!apartments.length}
-                className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
-              >
-                {apartments.length === 0 ? (
-                  <option value="">Aucun logement connecté</option>
-                ) : (
-                  <>
-                    <option value="">Choisir un logement</option>
-                    {apartments.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
+            <div className="mt-4 rounded-xl border-2 border-sky-200 bg-zinc-50 p-4 sm:p-5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">
+                {l(
+                  'Selection prestataire / logement',
+                  'Provider / listing selection',
+                  'Seleccion proveedor / alojamiento',
+                  'Auswahl Dienstleister / Unterkunft',
+                  'Selezione fornitore / alloggio',
+                )}
+              </p>
+              <p className="text-sm font-semibold text-zinc-900">
+                {l(
+                  'Assigner ce logement a :',
+                  'Assign this listing to:',
+                  'Asignar este alojamiento a:',
+                  'Diese Unterkunft zuweisen an:',
+                  'Assegna questo alloggio a:',
+                )}
+              </p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-zinc-700">
+                  {l('Logement disponible', 'Available listing', 'Alojamiento disponible', 'Verfugbare Unterkunft', 'Alloggio disponibile')}
+                  <select
+                    value={selectedApartmentLink}
+                    onChange={(e) => setSelectedApartmentLink(e.target.value)}
+                    disabled={!apartments.length}
+                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                  >
+                    {apartments.length === 0 ? (
+                      <option value="">{l('Aucun logement connecte', 'No connected apartment', 'Ningun alojamiento conectado', 'Keine verbundene Unterkunft', 'Nessun alloggio collegato')}</option>
+                    ) : (
+                      <>
+                        <option value="">{l('Choisir un logement', 'Choose an apartment', 'Elegir un alojamiento', 'Unterkunft auswahlen', 'Scegli un alloggio')}</option>
+                        {apartments.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-zinc-700">
+                  {l(
+                    'Prestataire menage disponible',
+                    'Available cleaning provider',
+                    'Proveedor de limpieza disponible',
+                    'Verfugbarer Reinigungsdienst',
+                    'Fornitore pulizie disponibile',
+                  )}
+                  <select
+                    value={selectedProviderLink}
+                    onChange={(e) => setSelectedProviderLink(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="">
+                      {assignableCleanerOptions.length > 0
+                        ? l('Choisir une prestataire invitée', 'Choose an invited provider', 'Elegir proveedor invitado', 'Eingeladenen Dienstleister wählen', 'Scegli fornitore invitato')
+                        : hasPendingCleanerInvite
+                          ? l('Invitation envoyée - pas encore acceptée', 'Invitation sent - not accepted yet', 'Invitación enviada - aún no aceptada', 'Einladung gesendet - noch nicht akzeptiert', 'Invito inviato - non ancora accettato')
+                          : ui.noProviderYet}
+                    </option>
+                    {assignableCleanerOptions.map((opt) => (
+                      <option key={opt.username} value={opt.label}>
+                        {opt.label}
                       </option>
                     ))}
-                  </>
-                )}
-              </select>
+                  </select>
+                </label>
+              </div>
+              {assignableCleanerOptions.length === 0 ? (
+                <p className="mt-2 text-xs text-zinc-600">
+                  {hasPendingCleanerInvite
+                    ? l(
+                        "Aucune prestataire disponible pour l'assignation : invitation envoyée mais pas encore acceptée.",
+                        'No provider available for assignment: invitation sent but not accepted yet.',
+                        'Ningún proveedor disponible para asignación: invitación enviada pero aún no aceptada.',
+                        'Kein Dienstleister zur Zuweisung verfügbar: Einladung gesendet, aber noch nicht akzeptiert.',
+                        "Nessun fornitore disponibile per l'assegnazione: invito inviato ma non ancora accettato.",
+                      )
+                    : l(
+                        "Aucune prestataire invitée pour cet hôte.",
+                        'No invited provider for this host.',
+                        'Ningún proveedor invitado para este anfitrión.',
+                        'Kein eingeladener Dienstleister für diesen Gastgeber.',
+                        'Nessun fornitore invitato per questo host.',
+                      )}
+                </p>
+              ) : null}
+              {selectedApartmentLink && selectedProviderLink ? (
+                <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
+                  {l('Attribution en preparation :', 'Assignment in progress:', 'Asignacion en preparacion:', 'Zuordnung in Vorbereitung:', 'Assegnazione in preparazione:')}{' '}
+                  <strong>{apartments.find((a) => a.id === selectedApartmentLink)?.name || selectedApartmentLink}</strong>{' '}
+                  {l('a', 'to', 'a', 'an', 'a')} <strong>{selectedProviderLink}</strong>
+                </p>
+              ) : null}
 
               <button
                 type="button"
@@ -1536,14 +2107,24 @@ export function DashboardCleaningPage() {
               ) : null}
 
               <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
-                <p className="text-xs font-semibold text-zinc-900">Attributions actuelles</p>
+                <p className="text-xs font-semibold text-zinc-900">{l('Attributions actuelles', 'Current assignments', 'Asignaciones actuales', 'Aktuelle Zuordnungen', 'Assegnazioni attuali')}</p>
                 {apartments.length === 0 ? (
-                  <p className="mt-1 text-xs text-zinc-600">Aucun logement connecté pour le moment.</p>
+                  <p className="mt-1 text-xs text-zinc-600">{l('Aucun logement connecte pour le moment.', 'No connected apartment for now.', 'Ningun alojamiento conectado por ahora.', 'Aktuell keine verbundene Unterkunft.', 'Nessun alloggio collegato al momento.')}</p>
                 ) : (
                   <ul className="mt-2 space-y-1 text-xs text-zinc-700">
                     {apartments.map((a) => (
                       <li key={`assign-${a.id}`}>
-                        {a.name}: <strong>{providerAssignments[a.id] || 'Aucune prestataire assignée'}</strong>
+                        {a.name}:{' '}
+                        <strong>
+                          {providerAssignments[a.id] ||
+                            l(
+                              'Aucune prestataire assignée',
+                              'No provider assigned',
+                              'Ningún proveedor asignado',
+                              'Kein Dienstleister zugewiesen',
+                              'Nessun fornitore assegnato',
+                            )}
+                        </strong>
                       </li>
                     ))}
                   </ul>
@@ -1554,7 +2135,7 @@ export function DashboardCleaningPage() {
 
           <div
             className={`grid gap-6 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1.1fr_1fr] ${
-              activePanel !== 'invoices' ? 'hidden' : ''
+              activePanel !== 'invoices' || cleanerHasNoAssignedListings ? 'hidden' : ''
             }`}
           >
             <div className="lg:col-span-2">
@@ -1585,7 +2166,7 @@ export function DashboardCleaningPage() {
                   <input
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
-                    placeholder="Ex: Ménage appartement A"
+                    placeholder={l('Ex: Menage appartement A', 'Ex: Apartment A cleaning', 'Ej: Limpieza apartamento A', 'Bsp: Reinigung Wohnung A', 'Es: Pulizia appartamento A')}
                     className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   />
                 </label>
@@ -1651,7 +2232,7 @@ export function DashboardCleaningPage() {
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Précisions utiles (période, nombre de passages, remarques...)"
+                  placeholder={l('Precisions utiles (periode, nombre de passages, remarques...)', 'Useful details (period, number of visits, notes...)', 'Detalles utiles (periodo, numero de visitas, observaciones...)', 'Nutzliche Angaben (Zeitraum, Anzahl Einsatze, Hinweise...)', 'Dettagli utili (periodo, numero interventi, note...)')}
                   rows={3}
                   className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 />
@@ -1801,31 +2382,37 @@ export function DashboardCleaningPage() {
             </div>
           </div>
 
-          <div className={activePanel !== 'chat' ? 'hidden px-5 py-5 sm:px-6 sm:py-6' : 'px-5 py-5 sm:px-6 sm:py-6'}>
+          <div
+            className={
+              activePanel !== 'chat' || cleanerHasNoAssignedListings
+                ? 'hidden px-5 py-5 sm:px-6 sm:py-6'
+                : 'px-5 py-5 sm:px-6 sm:py-6'
+            }
+          >
             <button
               type="button"
               onClick={() => setActivePanel('overview')}
               className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
             >
-              ← Retour aux outils prestataire ménage
+              {ui.backToCleaningTools}
             </button>
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 {isHostSession ? (
                   <>
-                    <p className="text-sm font-semibold text-zinc-900">Choisir le prestataire ménage</p>
+                    <p className="text-sm font-semibold text-zinc-900">{l('Choisir le prestataire menage', 'Choose the cleaning provider', 'Elegir el proveedor de limpieza', 'Reinigungsdienst auswahlen', 'Scegli il fornitore pulizie')}</p>
                     <select
-                      value={selectedChatProvider}
-                      onChange={(e) => setChatProvider(e.target.value)}
+                      value={chatCleanerUsername}
+                      onChange={(e) => setChatCleanerUsername(e.target.value.trim().toLowerCase())}
                       className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     >
-                      {chatProviderOptions.length === 0 ? (
-                        <option value="">Aucun prestataire enregistré</option>
+                      {chatCleanerOptions.length === 0 ? (
+                        <option value="">{ui.noProviderYet}</option>
                       ) : (
-                        chatProviderOptions.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
+                        chatCleanerOptions.map((cleaner) => (
+                          <option key={cleaner.username} value={cleaner.username.trim().toLowerCase()}>
+                            {cleaner.label}
                           </option>
                         ))
                       )}
@@ -1844,7 +2431,7 @@ export function DashboardCleaningPage() {
                   filteredChatMessages.map((msg, idx) => {
                     const prev = idx > 0 ? filteredChatMessages[idx - 1] : null
                     const showDaySeparator = !prev || chatDayKey(prev.createdAt) !== chatDayKey(msg.createdAt)
-                    const senderName = msg.sender === 'manager' ? 'Vous' : selectedChatProvider
+                    const senderName = msg.senderUsername === currentUsername ? 'Vous' : selectedChatProvider
                     return (
                       <div key={msg.id}>
                         {showDaySeparator ? (
@@ -1884,10 +2471,10 @@ export function DashboardCleaningPage() {
                     )
                   })
                   ) : (
-                    <p className="text-sm text-zinc-600">Aucun message pour l’instant avec ce prestataire.</p>
+                    <p className="text-sm text-zinc-600">{l('Aucun message pour l instant avec ce prestataire.', 'No message yet with this provider.', 'Aun no hay mensajes con este proveedor.', 'Noch keine Nachricht mit diesem Dienstleister.', 'Nessun messaggio per ora con questo fornitore.')}</p>
                   )
                 ) : isHostSession ? null : (
-                  <p className="text-sm text-zinc-600">Aucun message pour l’instant avec votre hôte.</p>
+                  <p className="text-sm text-zinc-600">{l('Aucun message pour l instant avec votre hote.', 'No message yet with your host.', 'Aun no hay mensajes con tu anfitrion.', 'Noch keine Nachricht mit Ihrem Gastgeber.', 'Nessun messaggio per ora con il tuo host.')}</p>
                 )}
               </div>
 
@@ -1919,15 +2506,15 @@ export function DashboardCleaningPage() {
                       }
                     }
                   }}
-                  placeholder="Écrire un message… (photo optionnelle)"
+                  placeholder={ui.photoPlaceholder}
                   rows={3}
-                  disabled={!selectedChatProvider}
+                  disabled={!currentHostUsername || !currentCleanerUsername}
                   className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
                 />
                 <div className="flex flex-wrap items-start gap-2">
                   <button
                     type="button"
-                    disabled={!selectedChatProvider}
+                    disabled={!currentHostUsername || !currentCleanerUsername}
                     onClick={() => chatFileRef.current?.click()}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
                   >
@@ -1945,7 +2532,7 @@ export function DashboardCleaningPage() {
                         type="button"
                         onClick={() => setPendingChatImage(null)}
                         className="absolute -right-1.5 -top-1.5 rounded-full border border-zinc-200 bg-white p-0.5 text-zinc-600 shadow-sm hover:bg-zinc-50"
-                        aria-label="Retirer la photo"
+                        aria-label={ui.removePhotoAria}
                       >
                         <X className="h-3.5 w-3.5" aria-hidden />
                       </button>
@@ -1956,7 +2543,7 @@ export function DashboardCleaningPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => sendChatMessage('manager')}
+                    onClick={() => sendChatMessage()}
                     disabled={!canSendChat}
                     className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
                   >
@@ -1969,7 +2556,9 @@ export function DashboardCleaningPage() {
 
           <div
             className={
-              activePanel !== 'tasks' ? 'hidden px-5 py-5 sm:px-6 sm:py-6' : 'px-5 py-5 sm:px-6 sm:py-6'
+              activePanel !== 'tasks' || cleanerHasNoAssignedListings
+                ? 'hidden px-5 py-5 sm:px-6 sm:py-6'
+                : 'px-5 py-5 sm:px-6 sm:py-6'
             }
           >
             <button
@@ -1977,7 +2566,7 @@ export function DashboardCleaningPage() {
               onClick={() => setActivePanel('overview')}
               className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
             >
-              ← Retour aux outils prestataire ménage
+              {ui.backToCleaningTools}
             </button>
 
             <div className="mt-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
@@ -1989,7 +2578,7 @@ export function DashboardCleaningPage() {
 
               {taskViewerRole === 'provider' && isHostSession ? (
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
-                  <p className="text-sm font-semibold text-zinc-900">Qui consulte la checklist ?</p>
+                  <p className="text-sm font-semibold text-zinc-900">{l('Qui consulte la checklist ?', 'Who is viewing the checklist?', 'Quien consulta la checklist?', 'Wer sieht die Checkliste?', 'Chi consulta la checklist?')}</p>
                   <p className="mt-1 text-xs text-zinc-600">
                     Seules les cases sont activées si votre nom correspond exactement à la prestataire assignée sur ce
                     logement (même orthographe).
@@ -2000,7 +2589,7 @@ export function DashboardCleaningPage() {
                       onChange={(e) => setTaskViewerProvider(e.target.value)}
                       className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     >
-                      <option value="">Choisir ma fiche prestataire</option>
+                      <option value="">{l('Choisir ma fiche prestataire', 'Choose my provider profile', 'Elegir mi perfil de proveedor', 'Mein Dienstleisterprofil auswahlen', 'Scegli il mio profilo fornitore')}</option>
                       {providerOptions.map((name) => (
                         <option key={name} value={name}>
                           {name}
@@ -2011,87 +2600,252 @@ export function DashboardCleaningPage() {
                     <input
                       value={taskViewerProvider}
                       onChange={(e) => setTaskViewerProvider(e.target.value)}
-                      placeholder="Votre nom (identique à l’assignation sur le logement)"
+                      placeholder={l('Votre nom (identique a l assignation sur le logement)', 'Your name (must match apartment assignment)', 'Tu nombre (igual a la asignacion del alojamiento)', 'Ihr Name (muss der Unterkunftszuweisung entsprechen)', 'Il tuo nome (deve corrispondere all assegnazione alloggio)')}
                       className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     />
                   )}
                 </div>
               ) : null}
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <label className="text-sm text-zinc-700">
-                  Logement
-                  <select
-                    value={effectiveTaskApartmentId}
-                    onChange={(e) => setTaskApartmentId(e.target.value)}
-                    disabled={!apartments.length}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                  >
-                    {apartments.length === 0 ? (
-                      <option value="">Aucun logement connecté</option>
-                    ) : (
-                      apartments.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                          {a.address ? ` — ${a.address}` : ''}
-                        </option>
-                      ))
+              {isHostSession ? (
+                <div className="rounded-lg border-2 border-sky-200 bg-sky-50 px-3 py-3">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {l(
+                      'Assigner ce logement a une prestataire menage',
+                      'Assign this listing to a cleaning provider',
+                      'Asignar este alojamiento a un proveedor de limpieza',
+                      'Diese Unterkunft einem Reinigungsdienst zuweisen',
+                      'Assegna questo alloggio a un fornitore pulizie',
                     )}
-                  </select>
-                </label>
-                <label className="text-sm text-zinc-700">
-                  Mois
-                  <select
-                    value={taskMonth}
-                    onChange={(e) => setTaskMonth(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  >
-                    {taskMonthSelectOptions.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm text-zinc-700">
-                  Fréquence
-                  <select
-                    value={taskFrequency}
-                    onChange={(e) => setTaskFrequency(e.target.value as TaskFrequency)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  >
-                    <option value="weekly">Hebdomadaire</option>
-                    <option value="monthly">Mensuel</option>
-                  </select>
-                </label>
-                {canOwnerManageTasks ? (
-                  <label className="text-sm text-zinc-700 sm:col-span-2 lg:col-span-1">
-                    Prestataire assignée à ce logement
-                    {hasRegisteredProviders ? (
+                  </p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
+                    <label className="text-sm text-zinc-700">
+                      {l('Logement', 'Listing', 'Alojamiento', 'Unterkunft', 'Alloggio')}
                       <select
-                        value={taskAssignedProvider}
-                        onChange={(e) => setTaskAssignedProvider(e.target.value)}
+                        value={selectedApartmentLink}
+                        onChange={(e) => setSelectedApartmentLink(e.target.value)}
+                        disabled={!apartments.length}
+                        className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                      >
+                        {apartments.length === 0 ? (
+                          <option value="">{l('Aucun logement connecte', 'No connected apartment', 'Ningun alojamiento conectado', 'Keine verbundene Unterkunft', 'Nessun alloggio collegato')}</option>
+                        ) : (
+                          <>
+                            <option value="">{l('Choisir un logement', 'Choose a listing', 'Elegir un alojamiento', 'Unterkunft auswahlen', 'Scegli un alloggio')}</option>
+                            {apartments.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </label>
+                    <label className="text-sm text-zinc-700">
+                      {l('Prestataire', 'Provider', 'Proveedor', 'Dienstleister', 'Fornitore')}
+                      <select
+                        value={selectedProviderLink}
+                        onChange={(e) => setSelectedProviderLink(e.target.value)}
                         className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                       >
-                        <option value="">Choisir…</option>
-                        {providerOptions.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
+                        <option value="">
+                          {assignableCleanerOptions.length > 0
+                            ? l('Choisir une prestataire', 'Choose a provider', 'Elegir proveedor', 'Dienstleister wählen', 'Scegli fornitore')
+                            : ui.noProviderYet}
+                        </option>
+                        {assignableCleanerOptions.map((opt) => (
+                          <option key={opt.username} value={opt.label}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={linkProviderToApartment}
+                      className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+                    >
+                      {l('Assigner', 'Assign', 'Asignar', 'Zuweisen', 'Assegna')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={unlinkProviderFromApartment}
+                      disabled={!selectedApartmentLink || !providerAssignments[selectedApartmentLink]}
+                      className="inline-flex rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {l('Retirer', 'Unassign', 'Quitar', 'Entfernen', 'Rimuovi')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <label className="text-sm text-zinc-700">
+                  {l('Historique / mois', 'History / month', 'Historial / mes', 'Verlauf / Monat', 'Storico / mese')}
+                  <div className="mt-1 rounded-lg border border-zinc-200 bg-white p-2">
+                    <div className="mb-2 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setTaskMonthTab('current')}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                          taskMonthTab === 'current' ? 'bg-sky-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {l('Mois en cours', 'Current month', 'Mes en curso', 'Aktueller Monat', 'Mese corrente')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskMonthTab('history')}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                          taskMonthTab === 'history' ? 'bg-sky-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {l('Historique', 'History', 'Historial', 'Verlauf', 'Storico')}
+                      </button>
+                    </div>
+                    {taskMonthTab === 'history' ? (
+                      <select
+                        value={taskHistoryMonth}
+                        onChange={(e) => setTaskHistoryMonth(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                      >
+                        {taskMonthHistoryOptions.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <input
-                        value={taskAssignedProvider}
-                        onChange={(e) => setTaskAssignedProvider(e.target.value)}
-                        placeholder="Nom du prestataire ménage pour ce logement"
-                        className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                      />
+                      <p className="rounded-md bg-sky-50 px-2.5 py-2 text-xs font-medium text-sky-800">
+                        {l('Affichage verrouille sur le mois en cours.', 'View locked to current month.', 'Vista bloqueada en el mes en curso.', 'Ansicht auf aktuellen Monat fixiert.', 'Vista bloccata sul mese corrente.')}
+                      </p>
                     )}
-                  </label>
-                ) : null}
+                  </div>
+                </label>
               </div>
-
+              {currentTaskBoard ? (
+                <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                  <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                      <tr>
+                        <th className="px-3 py-2">
+                          {l('Intitulé de la tâche', 'Task label', 'Título de la tarea', 'Aufgabentitel', 'Titolo attività')}
+                        </th>
+                        <th className="px-3 py-2">
+                          {l('Tous les combien', 'How often', 'Cada cuánto', 'Wie oft', 'Frequenza')}
+                        </th>
+                        <th className="px-3 py-2">{l('Fait', 'Done', 'Hecho', 'Erledigt', 'Fatto')}</th>
+                        <th className="px-3 py-2">{l('Date', 'Date', 'Fecha', 'Datum', 'Data')}</th>
+                        {canOwnerManageTasks ? (
+                          <th className="px-3 py-2">{l('Supprimer', 'Delete', 'Eliminar', 'Löschen', 'Elimina')}</th>
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {currentTaskBoard.tasks.map((item) => (
+                        <tr key={item.id}>
+                          <td className={`px-3 py-2 ${item.done ? 'text-zinc-500 line-through' : 'text-zinc-900'}`}>
+                            {item.label}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700">
+                            {canOwnerManageTasks ? (
+                              <select
+                                value={item.cadence}
+                                onChange={(e) => updateTaskCadence(item.id, e.target.value as TaskFrequency)}
+                                className="w-full min-w-[150px] rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                              >
+                                <option value="weekly">{l('Hebdomadaire', 'Weekly', 'Semanal', 'Wochentlich', 'Settimanale')}</option>
+                                <option value="monthly">{l('Mensuel', 'Monthly', 'Mensual', 'Monatlich', 'Mensile')}</option>
+                              </select>
+                            ) : (
+                              taskFrequencyLabel(item.cadence)
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {item.cadence === 'weekly' ? (
+                              <div className="flex flex-wrap gap-2">
+                                {([0, 1, 2, 3] as const).map((slotIndex) => (
+                                  <label
+                                    key={`${item.id}-week-${slotIndex}`}
+                                    className="inline-flex items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-700"
+                                  >
+                                    <span>{`S${slotIndex + 1}`}</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean((item.weeklyChecks || [false, false, false, false])[slotIndex])}
+                                      disabled={!canProviderToggleTasks || isTaskBoardReadOnly}
+                                      onChange={() => toggleTaskDone(item.id, slotIndex)}
+                                      className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={item.done}
+                                disabled={!canProviderToggleTasks || isTaskBoardReadOnly}
+                                onChange={() => toggleTaskDone(item.id)}
+                                className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-zinc-600">
+                            {item.cadence === 'weekly' ? (
+                              <div className="space-y-1">
+                                {([0, 1, 2, 3] as const).map((slotIndex) => {
+                                  const slotDoneAt = (item.weeklyDoneAt || [undefined, undefined, undefined, undefined])[slotIndex]
+                                  return (
+                                    <p key={`${item.id}-date-${slotIndex}`}>
+                                      <span className="font-semibold">{`S${slotIndex + 1}: `}</span>
+                                      {slotDoneAt
+                                        ? formatChatMessageTitle(slotDoneAt)
+                                        : l('Non fait', 'Not done', 'No hecho', 'Nicht erledigt', 'Non fatto')}
+                                    </p>
+                                  )
+                                })}
+                              </div>
+                            ) : item.doneAt ? (
+                              formatChatMessageTitle(item.doneAt)
+                            ) : (
+                              l('Non fait', 'Not done', 'No hecho', 'Nicht erledigt', 'Non fatto')
+                            )}
+                          </td>
+                          {canOwnerManageTasks ? (
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => removeTaskRow(item.id, item.title)}
+                                disabled={isTaskBoardReadOnly}
+                                className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                              >
+                                {l('Supprimer', 'Delete', 'Eliminar', 'Löschen', 'Elimina')}
+                              </button>
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-600">
+                  {isHostSession
+                    ? l(
+                        "Aucune tâche pour ce logement sur ce mois. Utilisez la ligne 'Créer une liste pour' pour ajouter vos tâches.",
+                        "No task for this apartment in this month yet. Use the 'Create a list for' row to add tasks.",
+                        "No hay tareas para este alojamiento en este mes. Usa la línea 'Crear una lista para' para añadir tareas.",
+                        "Für diese Unterkunft gibt es in diesem Monat noch keine Aufgaben. Nutzen Sie die Zeile 'Liste erstellen für'.",
+                        "Nessuna attività per questo alloggio in questo mese. Usa la riga 'Crea una lista per' per aggiungere attività.",
+                      )
+                    : l(
+                        "Votre hôte n'a pas encore mis ces options en place pour ce logement.",
+                        'Your host has not configured these options for this apartment yet.',
+                        'Tu anfitrión todavía no ha configurado estas opciones para este alojamiento.',
+                        'Ihr Gastgeber hat diese Optionen für diese Unterkunft noch nicht eingerichtet.',
+                        'Il tuo host non ha ancora configurato queste opzioni per questo alloggio.',
+                      )}
+                </p>
+              )}
               {apartments.length === 0 ? (
                 <p className="text-sm text-amber-800">
                   {isHostSession ? (
@@ -2107,102 +2861,114 @@ export function DashboardCleaningPage() {
                   )}
                 </p>
               ) : null}
+              {isTaskBoardReadOnly ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  {taskMonthTab === 'history'
+                    ? l(
+                        'Mode historique : cette feuille est en lecture seule et ne peut pas etre modifiee.',
+                        'History mode: this sheet is read-only and cannot be edited.',
+                        'Modo historial: esta hoja es de solo lectura y no se puede modificar.',
+                        'Verlaufmodus: Dieses Blatt ist schreibgeschutzt und kann nicht bearbeitet werden.',
+                        'Modalita storico: questo foglio e in sola lettura e non puo essere modificato.',
+                      )
+                    : l(
+                        'Mois archive : cette feuille est en lecture seule et ne peut plus etre modifiee.',
+                        'Archived month: this sheet is read-only and can no longer be edited.',
+                        'Mes archivado: esta hoja es de solo lectura y ya no se puede modificar.',
+                        'Archivierter Monat: Dieses Blatt ist schreibgeschutzt und kann nicht mehr bearbeitet werden.',
+                        'Mese archiviato: questo foglio e in sola lettura e non puo piu essere modificato.',
+                      )}
+                </div>
+              ) : null}
 
-              {canOwnerManageTasks ? (
-                <button
-                  type="button"
-                  onClick={saveTaskBoardConfig}
-                  disabled={!apartments.length || !taskAssignedProvider.trim()}
-                  className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+              <label className="mt-3 block text-sm text-zinc-700">
+                {l('Logement', 'Apartment', 'Alojamiento', 'Unterkunft', 'Alloggio')}
+                <select
+                  value={effectiveTaskApartmentId}
+                  onChange={(e) => setTaskApartmentId(e.target.value)}
+                  disabled={!apartments.length}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
                 >
-                  {currentTaskBoard ? 'Enregistrer la prestataire assignée' : 'Créer la checklist (exemples inclus)'}
-                </button>
-              ) : null}
+                  {apartments.length === 0 ? (
+                    <option value="">{l('Aucun logement connecte', 'No connected apartment', 'Ningun alojamiento conectado', 'Keine verbundene Unterkunft', 'Nessun alloggio collegato')}</option>
+                  ) : (
+                    apartments.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                        {a.address ? ` — ${a.address}` : ''}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
 
-              {currentTaskBoard && taskViewerRole === 'provider' && !canProviderToggleTasks ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Cette checklist est réservée à <strong>{currentTaskBoard.provider}</strong>. Sélectionnez ce nom
-                  ci-dessus pour pouvoir cocher.
+              <div className="rounded-lg border border-zinc-200 bg-white p-3">
+                <p className="text-sm font-semibold text-zinc-900">
+                  {l(
+                    'Créer une liste pour :',
+                    'Create a list for:',
+                    'Crear una lista para:',
+                    'Liste erstellen für:',
+                    'Crea una lista per:',
+                  )}{' '}
+                  {selectedTaskListingLabel ? (
+                    <span className="text-sky-800">{selectedTaskListingLabel}</span>
+                  ) : (
+                    <span className="font-normal text-zinc-500">
+                      {l('(choisir un logement)', '(pick a listing)', '(elige un alojamiento)', '(Unterkunft wählen)', '(scegli un alloggio)')}
+                    </span>
+                  )}
                 </p>
-              ) : null}
-
-              {currentTaskBoard && canOwnerManageTasks ? (
-                <p className="text-xs text-zinc-600">
-                  Les coches sont réservées à la prestataire (mode Prestataire). Vous pouvez modifier la liste
-                  ci-dessous.
-                </p>
-              ) : null}
-
-              {currentTaskBoard ? (
-                <ul className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
-                  {currentTaskBoard.tasks.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex items-start gap-3 rounded-md border border-zinc-100 px-2 py-2 sm:px-3"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.done}
-                        disabled={!canProviderToggleTasks}
-                        onChange={() => toggleTaskDone(item.id)}
-                        className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-sm ${item.done ? 'text-zinc-500 line-through' : 'text-zinc-900'}`}>
-                          {item.label}
-                        </p>
-                        {item.done && item.doneAt ? (
-                          <p className="text-[11px] text-zinc-500">
-                            Fait le {formatChatMessageTitle(item.doneAt)}
-                          </p>
-                        ) : null}
-                      </div>
-                      {canOwnerManageTasks ? (
-                        <button
-                          type="button"
-                          onClick={() => removeTaskRow(item.id)}
-                          className="shrink-0 text-xs font-semibold text-rose-600 hover:text-rose-700"
-                        >
-                          Retirer
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-zinc-600">
-                  {isHostSession
-                    ? 'Aucune checklist pour ce logement, ce mois et cette fréquence. Configurez les options hôte pour créer la checklist.'
-                    : "Votre hôte n'a pas encore mis ces options en place pour ce logement."}
-                </p>
-              )}
-
-              {canOwnerManageTasks && currentTaskBoard ? (
-                <div className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3">
-                  <label className="min-w-[200px] flex-1 text-sm text-zinc-700">
-                    Ajouter une tâche
+                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-end">
+                  <label className="text-sm text-zinc-700">
+                    {l('Nom de la tâche', 'Task name', 'Nombre de la tarea', 'Aufgabenname', 'Nome attività')}
                     <input
                       value={taskNewLabel}
                       onChange={(e) => setTaskNewLabel(e.target.value)}
-                      placeholder="Ex: Nettoyer les spots encastrés"
+                      disabled={isTaskBoardReadOnly}
+                      placeholder={l(
+                        'Ex: Nettoyer les vitres',
+                        'Ex: Clean windows',
+                        'Ej: Limpiar los cristales',
+                        'Bsp: Fenster reinigen',
+                        'Es: Pulire i vetri',
+                      )}
                       className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     />
                   </label>
-                  <button
-                    type="button"
-                    onClick={addTaskRow}
-                    className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-                  >
-                    Ajouter
-                  </button>
+                  <label className="text-sm text-zinc-700">
+                    {l('Fréquence', 'Frequency', 'Frecuencia', 'Frequenz', 'Frequenza')}
+                    <select
+                      value={taskNewCadence}
+                      onChange={(e) => setTaskNewCadence(e.target.value as TaskFrequency)}
+                      disabled={isTaskBoardReadOnly}
+                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    >
+                      <option value="monthly">{l('Mensuel', 'Monthly', 'Mensual', 'Monatlich', 'Mensile')}</option>
+                      <option value="weekly">{l('Semaine', 'Weekly', 'Semanal', 'Wöchentlich', 'Settimanale')}</option>
+                    </select>
+                  </label>
+                  {canOwnerManageTasks ? (
+                    <button
+                      type="button"
+                      onClick={addTaskRow}
+                      disabled={!effectiveTaskApartmentId || !taskNewLabel.trim() || isTaskBoardReadOnly}
+                      className="inline-flex rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 disabled:opacity-50"
+                    >
+                      {l('Ajouter', 'Add', 'Añadir', 'Hinzufügen', 'Aggiungi')}
+                    </button>
+                  ) : null}
                 </div>
-              ) : null}
+              </div>
+
             </div>
           </div>
 
           <div
             className={
-              activePanel !== 'suivi' ? 'hidden px-5 py-5 sm:px-6 sm:py-6' : 'px-5 py-5 sm:px-6 sm:py-6'
+              activePanel !== 'suivi' || cleanerHasNoAssignedListings
+                ? 'hidden px-5 py-5 sm:px-6 sm:py-6'
+                : 'px-5 py-5 sm:px-6 sm:py-6'
             }
           >
             <button
@@ -2210,20 +2976,31 @@ export function DashboardCleaningPage() {
               onClick={() => setActivePanel('overview')}
               className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
             >
-              ← Retour aux outils prestataire ménage
+              {ui.backToCleaningTools}
             </button>
 
             <div className="mt-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
               <p className="text-xs text-zinc-600">
-                Les départs sont détectés à partir du même calendrier que le tableau de bord (données démo{' '}
-                {suiviDemoMonthLabel}). Branchement iCal à venir pour vos vraies réservations.
+                {l(
+                  'Les départs affichés proviennent uniquement des réservations réelles détectées sur vos logements connectés au channel manager.',
+                  'Displayed departures come only from real bookings detected on your listings connected to the channel manager.',
+                  'Las salidas mostradas provienen solo de reservas reales detectadas en tus alojamientos conectados al channel manager.',
+                  'Die angezeigten Abreisen stammen nur aus echten Buchungen, die für Ihre mit dem Channel Manager verbundenen Unterkünfte erkannt wurden.',
+                  'Le partenze mostrate provengono solo da prenotazioni reali rilevate sugli alloggi collegati al channel manager.',
+                )}
               </p>
 
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-900">Logement</p>
+                  <p className="text-sm font-semibold text-zinc-900">{l('Logement', 'Apartment', 'Alojamiento', 'Unterkunft', 'Alloggio')}</p>
                   <p className="mt-0.5 text-xs text-zinc-600">
-                    Choisissez le logement concerné ou « Tous » pour voir tous les départs.
+                    {l(
+                      'Choisissez le logement concerné ou « Tous » pour voir tous les départs.',
+                      'Choose the apartment or "All" to display every departure.',
+                      'Elige el alojamiento o "Todos" para ver todas las salidas.',
+                      'Wählen Sie die Unterkunft oder "Alle", um alle Abreisen zu sehen.',
+                      'Scegli l alloggio o "Tutti" per vedere tutte le partenze.',
+                    )}
                   </p>
                   <select
                     value={suiviLogementTab === 'all' ? 'all' : String(suiviLogementTab)}
@@ -2232,8 +3009,8 @@ export function DashboardCleaningPage() {
                     }
                     className="mt-2 w-full max-w-sm rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   >
-                    <option value="all">Tous les logements</option>
-                    {Array.from({ length: suiviApartmentCount }, (_, i) => (
+                    <option value="all">{l('Tous les logements', 'All apartments', 'Todos los alojamientos', 'Alle Unterkunfte', 'Tutti gli alloggi')}</option>
+                    {apartments.map((_, i) => (
                       <option key={i} value={String(i)}>
                         {suiviApartmentLabel(i)}
                       </option>
@@ -2242,9 +3019,15 @@ export function DashboardCleaningPage() {
                 </div>
 
                 <div className="shrink-0 lg:max-w-xs">
-                  <p className="text-sm font-semibold text-zinc-900 lg:text-right">Check-outs</p>
+                  <p className="text-sm font-semibold text-zinc-900 lg:text-right">{l('Check-outs', 'Check-outs', 'Check-outs', 'Check-outs', 'Check-outs')}</p>
                   <p className="mt-0.5 text-xs text-zinc-600 lg:text-right">
-                    Filtrer par date de départ (par rapport à aujourd’hui).
+                    {l(
+                      "Filtrer par date de départ (par rapport à aujourd’hui).",
+                      'Filter by checkout date (relative to today).',
+                      'Filtrar por fecha de salida (respecto a hoy).',
+                      'Nach Abreisedatum filtern (relativ zu heute).',
+                      'Filtra per data di check-out (rispetto a oggi).',
+                    )}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 lg:justify-end">
                     <button
@@ -2256,7 +3039,7 @@ export function DashboardCleaningPage() {
                           : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
                       }`}
                     >
-                      Check-outs passés
+                      {l('Check-outs passés', 'Past check-outs', 'Check-outs pasados', 'Vergangene Check-outs', 'Check-out passati')}
                     </button>
                     <button
                       type="button"
@@ -2267,17 +3050,23 @@ export function DashboardCleaningPage() {
                           : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
                       }`}
                     >
-                      Check-outs à venir
+                      {l('Check-outs à venir', 'Upcoming check-outs', 'Próximos check-outs', 'Bevorstehende Check-outs', 'Prossimi check-out')}
                     </button>
                   </div>
                 </div>
               </div>
 
               <label className="block text-sm font-semibold text-zinc-900">
-                Check-out à traiter
+                {l('Check-out à traiter', 'Check-out to process', 'Check-out a procesar', 'Zu bearbeitender Check-out', 'Check-out da gestire')}
                 {!isHostSession ? (
                   <p className="mt-0.5 text-xs font-medium text-zinc-600">
-                    Vue prestataire : les détails de réservation sont masqués.
+                    {l(
+                      'Vue prestataire : les détails de réservation sont masqués.',
+                      'Provider view: booking details are hidden.',
+                      'Vista proveedor: los detalles de reserva están ocultos.',
+                      'Dienstleisteransicht: Buchungsdetails sind ausgeblendet.',
+                      'Vista fornitore: i dettagli della prenotazione sono nascosti.',
+                    )}
                   </p>
                 ) : null}
                 <select
@@ -2290,11 +3079,23 @@ export function DashboardCleaningPage() {
                     <option value="">
                       {suiviHorizonTab === 'past'
                         ? suiviLogementTab === 'all'
-                          ? 'Aucun check-out passé'
-                          : 'Aucun check-out passé pour ce logement'
+                          ? l('Aucun check-out passé', 'No past check-outs', 'No hay check-outs pasados', 'Keine vergangenen Check-outs', 'Nessun check-out passato')
+                          : l(
+                              'Aucun check-out passé pour ce logement',
+                              'No past check-outs for this apartment',
+                              'No hay check-outs pasados para este alojamiento',
+                              'Keine vergangenen Check-outs für diese Unterkunft',
+                              'Nessun check-out passato per questo alloggio',
+                            )
                         : suiviLogementTab === 'all'
-                          ? 'Aucun check-out à venir'
-                          : 'Aucun check-out à venir pour ce logement'}
+                          ? l('Aucun check-out à venir', 'No upcoming check-outs', 'No hay próximos check-outs', 'Keine bevorstehenden Check-outs', 'Nessun check-out in arrivo')
+                          : l(
+                              'Aucun check-out à venir pour ce logement',
+                              'No upcoming check-outs for this apartment',
+                              'No hay próximos check-outs para este alojamiento',
+                              'Keine bevorstehenden Check-outs für diese Unterkunft',
+                              'Nessun check-out in arrivo per questo alloggio',
+                            )}
                     </option>
                   ) : (
                     suiviFilteredCheckoutEvents.map((ev) => (
@@ -2307,7 +3108,7 @@ export function DashboardCleaningPage() {
                         {formatSuiviCheckoutLabel(ev.checkoutIso)}
                         {suiviLogementTab === 'all' ? ` — ${suiviApartmentLabel(ev.aptIndex)}` : ''}
                         {isHostSession
-                          ? ` — ${ev.guest} (${ev.channel === 'airbnb' ? 'Airbnb' : 'Booking'}) — ${ev.reservationId}`
+                          ? ` — ${ev.guest} (${ev.channel === 'airbnb' ? 'Airbnb' : ev.channel === 'booking' ? 'Booking' : 'Channel manager'}) — ${ev.reservationId}`
                           : ''}
                         {' — '}
                         [{suiviEventStatus(ev, suiviReports[ev.id]).label}]
@@ -2315,6 +3116,41 @@ export function DashboardCleaningPage() {
                     ))
                   )}
                 </select>
+                {suiviFilteredCheckoutEvents.length === 0 ? (
+                  <p className="mt-2 text-xs text-zinc-600">
+                    {suiviHorizonTab === 'past'
+                      ? suiviLogementTab === 'all'
+                        ? l(
+                            'Aucun check-out passé à afficher pour le moment.',
+                            'No past check-outs to display at the moment.',
+                            'No hay check-outs pasados para mostrar por el momento.',
+                            'Derzeit keine vergangenen Check-outs zum Anzeigen.',
+                            'Nessun check-out passato da mostrare al momento.',
+                          )
+                        : l(
+                            'Aucun check-out passé pour ce logement pour le moment.',
+                            'No past check-outs for this apartment at the moment.',
+                            'No hay check-outs pasados para este alojamiento por el momento.',
+                            'Derzeit keine vergangenen Check-outs für diese Unterkunft.',
+                            'Nessun check-out passato per questo alloggio al momento.',
+                          )
+                      : suiviLogementTab === 'all'
+                        ? l(
+                            'Aucun check-out à venir à afficher pour le moment.',
+                            'No upcoming check-outs to display at the moment.',
+                            'No hay próximos check-outs para mostrar por el momento.',
+                            'Derzeit keine bevorstehenden Check-outs zum Anzeigen.',
+                            'Nessun check-out in arrivo da mostrare al momento.',
+                          )
+                        : l(
+                            'Aucun check-out à venir pour ce logement pour le moment.',
+                            'No upcoming check-outs for this apartment at the moment.',
+                            'No hay próximos check-outs para este alojamiento por el momento.',
+                            'Derzeit keine bevorstehenden Check-outs für diese Unterkunft.',
+                            'Nessun check-out in arrivo per questo alloggio al momento.',
+                          )}
+                  </p>
+                ) : null}
               </label>
 
               {selectedSuiviStatus ? (
@@ -2337,14 +3173,14 @@ export function DashboardCleaningPage() {
               {selectedSuiviEventId ? (
                 <>
                   <div>
-                    <label className="text-sm font-semibold text-zinc-900">Remarques / incidents</label>
+                    <label className="text-sm font-semibold text-zinc-900">{l('Remarques / incidents', 'Notes / incidents', 'Notas / incidencias', 'Hinweise / Vorfalle', 'Note / incidenti')}</label>
                     <p className="mt-0.5 text-xs text-zinc-600">
                       Laissez vide ou indiquez « Rien à signaler ». Ex. : vaisselle cassée, tache sur le canapé…
                     </p>
                     <textarea
                       value={suiviDraft.note}
                       onChange={(e) => setSuiviDraft((d) => ({ ...d, note: e.target.value }))}
-                      placeholder="Rien à signaler"
+                      placeholder={l('Rien a signaler', 'Nothing to report', 'Nada que reportar', 'Nichts zu melden', 'Niente da segnalare')}
                       rows={4}
                       className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     />
@@ -2352,7 +3188,7 @@ export function DashboardCleaningPage() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                      <p className="text-sm font-semibold text-zinc-900">Photos avant ménage</p>
+                      <p className="text-sm font-semibold text-zinc-900">{l('Photos avant menage', 'Photos before cleaning', 'Fotos antes de la limpieza', 'Fotos vor der Reinigung', 'Foto prima della pulizia')}</p>
                       <input
                         ref={suiviBeforeRef}
                         type="file"
@@ -2370,7 +3206,7 @@ export function DashboardCleaningPage() {
                         className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
                       >
                         <ImagePlus className="h-4 w-4 text-sky-600" aria-hidden />
-                        Ajouter des photos
+                        {ui.addPhotos}
                       </button>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {suiviDraft.photosBefore.map((src, i) => (
@@ -2380,7 +3216,7 @@ export function DashboardCleaningPage() {
                               type="button"
                               onClick={() => removeSuiviPhoto('before', i)}
                               className="absolute -right-1 -top-1 rounded-full border border-zinc-200 bg-white p-0.5 text-zinc-600 shadow-sm"
-                              aria-label="Retirer la photo"
+                              aria-label={ui.removePhotoAria}
                             >
                               <X className="h-3 w-3" aria-hidden />
                             </button>
@@ -2389,7 +3225,7 @@ export function DashboardCleaningPage() {
                       </div>
                     </div>
                     <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                      <p className="text-sm font-semibold text-zinc-900">Photos après ménage</p>
+                      <p className="text-sm font-semibold text-zinc-900">{l('Photos apres menage', 'Photos after cleaning', 'Fotos despues de la limpieza', 'Fotos nach der Reinigung', 'Foto dopo la pulizia')}</p>
                       <input
                         ref={suiviAfterRef}
                         type="file"
@@ -2407,7 +3243,7 @@ export function DashboardCleaningPage() {
                         className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
                       >
                         <ImagePlus className="h-4 w-4 text-sky-600" aria-hidden />
-                        Ajouter des photos
+                        {ui.addPhotos}
                       </button>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {suiviDraft.photosAfter.map((src, i) => (
@@ -2417,7 +3253,7 @@ export function DashboardCleaningPage() {
                               type="button"
                               onClick={() => removeSuiviPhoto('after', i)}
                               className="absolute -right-1 -top-1 rounded-full border border-zinc-200 bg-white p-0.5 text-zinc-600 shadow-sm"
-                              aria-label="Retirer la photo"
+                              aria-label={ui.removePhotoAria}
                             >
                               <X className="h-3 w-3" aria-hidden />
                             </button>
@@ -2462,7 +3298,7 @@ export function DashboardCleaningPage() {
                           onChange={() => setSuiviDraft((d) => ({ ...d, keyInBox: '' }))}
                           className="h-4 w-4 border-zinc-300 text-sky-600 focus:ring-sky-500"
                         />
-                        Non renseigné
+                        {ui.notProvided}
                       </label>
                     </div>
                   </fieldset>
@@ -2518,7 +3354,7 @@ export function DashboardCleaningPage() {
           {activePanel === 'invoices' ? (
             <div className="border-t border-zinc-200 px-5 py-4 sm:px-6">
               <div className="rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3">
-                <p className="text-sm font-semibold text-zinc-800">Information importante</p>
+                <p className="text-sm font-semibold text-zinc-800">{cc.importantInfo}</p>
                 <p className="mt-1 text-sm leading-relaxed text-zinc-700">
                   Cet espace sert à créer, centraliser et suivre vos factures de ménage (statut, mois, prestataire,
                   PDF). Le règlement financier n’est pas géré dans StayPilot : le paiement doit être effectué hors

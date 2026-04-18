@@ -3,11 +3,15 @@ import type { FormEvent } from 'react'
 import { Check, CircleCheck, Eye, EyeOff, TrendingUp, Users } from 'lucide-react'
 import { useLanguage } from '../hooks/useLanguage'
 import {
-  accountExistsByEmailOrUsername,
+  accountExistsByEmailOrUsernameAsync,
   clearStoredAccounts,
   createAccount,
   getStoredAccounts,
+  saveStoredAccounts,
+  type StoredAccount,
 } from '../lib/accounts'
+import { isServerAccountsMandatory, serverAccountsConfigErrorMessage } from '../lib/serverAccountsPolicy'
+import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur, type PlanKey } from '../utils/planPricing'
 
 const CLEANER_INVITES_KEY = 'staypilot_cleaner_invites_v1'
 
@@ -82,7 +86,7 @@ function emailAlreadyRegisteredForSignup(emailNorm: string) {
   return getStoredAccounts().some((a) => a.email.trim().toLowerCase() === emailNorm)
 }
 
-function planToPlanKey(plan: string): 'starter' | 'pro' | 'scale' {
+function planToPlanKey(plan: string): PlanKey {
   const value = plan.trim().toLowerCase()
   if (value === 'starter') return 'starter'
   if (value === 'scale') return 'scale'
@@ -106,7 +110,7 @@ export function SignupPage() {
   const [plan, setPlan] = useState('Pro')
   const [role, setRole] = useState<'host' | 'cleaner'>('host')
   const [invitationCode, setInvitationCode] = useState('')
-  const [clientType, setClientType] = useState<'b2b' | 'b2c'>('b2c')
+  const [clientType, setClientType] = useState<'b2b' | 'b2c'>('b2b')
   const [countryCode, setCountryCode] = useState('FR')
   const [vatNumber, setVatNumber] = useState('')
   const [vatVerified, setVatVerified] = useState(false)
@@ -135,16 +139,16 @@ export function SignupPage() {
   const [emailVerifyMsg, setEmailVerifyMsg] = useState('')
   const [accountsCount, setAccountsCount] = useState(() => getStoredAccounts().length)
   const [accountsPreview, setAccountsPreview] = useState(() => getStoredAccounts())
+  const [remoteKvOk, setRemoteKvOk] = useState<boolean | null>(() =>
+    isServerAccountsMandatory() ? null : true,
+  )
 
-  const selectedPlanPricing =
-    plan === 'Starter'
-      ? `${t.starterPrice}${t.starterPriceSuffix}`
-      : plan === 'Scale'
-        ? `${t.scalePrice}${t.scalePriceSuffix}`
-        : `${t.proPrice}${t.proPriceSuffix}`
-  const starterHt = (19.99 / 1.2).toFixed(2)
-  const proHt = (59.99 / 1.2).toFixed(2)
-  const scaleHt = (99.99 / 1.2).toFixed(2)
+  const starterTtc = getPlanMonthlyTtcEur('starter')
+  const proTtc = getPlanMonthlyTtcEur('pro')
+  const scaleTtc = getPlanMonthlyTtcEur('scale')
+  const starterHt = computeHtFromTtc(starterTtc, 20)
+  const proHt = computeHtFromTtc(proTtc, 20)
+  const scaleHt = computeHtFromTtc(scaleTtc, 20)
   const vatRateByCountry: Record<string, number> = {
     FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
     SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
@@ -152,13 +156,31 @@ export function SignupPage() {
   }
   const normalizedCountry = countryCode.trim().toUpperCase() || 'FR'
   const vatRate = clientType === 'b2b' && vatVerified ? 0 : vatRateByCountry[normalizedCountry] ?? 20
-  const priceNumeric =
-    plan === 'Starter' ? 19.99 : plan === 'Scale' ? 99.99 : 59.99
-  const priceTtc = priceNumeric
+  const selectedPlanKey = planToPlanKey(plan)
+  const priceTtc = getPlanMonthlyTtcEur(selectedPlanKey)
   const priceHt = vatRate > 0 ? priceTtc / (1 + vatRate / 100) : priceTtc
   const cardNumberDigits = cardNumber.replace(/\D/g, '')
   const cardExpiryDigits = cardExpiry.replace(/\D/g, '')
   const cardCvcDigits = cardCvc.replace(/\D/g, '')
+
+  useEffect(() => {
+    if (!isServerAccountsMandatory()) {
+      setRemoteKvOk(true)
+      return
+    }
+    let cancelled = false
+    fetch('/api/auth-status', { method: 'GET' })
+      .then((r) => r.json().catch(() => ({})))
+      .then((j: { remoteAuth?: boolean }) => {
+        if (!cancelled) setRemoteKvOk(Boolean(j?.remoteAuth))
+      })
+      .catch(() => {
+        if (!cancelled) setRemoteKvOk(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -202,6 +224,7 @@ export function SignupPage() {
       (role === 'cleaner'
         ? Boolean(getValidCleanerInvite())
         : cardHolder.trim().length > 0 &&
+          (clientType === 'b2c' || (vatNumber.trim().length > 0 && vatVerified)) &&
           cardNumberDigits.length >= 14 &&
           cardExpiryDigits.length === 4 &&
           cardCvcDigits.length >= 3),
@@ -219,6 +242,9 @@ export function SignupPage() {
       cardExpiry,
       cardCvc,
       invitationCode,
+      clientType,
+      vatNumber,
+      vatVerified,
       emailVerifyValidated,
       requireEmailOtp,
     ],
@@ -226,13 +252,13 @@ export function SignupPage() {
 
   async function verifyVat() {
     if (clientType !== 'b2b') {
-      setVatStatusMsg('Verification TVA reservee au mode B2B.')
+      setVatStatusMsg('Vérification TVA réservée au mode B2B.')
       return
     }
     const cc = countryCode.trim().toUpperCase()
     const vat = vatNumber.trim().toUpperCase().replace(/\s+/g, '')
     if (cc.length !== 2 || vat.length < 4) {
-      setVatStatusMsg('Renseignez un pays (2 lettres) et un numero de TVA valide.')
+      setVatStatusMsg('Renseignez un pays (2 lettres) et un numéro de TVA valide.')
       setVatVerified(false)
       return
     }
@@ -246,17 +272,29 @@ export function SignupPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setVatVerified(false)
-        setVatStatusMsg('Verification TVA indisponible. Facturation TTC appliquee.')
+        setVatStatusMsg(
+          cc === 'GB' || cc === 'UK'
+            ? 'Vérification TVA UK indisponible pour le moment. Réessayez.'
+            : 'Vérification TVA indisponible pour le moment. Réessayez.',
+        )
       } else if (data.verified) {
         setVatVerified(true)
-        setVatStatusMsg('Numero de TVA verifie officiellement (VIES).')
+        setVatStatusMsg(
+          data?.verificationSource === 'uk_hmrc'
+            ? 'Numéro de TVA UK vérifié officiellement (HMRC).'
+            : 'Numéro de TVA vérifié officiellement (VIES).',
+        )
       } else {
         setVatVerified(false)
-        setVatStatusMsg('Numero de TVA non valide. Facturation TTC appliquee.')
+        setVatStatusMsg(
+          data?.verificationSource === 'uk_hmrc'
+            ? 'Numéro de TVA UK non valide (HMRC).'
+            : 'Numéro de TVA non valide.',
+        )
       }
     } catch {
       setVatVerified(false)
-      setVatStatusMsg('Verification TVA indisponible. Facturation TTC appliquee.')
+      setVatStatusMsg('Vérification TVA indisponible pour le moment. Réessayez.')
     } finally {
       setVatChecking(false)
     }
@@ -288,6 +326,9 @@ export function SignupPage() {
         }),
       })
       if (!res.ok) {
+        setEmailVerifyRequested(false)
+        setEmailVerifyValidated(false)
+        setEmailVerifyInput('')
         setEmailVerifyMsg(t.signupEmailVerifySendError)
         return
       }
@@ -297,6 +338,9 @@ export function SignupPage() {
       setEmailVerifyInput('')
       setEmailVerifyMsg(t.signupEmailVerifySent)
     } catch {
+      setEmailVerifyRequested(false)
+      setEmailVerifyValidated(false)
+      setEmailVerifyInput('')
       setEmailVerifyMsg(t.signupEmailVerifySendError)
     } finally {
       setEmailVerifySending(false)
@@ -373,7 +417,15 @@ export function SignupPage() {
       return
     }
 
-    if (accountExistsByEmailOrUsername(email, username)) {
+    const remoteStatus = await fetch('/api/auth-status', { method: 'GET' })
+      .then((r) => r.json().catch(() => ({})))
+      .catch(() => ({}))
+    if (isServerAccountsMandatory() && !remoteStatus.remoteAuth) {
+      setSubmitError(serverAccountsConfigErrorMessage())
+      return
+    }
+
+    if (await accountExistsByEmailOrUsernameAsync(email, username)) {
       setSubmitError(t.signupDuplicateError)
       return
     }
@@ -381,14 +433,18 @@ export function SignupPage() {
       setSubmitError('Inscription impossible : les deux mots de passe ne sont pas identiques.')
       return
     }
-
-    const validInvite = role === 'cleaner' ? getValidCleanerInvite() : null
-    if (role === 'cleaner' && !validInvite) {
-      setSubmitError("Code d'invitation invalide. Verifiez le code envoye par votre hote.")
+    if (role === 'host' && clientType === 'b2b' && (!vatNumber.trim() || !vatVerified)) {
+      setSubmitError('Inscription impossible : numéro de TVA B2B manquant ou non valide.')
       return
     }
 
-    createAccount({
+    const validInvite = role === 'cleaner' ? getValidCleanerInvite() : null
+    if (role === 'cleaner' && !validInvite) {
+      setSubmitError("Code d'invitation invalide. Vérifiez le code envoyé par votre hôte.")
+      return
+    }
+
+    const accountPayload = {
       plan: role === 'cleaner' ? 'Gratuit' : plan,
       role,
       hostUsername: role === 'cleaner' && validInvite ? validInvite.hostUsername : undefined,
@@ -406,7 +462,54 @@ export function SignupPage() {
       promoCode: role === 'host' && promoCode.trim() ? promoCode.trim() : undefined,
       preferredLocale: locale,
       emailVerified: emailVerifyValidated,
-    })
+    }
+
+    let createdAccount: StoredAccount
+    if (remoteStatus.remoteAuth) {
+      const res = await fetch('/api/auth-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: accountPayload }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) {
+        setSubmitError(t.signupDuplicateError)
+        return
+      }
+      if (!res.ok || !Array.isArray(data.accounts)) {
+        setSubmitError("Inscription impossible : le serveur de comptes est indisponible. Réessayez plus tard.")
+        return
+      }
+      saveStoredAccounts(data.accounts)
+      const uNorm = username.trim().toLowerCase()
+      const found = data.accounts.find((a: { username: string }) => a.username.trim().toLowerCase() === uNorm)
+      if (!found) {
+        setSubmitError("Inscription impossible : compte non retrouvé après création.")
+        return
+      }
+      createdAccount = found
+    } else {
+      if (isServerAccountsMandatory()) {
+        setSubmitError(serverAccountsConfigErrorMessage())
+        return
+      }
+      createdAccount = createAccount(accountPayload)
+    }
+    try {
+      await fetch('/api/cancel-subscription-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'welcome_onboarding',
+          to: email.trim(),
+          firstName: firstName.trim(),
+          locale,
+          role,
+        }),
+      })
+    } catch {
+      // Non-blocking: signup flow must continue even if email transport is unavailable.
+    }
     clearSignupEmailOtp(email.trim())
     const updatedAccounts = getStoredAccounts()
     setAccountsCount(updatedAccounts.length)
@@ -425,6 +528,8 @@ export function SignupPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             planKey: planToPlanKey(plan),
+            clientType,
+            accountId: createdAccount.id,
             email: email.trim(),
             locale,
           }),
@@ -456,7 +561,7 @@ export function SignupPage() {
     setCompany('')
     setPhone('')
     setPromoCode('')
-    setClientType('b2c')
+    setClientType('b2b')
     setRole('host')
     setInvitationCode('')
     setCountryCode('FR')
@@ -498,22 +603,40 @@ export function SignupPage() {
               par votre hôte.
             </p>
           ) : (
-            <>
-              <p className="mt-1.5 text-sm font-medium text-zinc-600">
-                {t.signupTrialPrefix} {selectedPlanPricing} {t.signupTrialSuffix}
-              </p>
-              <p className="mt-1 text-xs font-medium text-zinc-600">
-                Prix affiche: <strong>{priceHt.toFixed(2)} EUR HT</strong> (grand) -{' '}
-                <span className="text-zinc-500">{priceTtc.toFixed(2)} EUR TTC</span>{' '}
-                {clientType === 'b2b' && vatVerified ? '(autoliquidation B2B)' : `(TVA ${vatRate}%)`}
-              </p>
-            </>
+            <p className="mt-1 text-xs font-medium text-zinc-600">
+              {clientType === 'b2c' ? (
+                <>
+                  Prix affiché : <strong>{formatEuroForLocale(locale, priceTtc)} TTC</strong>{' '}
+                  <span className="text-zinc-500">(TVA {vatRate}%)</span>
+                </>
+              ) : (
+                <>
+                  Prix affiché : <strong>{formatEuroForLocale(locale, priceHt)} HT</strong> -{' '}
+                  <span className="text-zinc-500">{formatEuroForLocale(locale, priceTtc)} TTC</span>{' '}
+                  {vatVerified ? '(autoliquidation B2B)' : `(TVA ${vatRate}%)`}
+                </>
+              )}
+            </p>
           )}
           <p className="mt-1 text-xs font-medium text-zinc-500">
             {accountsCount > 0
               ? `${accountsCount} ${t.signupAccountsSome}`
               : t.signupAccountsNone}
           </p>
+
+          {isServerAccountsMandatory() && remoteKvOk !== true ? (
+            <div
+              className={`mt-4 rounded-xl border px-3 py-2 text-sm font-medium ${
+                remoteKvOk === null
+                  ? 'border-zinc-200 bg-zinc-50 text-zinc-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+              }`}
+            >
+              {remoteKvOk === null
+                ? 'Vérification du service de comptes…'
+                : serverAccountsConfigErrorMessage()}
+            </div>
+          ) : null}
 
           <form className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
             <p className="sm:col-span-2 text-xs text-zinc-700">Champs requis (obligatoire)</p>
@@ -532,13 +655,13 @@ export function SignupPage() {
               </div>
             ) : null}
             <label className="sm:col-span-2 text-xs text-zinc-700">
-              Vous etes
+              Vous êtes
               <select
                 value={role}
                 onChange={(e) => setRole((e.target.value as 'host' | 'cleaner') || 'host')}
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
               >
-                <option value="host">Hote</option>
+                <option value="host">Hôte</option>
                 <option value="cleaner">Prestataire ménage</option>
               </select>
             </label>
@@ -549,19 +672,15 @@ export function SignupPage() {
                   <select
                     value={clientType}
                     onChange={(e) => {
-                      const next = (e.target.value as 'b2b' | 'b2c') || 'b2c'
+                      const next = (e.target.value as 'b2b' | 'b2c') || 'b2b'
                       setClientType(next)
-                      if (next === 'b2c') {
-                        setVatVerified(false)
-                        setVatNumber('')
-                        setCompany('')
-                        setVatStatusMsg('Mode B2C: TVA appliquee selon le pays client.')
-                      }
+                      setVatVerified(false)
+                      setVatStatusMsg('')
                     }}
-                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm font-semibold text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                   >
-                    <option value="b2c">B2C</option>
                     <option value="b2b">B2B</option>
+                    <option value="b2c">B2C</option>
                   </select>
                 </label>
                 <label className="text-xs text-zinc-700">
@@ -576,7 +695,7 @@ export function SignupPage() {
                 </label>
                 {clientType === 'b2b' ? (
                   <label className="sm:col-span-2 text-xs text-zinc-700">
-                    Numero de TVA (B2B)
+                    Numéro de TVA (B2B)
                     <div className="mt-1 flex gap-2">
                       <input
                         type="text"
@@ -591,17 +710,21 @@ export function SignupPage() {
                       <button
                         type="button"
                         onClick={() => void verifyVat()}
-                        disabled={vatChecking || clientType !== 'b2b'}
+                        disabled={vatChecking}
                         className="shrink-0 rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {vatChecking ? 'Verification...' : 'Verifier TVA'}
+                        {vatChecking ? 'Vérification...' : 'Vérifier TVA'}
                       </button>
                     </div>
                     {vatStatusMsg ? (
                       <p className={`mt-1 ${vatVerified ? 'text-emerald-700' : 'text-amber-700'}`}>{vatStatusMsg}</p>
                     ) : null}
                   </label>
-                ) : null}
+                ) : (
+                  <p className="sm:col-span-2 text-xs text-zinc-600">
+                    Facturation B2C appliquée en TTC selon le pays client (TVA incluse).
+                  </p>
+                )}
               </>
             ) : (
               <label className="sm:col-span-2 text-xs text-zinc-700">
@@ -734,6 +857,11 @@ export function SignupPage() {
                     {t.signupEmailVerifyValidate}
                   </button>
                 </div>
+                {role === 'host' ? (
+                  <p className="mt-2 text-[11px] font-normal text-zinc-500">
+                    Channel manager obligatoire pour acceder a StayPilot : Beds24, Hostaway, Guesty ou Lodgify.
+                  </p>
+                ) : null}
                 {emailVerifyMsg ? (
                   <p
                     className={`mt-2 text-xs font-medium ${
@@ -836,25 +964,11 @@ export function SignupPage() {
 
             <button
               type="submit"
-              disabled={false}
-              aria-disabled={!canSubmit}
-              className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl bg-[#4a86f7] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_-10px_rgba(74,134,247,0.8)] transition-all hover:scale-[1.01] hover:brightness-[0.98]"
+              disabled={!canSubmit || remoteKvOk !== true}
+              aria-disabled={!canSubmit || remoteKvOk !== true}
+              className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl bg-[#4a86f7] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_-10px_rgba(74,134,247,0.8)] transition-all hover:scale-[1.01] hover:brightness-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t.signupSubmit}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem('staypilot_session_active', 'true')
-                localStorage.setItem('staypilot_current_plan', 'Gratuit')
-                localStorage.setItem('staypilot_current_role', role)
-                localStorage.removeItem('staypilot_current_user')
-                window.dispatchEvent(new Event('staypilot-session-changed'))
-                window.location.href = '/dashboard'
-              }}
-              className="sm:col-span-2 inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
-            >
-              Acces gratuit
             </button>
             {submitError ? (
               <p className="sm:col-span-2 text-sm font-medium text-rose-600">{submitError}</p>
@@ -865,32 +979,6 @@ export function SignupPage() {
             {t.signupAlready} <a href="/connexion" className="font-semibold text-[#4a86f7]">{t.signupLoginLink}</a>
           </p>
 
-          <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-zinc-800">{t.signupAdminTitle}</p>
-              <button
-                type="button"
-                onClick={onResetTestData}
-                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-100"
-              >
-                {t.signupAdminReset}
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-zinc-600">
-              {accountsPreview.length > 0
-                ? `${accountsPreview.length} ${t.signupAdminCount}`
-                : t.signupAdminNone}
-            </p>
-            {accountsPreview.length > 0 ? (
-              <ul className="mt-2 space-y-1 text-xs text-zinc-700">
-                {accountsPreview.slice(0, 5).map((account) => (
-                  <li key={account.id} className="rounded-md bg-white px-2 py-1">
-                    {account.firstName} {account.lastName} — {account.email}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
         </div>
 
         {role === 'host' ? <aside className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 sm:p-6">
@@ -955,10 +1043,10 @@ export function SignupPage() {
               <p className="mt-1 text-sm text-zinc-600">{t.starterRange}</p>
               <p className="mt-2 text-sm font-semibold text-zinc-800">{t.starterOutcome}</p>
               <p className="mt-3 text-3xl font-bold text-zinc-900">
-                {starterHt}€
+                {formatEuroForLocale(locale, starterHt)}
                 <span className="ml-1 text-base font-medium text-zinc-600">HT {t.starterPriceSuffix}</span>
               </p>
-              <p className="mt-1 text-xs text-zinc-500">19.99€ TTC</p>
+              <p className="mt-1 text-xs text-zinc-500">{formatEuroForLocale(locale, starterTtc)} TTC</p>
               <p className="mt-2 text-sm font-semibold text-emerald-600">{t.planTrial}</p>
               <ul className="mt-4 space-y-2">
                 {t.starterFeatures.map((feature) => (
@@ -980,10 +1068,10 @@ export function SignupPage() {
               <p className="mt-1 text-sm text-white/90">{t.proRange}</p>
               <p className="mt-2 text-sm font-semibold text-white">{t.proOutcome}</p>
               <p className="mt-3 text-4xl font-bold text-white">
-                {proHt}€
+                {formatEuroForLocale(locale, proHt)}
                 <span className="ml-1 text-base font-medium text-white/90">HT {t.proPriceSuffix}</span>
               </p>
-              <p className="mt-1 text-xs text-white/80">59.99€ TTC</p>
+              <p className="mt-1 text-xs text-white/80">{formatEuroForLocale(locale, proTtc)} TTC</p>
               <p className="mt-2 text-sm font-semibold text-white">{t.planTrial}</p>
               <ul className="mt-4 space-y-2">
                 {t.proFeatures.map((feature) => (
@@ -1000,10 +1088,10 @@ export function SignupPage() {
               <p className="mt-1 text-sm text-zinc-600">{t.scaleRange}</p>
               <p className="mt-2 text-sm font-semibold text-zinc-800">{t.scaleOutcome}</p>
               <p className="mt-3 text-3xl font-bold text-zinc-900">
-                {scaleHt}€
+                {formatEuroForLocale(locale, scaleHt)}
                 <span className="ml-1 text-base font-medium text-zinc-600">HT {t.scalePriceSuffix}</span>
               </p>
-              <p className="mt-1 text-xs text-zinc-500">99.99€ TTC</p>
+              <p className="mt-1 text-xs text-zinc-500">{formatEuroForLocale(locale, scaleTtc)} TTC</p>
               <p className="mt-2 text-sm font-semibold text-emerald-600">{t.planTrial}</p>
               <ul className="mt-4 space-y-2">
                 {t.scaleFeatures.map((feature) => (

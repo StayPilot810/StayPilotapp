@@ -72,9 +72,9 @@ export function WhyStayPilotPage() {
           </div>
 
           <div className="mt-9 rounded-2xl border border-[#4a86f7]/25 bg-gradient-to-br from-[#4a86f7]/10 to-white p-6">
-            <p className="text-sm font-semibold text-zinc-900">Prochaine etape recommandee</p>
+            <p className="text-sm font-semibold text-zinc-900">Prochaine étape recommandée</p>
             <p className="mt-2 text-sm leading-relaxed text-zinc-700">
-              Activez maintenant l’offre adaptee a votre volume et transformez vos operations en avantage competitif.
+              Activez maintenant l’offre adaptée à votre volume et transformez vos opérations en avantage compétitif.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
@@ -87,7 +87,7 @@ export function WhyStayPilotPage() {
                 href="/contact"
                 className="inline-flex rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
               >
-                Contacter l'equipe
+                Contacter l'équipe
               </a>
               <a
                 href={`mailto:${CONTACT_EMAIL}`}

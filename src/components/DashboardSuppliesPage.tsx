@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getStoredAccounts } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { isTestModeEnabled } from '../utils/testMode'
 
 type SupplyRow = {
@@ -16,6 +17,10 @@ type SupplyRow = {
 }
 
 const STORAGE_ROWS_KEY = 'staypilot_supplies_rows_v1'
+const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
+const EMPTY_LISTING_KEYS: string[] = []
+/** Valeur stockée pour le mode « sans logement » ; le libellé affiché est traduit via `c.testListingLabel`. */
+const TEST_LISTING_PLACEHOLDER = 'Logement test'
 const LS_CURRENT_ROLE = 'staypilot_current_role'
 const LS_CURRENT_USER = 'staypilot_current_user'
 const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
@@ -44,7 +49,7 @@ const SUPPLIES_V1: SupplyRow[] = [
     id: '1',
     apartment: 'Logement',
     item: 'Papier toilette',
-    category: 'Hygiene',
+    category: 'Hygiène',
     stock: 8,
     minStock: 6,
     status: 'En stock',
@@ -53,7 +58,7 @@ const SUPPLIES_V1: SupplyRow[] = [
   {
     id: '2',
     apartment: 'Logement',
-    item: 'Capsules cafe',
+    item: 'Capsules café',
     category: 'Cuisine',
     stock: 12,
     minStock: 10,
@@ -63,8 +68,8 @@ const SUPPLIES_V1: SupplyRow[] = [
   {
     id: '3',
     apartment: 'Logement',
-    item: 'Savon mains',
-    category: 'Hygiene',
+    item: 'Savon pour les mains',
+    category: 'Hygiène',
     stock: 2,
     minStock: 4,
     status: 'À réapprovisionner',
@@ -92,8 +97,209 @@ const SUPPLIES_V1: SupplyRow[] = [
   },
 ]
 
+function cloneSuppliesTemplateForApartment(apartment: string): SupplyRow[] {
+  const now = todayFrDate()
+  return SUPPLIES_V1.map((template, idx) => ({
+    ...template,
+    id: `seed-${idx}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    apartment,
+    updatedAt: now,
+  }))
+}
+
+/** Rattache les anciennes lignes (ex. « Logement ») au 1er logement connu, puis crée un jeu d’exemple par logement sans aucune ligne. */
+function syncRowsToConnectedListings(prev: SupplyRow[], listingNames: string[]): SupplyRow[] {
+  if (listingNames.length === 0) return prev
+  const optSet = new Set(listingNames)
+  let next = prev.map((row) => {
+    const apt = (row.apartment || '').trim()
+    if (optSet.has(apt)) return row
+    return { ...row, apartment: listingNames[0] }
+  })
+  for (const apt of listingNames) {
+    if (!next.some((r) => r.apartment === apt)) {
+      next = [...next, ...cloneSuppliesTemplateForApartment(apt)]
+    }
+  }
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next
+}
+
+function initialSuppliesState(): { rows: SupplyRow[]; snapshot: string } {
+  try {
+    const raw = readScopedStorage(STORAGE_ROWS_KEY)
+    const base = raw ? (JSON.parse(raw) as SupplyRow[]) : SUPPLIES_V1
+    const opts = getApartmentOptionsFromConnections()
+    const rows = opts.length ? syncRowsToConnectedListings(base, opts) : base
+    return { rows, snapshot: JSON.stringify({ rows }) }
+  } catch {
+    const opts = getApartmentOptionsFromConnections()
+    const rows = opts.length ? syncRowsToConnectedListings(SUPPLIES_V1, opts) : SUPPLIES_V1
+    return { rows, snapshot: JSON.stringify({ rows }) }
+  }
+}
+
 export function DashboardSuppliesPage() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const c = {
+    fr: {
+      editableV1: 'V1 éditable : toutes les cellules sont modifiables.',
+      connectPrompt: "Connecte d'abord tes logements pour accéder à la liste des consommables.",
+      connectMyListings: 'Connecter mes logements',
+      testModeNoListing: 'Ouvrir en mode test sans logement',
+      addSupply: 'Ajouter un consommable',
+      saveAll: 'Enregistrer tout',
+      unsaved: 'Modifications non enregistrées',
+      saved: 'Tout est enregistré',
+      listing: 'Logement',
+      supply: 'Consommable',
+      category: 'Catégorie',
+      remove: 'Supprimer',
+      addRowTitle: 'Ajouter une ligne',
+      addRow: 'Ajouter une ligne',
+      cleanerMode: 'Mode prestataire : vous pouvez uniquement saisir le stock restant.',
+      addRowHint: 'Ajoute une nouvelle ligne de consommable (horizontale).',
+      noRowsForListing:
+        'Aucune ligne pour ce logement. Utilise « Ajouter un consommable » ou choisis un autre logement.',
+      saveBeforeLeave: "Enregistre d'abord les modifications avant de quitter la page.",
+      colStock: 'Stock',
+      colMin: 'Seuil min.',
+      colStatus: 'Statut',
+      colUpdated: 'Màj.',
+      colAction: 'Action',
+      statusInStock: 'En stock',
+      statusLow: 'À réapprovisionner',
+      statusOut: 'Rupture',
+      testListingLabel: 'Logement test',
+    },
+    en: {
+      editableV1: 'Editable V1: all cells can be edited.',
+      connectPrompt: 'Connect your listings first to access the supplies list.',
+      connectMyListings: 'Connect my listings',
+      testModeNoListing: 'Open test mode without a listing',
+      addSupply: 'Add supply',
+      saveAll: 'Save all',
+      unsaved: 'Unsaved changes',
+      saved: 'Everything is saved',
+      listing: 'Listing',
+      supply: 'Supply',
+      category: 'Category',
+      remove: 'Delete',
+      addRowTitle: 'Add row',
+      addRow: 'Add row',
+      cleanerMode: 'Cleaner mode: you can only enter remaining stock.',
+      addRowHint: 'Add a new supply row (horizontal).',
+      noRowsForListing:
+        'No rows for this listing. Use "Add supply" or choose another listing.',
+      saveBeforeLeave: 'Save your changes before leaving this page.',
+      colStock: 'Stock',
+      colMin: 'Min. threshold',
+      colStatus: 'Status',
+      colUpdated: 'Updated',
+      colAction: 'Action',
+      statusInStock: 'In stock',
+      statusLow: 'Reorder soon',
+      statusOut: 'Out of stock',
+      testListingLabel: 'Test listing',
+    },
+    es: {
+      editableV1: 'V1 editable: todas las celdas son editables.',
+      connectPrompt: 'Conecta primero tus alojamientos para acceder a los consumibles.',
+      connectMyListings: 'Conectar mis alojamientos',
+      testModeNoListing: 'Abrir modo prueba sin alojamiento',
+      addSupply: 'Añadir consumible',
+      saveAll: 'Guardar todo',
+      unsaved: 'Cambios no guardados',
+      saved: 'Todo está guardado',
+      listing: 'Alojamiento',
+      supply: 'Consumible',
+      category: 'Categoría',
+      remove: 'Eliminar',
+      addRowTitle: 'Añadir línea',
+      addRow: 'Añadir línea',
+      cleanerMode: 'Modo proveedor: solo puedes indicar el stock restante.',
+      addRowHint: 'Añade una nueva línea de consumible (horizontal).',
+      noRowsForListing:
+        'No hay filas para este alojamiento. Usa «Añadir consumible» o elige otro alojamiento.',
+      saveBeforeLeave: 'Guarda los cambios antes de salir de esta página.',
+      colStock: 'Stock',
+      colMin: 'Umbral mín.',
+      colStatus: 'Estado',
+      colUpdated: 'Actualiz.',
+      colAction: 'Acción',
+      statusInStock: 'En stock',
+      statusLow: 'A reponer',
+      statusOut: 'Agotado',
+      testListingLabel: 'Alojamiento de prueba',
+    },
+    de: {
+      editableV1: 'Bearbeitbare V1: alle Zellen sind editierbar.',
+      connectPrompt: 'Verbinden Sie zuerst Ihre Unterkünfte, um Verbrauchsmaterial zu sehen.',
+      connectMyListings: 'Meine Unterkünfte verbinden',
+      testModeNoListing: 'Testmodus ohne Unterkunft öffnen',
+      addSupply: 'Verbrauchsmaterial hinzufügen',
+      saveAll: 'Alles speichern',
+      unsaved: 'Ungespeicherte Änderungen',
+      saved: 'Alles ist gespeichert',
+      listing: 'Unterkunft',
+      supply: 'Verbrauchsmaterial',
+      category: 'Kategorie',
+      remove: 'Löschen',
+      addRowTitle: 'Zeile hinzufügen',
+      addRow: 'Zeile hinzufügen',
+      cleanerMode: 'Dienstleister-Modus: Sie können nur den Restbestand erfassen.',
+      addRowHint: 'Fügen Sie eine neue Verbrauchszeile hinzu.',
+      noRowsForListing:
+        'Keine Zeilen für diese Unterkunft. Nutzen Sie „Verbrauchsmaterial hinzufügen“ oder wählen Sie eine andere Unterkunft.',
+      saveBeforeLeave: 'Speichern Sie Ihre Änderungen, bevor Sie diese Seite verlassen.',
+      colStock: 'Bestand',
+      colMin: 'Mindestbest.',
+      colStatus: 'Status',
+      colUpdated: 'Aktualisiert',
+      colAction: 'Aktion',
+      statusInStock: 'Auf Lager',
+      statusLow: 'Nachbestellen',
+      statusOut: 'Leer',
+      testListingLabel: 'Testunterkunft',
+    },
+    it: {
+      editableV1: 'V1 modificabile: tutte le celle sono modificabili.',
+      connectPrompt: 'Collega prima i tuoi alloggi per vedere i consumabili.',
+      connectMyListings: 'Collega i miei alloggi',
+      testModeNoListing: 'Apri modalità test senza alloggio',
+      addSupply: 'Aggiungi consumabile',
+      saveAll: 'Salva tutto',
+      unsaved: 'Modifiche non salvate',
+      saved: 'Tutto salvato',
+      listing: 'Alloggio',
+      supply: 'Consumabile',
+      category: 'Categoria',
+      remove: 'Elimina',
+      addRowTitle: 'Aggiungi riga',
+      addRow: 'Aggiungi riga',
+      cleanerMode: 'Modalità fornitore: puoi inserire solo lo stock residuo.',
+      addRowHint: 'Aggiungi una nuova riga di consumabile.',
+      noRowsForListing:
+        'Nessuna riga per questo alloggio. Usa «Aggiungi consumabile» o scegli un altro alloggio.',
+      saveBeforeLeave: 'Salva le modifiche prima di uscire da questa pagina.',
+      colStock: 'Stock',
+      colMin: 'Soglia min.',
+      colStatus: 'Stato',
+      colUpdated: 'Agg.',
+      colAction: 'Azione',
+      statusInStock: 'Disponibile',
+      statusLow: 'Da riordinare',
+      statusOut: 'Esaurito',
+      testListingLabel: 'Alloggio di prova',
+    },
+  }[ll]
+  const displayListingName = (name: string) =>
+    name === TEST_LISTING_PLACEHOLDER ? c.testListingLabel : name
+  const labelForStatus = (status: SupplyRow['status']) => {
+    if (status === 'En stock') return c.statusInStock
+    if (status === 'À réapprovisionner') return c.statusLow
+    return c.statusOut
+  }
   const isCleanerSession = (() => {
     const explicitRole = (localStorage.getItem(LS_CURRENT_ROLE) || '').trim().toLowerCase()
     if (explicitRole === 'cleaner' || explicitRole === 'host') return explicitRole === 'cleaner'
@@ -109,35 +315,44 @@ export function DashboardSuppliesPage() {
     )
     return (account?.role || 'host') === 'cleaner'
   })()
-  const [apartmentOptions] = useState<string[]>(() => getApartmentOptionsFromConnections())
+  const init = useMemo(() => initialSuppliesState(), [])
+  const [listingOptions, setListingOptions] = useState<string[]>(() => getApartmentOptionsFromConnections())
   const [testViewWithoutApartment, setTestViewWithoutApartment] = useState(false)
-  const hasConnectedApartments = apartmentOptions.length > 0
+  const hasConnectedApartments = listingOptions.length > 0
   const effectiveApartmentOptions =
-    hasConnectedApartments || testViewWithoutApartment ? (apartmentOptions.length > 0 ? apartmentOptions : ['Logement test']) : []
-  const [selectedApartment, setSelectedApartment] = useState<string>(() => apartmentOptions[0] ?? 'Logement test')
-  const [rows, setRows] = useState<SupplyRow[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_ROWS_KEY)
-      if (!raw) return SUPPLIES_V1
-      return JSON.parse(raw) as SupplyRow[]
-    } catch {
-      return SUPPLIES_V1
-    }
-  })
-  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify({ rows: SUPPLIES_V1 }))
+    hasConnectedApartments || testViewWithoutApartment
+      ? listingOptions.length > 0
+        ? listingOptions
+        : [TEST_LISTING_PLACEHOLDER]
+      : []
+  const [selectedApartment, setSelectedApartment] = useState<string>(
+    () => getApartmentOptionsFromConnections()[0] ?? TEST_LISTING_PLACEHOLDER,
+  )
+  const [rows, setRows] = useState(() => init.rows)
+  const [savedSnapshot, setSavedSnapshot] = useState(() => init.snapshot)
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
 
   useEffect(() => {
-    try {
-      const rawRows = localStorage.getItem(STORAGE_ROWS_KEY)
-      const initialRows = rawRows ? (JSON.parse(rawRows) as SupplyRow[]) : SUPPLIES_V1
-      setSavedSnapshot(JSON.stringify({ rows: initialRows }))
-      setHasPendingChanges(false)
-    } catch {
-      setSavedSnapshot(JSON.stringify({ rows: SUPPLIES_V1 }))
-      setHasPendingChanges(false)
+    const bump = () => setListingOptions(getApartmentOptionsFromConnections())
+    bump()
+    window.addEventListener('storage', bump)
+    window.addEventListener(CONNECTIONS_UPDATED_EVENT, bump)
+    return () => {
+      window.removeEventListener('storage', bump)
+      window.removeEventListener(CONNECTIONS_UPDATED_EVENT, bump)
     }
   }, [])
+
+  const listingKeysForSync = useMemo(() => {
+    if (listingOptions.length > 0) return listingOptions
+    if (testViewWithoutApartment) return [TEST_LISTING_PLACEHOLDER]
+    return EMPTY_LISTING_KEYS
+  }, [listingOptions, testViewWithoutApartment])
+
+  useEffect(() => {
+    if (listingKeysForSync.length === 0) return
+    setRows((prev) => syncRowsToConnectedListings(prev, listingKeysForSync))
+  }, [listingKeysForSync])
 
   useEffect(() => {
     if (!effectiveApartmentOptions.includes(selectedApartment)) {
@@ -210,10 +425,13 @@ export function DashboardSuppliesPage() {
     Rupture: 'bg-rose-100 text-rose-700',
   }
 
-  const visibleRows = rows.filter((row) => row.apartment === selectedApartment)
+  const visibleRows = useMemo(
+    () => rows.filter((row) => row.apartment === selectedApartment),
+    [rows, selectedApartment],
+  )
 
   const saveAll = () => {
-    localStorage.setItem(STORAGE_ROWS_KEY, JSON.stringify(rows))
+    writeScopedStorage(STORAGE_ROWS_KEY, JSON.stringify(rows))
     setSavedSnapshot(JSON.stringify({ rows }))
     setHasPendingChanges(false)
   }
@@ -225,7 +443,7 @@ export function DashboardSuppliesPage() {
         onClick={(e) => {
           if (!isDirty) return
           e.preventDefault()
-          window.alert("Enregistre d'abord les modifications avant de quitter la page.")
+          window.alert(c.saveBeforeLeave)
         }}
         className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
       >
@@ -234,24 +452,24 @@ export function DashboardSuppliesPage() {
 
       <div className="mx-auto mt-6 w-full max-w-6xl">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTabSupplies}</h1>
-        <p className="mt-2 text-sm text-zinc-600">V1 editable: toutes les cellules sont modifiables.</p>
+        <p className="mt-2 text-sm text-zinc-600">{c.editableV1}</p>
 
         {!hasConnectedApartments && !testViewWithoutApartment ? (
           <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-5">
-            <p className="text-sm font-semibold text-zinc-900">Connecte d'abord tes logements pour accéder à la liste des consommables.</p>
+            <p className="text-sm font-semibold text-zinc-900">{c.connectPrompt}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a
                 href="/dashboard/connecter-logements"
                 className="inline-flex rounded-lg bg-[#4a86f7] px-3.5 py-2 text-sm font-semibold text-white transition hover:brightness-95"
               >
-                Connecter mes logements
+                {c.connectMyListings}
               </a>
               <button
                 type="button"
                 onClick={() => setTestViewWithoutApartment(true)}
                 className="inline-flex rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
               >
-                Ouvrir en mode test sans logement
+                {c.testModeNoListing}
               </button>
             </div>
           </div>
@@ -264,7 +482,7 @@ export function DashboardSuppliesPage() {
             disabled={isCleanerSession}
             className="rounded-xl bg-[#4a86f7] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
           >
-            Ajouter un consommable
+            {c.addSupply}
           </button>
           <button
             type="button"
@@ -272,13 +490,13 @@ export function DashboardSuppliesPage() {
             disabled={isCleanerSession}
             className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
           >
-            Enregistrer tout
+            {c.saveAll}
           </button>
           <span className={`text-xs font-semibold ${isDirty ? 'text-rose-600' : 'text-emerald-700'}`}>
-            {isDirty ? 'Modifications non enregistrées' : 'Tout est enregistré'}
+            {isDirty ? c.unsaved : c.saved}
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <label className="text-xs font-semibold text-zinc-600">Logement</label>
+            <label className="text-xs font-semibold text-zinc-600">{c.listing}</label>
             <select
               value={selectedApartment}
               onChange={(e) => setSelectedApartment(e.target.value)}
@@ -286,7 +504,7 @@ export function DashboardSuppliesPage() {
             >
               {effectiveApartmentOptions.map((name) => (
                 <option key={name} value={name}>
-                  {name}
+                  {displayListingName(name)}
                 </option>
               ))}
             </select>
@@ -298,23 +516,30 @@ export function DashboardSuppliesPage() {
             <table className="w-full table-fixed text-left">
               <thead className="bg-zinc-50">
                 <tr className="text-xs uppercase tracking-wide text-zinc-500">
-                  <th className="px-4 py-3 font-semibold">Logement</th>
-                  <th className="px-4 py-3 font-semibold">Consommable</th>
-                  <th className="px-4 py-3 font-semibold">Catégorie</th>
-                  <th className="px-4 py-3 font-semibold">Stock</th>
-                  <th className="px-4 py-3 font-semibold">Seuil min</th>
-                  <th className="px-4 py-3 font-semibold">Statut</th>
-                  <th className="px-4 py-3 font-semibold">Maj</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                  <th className="px-4 py-3 font-semibold">{c.listing}</th>
+                  <th className="px-4 py-3 font-semibold">{c.supply}</th>
+                  <th className="px-4 py-3 font-semibold">{c.category}</th>
+                  <th className="px-4 py-3 font-semibold">{c.colStock}</th>
+                  <th className="px-4 py-3 font-semibold">{c.colMin}</th>
+                  <th className="px-4 py-3 font-semibold">{c.colStatus}</th>
+                  <th className="px-4 py-3 font-semibold">{c.colUpdated}</th>
+                  <th className="px-4 py-3 font-semibold">{c.colAction}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 bg-white text-sm text-zinc-700">
+                {visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-zinc-500">
+                      {c.noRowsForListing}
+                    </td>
+                  </tr>
+                ) : null}
                 {visibleRows.map((row) => {
                   return (
                     <tr key={row.id} className="hover:bg-zinc-50/70">
                       <td className="px-4 py-3 align-top">
                         <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-sm font-medium text-zinc-700">
-                          {row.apartment}
+                          {displayListingName(row.apartment)}
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">
@@ -358,7 +583,7 @@ export function DashboardSuppliesPage() {
                             badgeClass[computeSupplyStatus(row.stock, row.minStock)]
                           }`}
                         >
-                          {computeSupplyStatus(row.stock, row.minStock)}
+                          {labelForStatus(computeSupplyStatus(row.stock, row.minStock))}
                         </span>
                       </td>
                       <td className="px-4 py-3 align-top text-zinc-500">
@@ -373,7 +598,7 @@ export function DashboardSuppliesPage() {
                           disabled={isCleanerSession}
                           className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
                         >
-                          Supprimer
+                          {c.remove}
                         </button>
                       </td>
                     </tr>
@@ -390,14 +615,14 @@ export function DashboardSuppliesPage() {
             onClick={addRow}
             disabled={isCleanerSession}
             className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            title="Ajouter une ligne"
+            title={c.addRowTitle}
           >
-            Ajouter une ligne
+            {c.addRow}
           </button>
           <p className="mt-1 text-xs text-zinc-500">
             {isCleanerSession
-              ? "Mode prestataire: vous pouvez uniquement saisir le stock restant."
-              : 'Ajoute une nouvelle ligne de consommable (horizontale).'}
+              ? c.cleanerMode
+              : c.addRowHint}
           </p>
         </div>
           </>
