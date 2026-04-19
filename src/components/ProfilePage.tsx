@@ -129,6 +129,54 @@ function addDays(baseIso: string, days: number) {
   return d
 }
 
+/** Prochaine échéance au même jour du mois que la date d’ancrage (9h locale), par rapport à `now`. */
+function computeMonthlyBillingDueFromAnchor(anchorIso: string, now = new Date()) {
+  const anchor = new Date(anchorIso)
+  if (!Number.isFinite(anchor.getTime())) {
+    const y = now.getFullYear()
+    const m = now.getMonth()
+    const d = Math.min(now.getDate(), new Date(y, m + 1, 0).getDate())
+    return new Date(y, m, d, 9, 0, 0, 0)
+  }
+  const startDay = anchor.getDate()
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  const daysInThisMonth = new Date(y, m + 1, 0).getDate()
+  const thisMonthDue = new Date(y, m, Math.min(startDay, daysInThisMonth), 9, 0, 0, 0)
+  if (Number.isFinite(thisMonthDue.getTime()) && now <= thisMonthDue) return thisMonthDue
+  const nextY = m === 11 ? y + 1 : y
+  const nextM = (m + 1) % 12
+  const daysInNextMonth = new Date(nextY, nextM + 1, 0).getDate()
+  const nextDue = new Date(nextY, nextM, Math.min(startDay, daysInNextMonth), 9, 0, 0, 0)
+  return Number.isFinite(nextDue.getTime()) ? nextDue : thisMonthDue
+}
+
+/** Fin d’essai J+14 à 9h locale = date/heure du premier prélèvement prévu. */
+function trialEndChargeMorning(subscriptionStartIso: string) {
+  const trialEnd = addDays(subscriptionStartIso, 14)
+  if (!Number.isFinite(trialEnd.getTime())) return new Date()
+  const d = new Date(trialEnd)
+  d.setHours(9, 0, 0, 0)
+  return d
+}
+
+/**
+ * Premier prélèvement = fin des 14 jours d’essai (9h locale).
+ * Après l’essai, cycles mensuels alignés sur ce jour (fin d’essai), pas sur le seul jour d’inscription.
+ */
+function nextAutopayDueDate(subscriptionStartIso: string, now = new Date()) {
+  const sub = new Date(subscriptionStartIso)
+  if (!Number.isFinite(sub.getTime())) {
+    return computeMonthlyBillingDueFromAnchor(subscriptionStartIso, now)
+  }
+  const trialEndCharge = trialEndChargeMorning(subscriptionStartIso)
+  if (!Number.isFinite(trialEndCharge.getTime())) {
+    return computeMonthlyBillingDueFromAnchor(subscriptionStartIso, now)
+  }
+  if (now < trialEndCharge) return trialEndCharge
+  return computeMonthlyBillingDueFromAnchor(trialEndCharge.toISOString(), now)
+}
+
 function computePlanAmountByTaxMode(planLabel: string, taxMode: 'reverse_charge' | 'vat_collected', vatRate: number) {
   const ttcByPlan: Record<string, number> = { starter: 19.99, pro: 59.99, scale: 99.99 }
   const ttc = ttcByPlan[planLabel.trim().toLowerCase()] ?? 19.99
@@ -328,7 +376,7 @@ export function ProfilePage() {
     }
     return {
       paymentMethodValid: false,
-      nextDueIso: computeUpcomingBillingDue(planStartDateIso()).toISOString(),
+      nextDueIso: nextAutopayDueDate(planStartDateIso()).toISOString(),
       lastNotifiedAttempt: 0,
     }
   })
@@ -360,7 +408,7 @@ export function ProfilePage() {
   })
 
   useEffect(() => {
-    const trialEnd = addDays(planStartDateIso(), 14)
+    const trialEnd = trialEndChargeMorning(planStartDateIso())
     setClientInvoices((prev) =>
       prev.filter((inv) => {
         const issuedAt = new Date(inv.issuedAtIso)
@@ -368,6 +416,22 @@ export function ProfilePage() {
       }),
     )
   }, [account?.createdAt])
+
+  useEffect(() => {
+    if (new Date() >= trialEndChargeMorning(planStartDateIso())) return
+    const ideal = nextAutopayDueDate(planStartDateIso()).toISOString()
+    setBillingAutopay((prev) => {
+      if (prev.nextDueIso === ideal) return prev
+      const next = { ...prev, nextDueIso: ideal }
+      try {
+        localStorage.setItem(LS_BILLING_AUTOPAY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [account?.createdAt, billingAutopay.paymentMethodValid])
+
   const [paymentCardNumber, setPaymentCardNumber] = useState('4242 4242 4242 4242')
   const [paymentExpiry, setPaymentExpiry] = useState('12/29')
   const [paymentHolder, setPaymentHolder] = useState(() => `${firstName} ${lastName}`.trim())
@@ -507,11 +571,10 @@ export function ProfilePage() {
     try {
       const targetEmail = String(email || account?.email || '').trim()
       if (!targetEmail) return
-      const trialEnd = addDays(planStartDateIso(), 14)
       const now = new Date()
-      if (now < trialEnd) return
+      if (now < trialEndChargeMorning(planStartDateIso())) return
       if (!billingAutopay.paymentMethodValid) return
-      const dueAt = new Date(billingAutopay.nextDueIso)
+      const dueAt = nextAutopayDueDate(planStartDateIso(), now)
       if (!Number.isFinite(dueAt.getTime()) || now < dueAt) return
       const y = dueAt.getFullYear()
       const m = String(dueAt.getMonth() + 1).padStart(2, '0')
@@ -557,7 +620,10 @@ export function ProfilePage() {
         }
         return [invoice, ...prev].slice(0, 24)
       })
-      const nextDue = computeUpcomingBillingDue(planStartDateIso(), new Date(dueAt.getTime() + 24 * 60 * 60 * 1000))
+      const nextDue = nextAutopayDueDate(
+        planStartDateIso(),
+        new Date(dueAt.getTime() + 24 * 60 * 60 * 1000),
+      )
       const nextIso = Number.isFinite(nextDue.getTime()) ? nextDue.toISOString() : new Date().toISOString()
       setBillingAutopay((prev) => ({ ...prev, nextDueIso: nextIso, lastNotifiedAttempt: 0 }))
       readAndSyncBillingRecovery(null)
@@ -1083,7 +1149,7 @@ export function ProfilePage() {
       const nextTier = getPlanTierFromValue(nextPlan)
       const tierRank: Record<'starter' | 'pro' | 'scale', number> = { starter: 1, pro: 2, scale: 3 }
       const isUpgrade = tierRank[nextTier] > tierRank[oldTier]
-      const billingDue = computeUpcomingBillingDue(planStartDateIso(), new Date())
+      const billingDue = nextAutopayDueDate(planStartDateIso(), new Date())
       const effectiveAtIso = Number.isFinite(billingDue.getTime())
         ? billingDue.toISOString()
         : new Date().toISOString()
@@ -1178,27 +1244,6 @@ export function ProfilePage() {
     return new Date(nextY, nextM, Math.min(startDay, daysInNextMonth))
   }
 
-  function computeUpcomingBillingDue(startIso: string, now = new Date()) {
-    const start = new Date(startIso)
-    if (!Number.isFinite(start.getTime())) {
-      const y = now.getFullYear()
-      const m = now.getMonth()
-      const d = Math.min(now.getDate(), new Date(y, m + 1, 0).getDate())
-      return new Date(y, m, d, 9, 0, 0, 0)
-    }
-    const startDay = start.getDate()
-    const y = now.getFullYear()
-    const m = now.getMonth()
-    const daysInThisMonth = new Date(y, m + 1, 0).getDate()
-    const thisMonthDue = new Date(y, m, Math.min(startDay, daysInThisMonth), 9, 0, 0, 0)
-    if (Number.isFinite(thisMonthDue.getTime()) && now <= thisMonthDue) return thisMonthDue
-    const nextY = m === 11 ? y + 1 : y
-    const nextM = (m + 1) % 12
-    const daysInNextMonth = new Date(nextY, nextM + 1, 0).getDate()
-    const nextDue = new Date(nextY, nextM, Math.min(startDay, daysInNextMonth), 9, 0, 0, 0)
-    return Number.isFinite(nextDue.getTime()) ? nextDue : thisMonthDue
-  }
-
   function fmtLongDate(iso: string) {
     try {
       return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
@@ -1241,7 +1286,7 @@ export function ProfilePage() {
   function runBillingRecoveryEngine() {
     if (billingAutopay.paymentMethodValid) return
     const now = new Date()
-    const dueDate = new Date(billingAutopay.nextDueIso)
+    const dueDate = nextAutopayDueDate(planStartDateIso(), now)
     if (!Number.isFinite(dueDate.getTime())) return
     if (now < dueDate) return
 
@@ -1376,7 +1421,7 @@ export function ProfilePage() {
     setShowCancelFunnel(false)
     setCancelStep(1)
     setSaveMsg(
-      new Date() < addDays(planStartDateIso(), 14)
+      new Date() < trialEndChargeMorning(planStartDateIso())
         ? mailSent
           ? `Résiliation confirmée pendant l'essai gratuit. Aucun débit ne sera effectué. Votre abonnement prendra fin le ${fmtLongDate(
               endAtIso,
@@ -1975,8 +2020,8 @@ export function ProfilePage() {
     setSaveMsg('Code valide. Vous pouvez maintenant modifier le mot de passe.')
   }
 
-  const trialEndDate = addDays(planStartDateIso(), 14)
-  const isTrialActive = new Date() < trialEndDate
+  const trialEndFirstCharge = trialEndChargeMorning(planStartDateIso())
+  const isTrialActive = new Date() < trialEndFirstCharge
   const latestInvoice = clientInvoices[0]
 
   if (!loggedIn) {
@@ -2342,7 +2387,7 @@ export function ProfilePage() {
                         Votre abonnement prendra fin le{' '}
                         <strong>{fmtLongDate(computeEndDateForCancellation(planStartDateIso()).toISOString())}</strong>.
                       </p>
-                      {new Date() < addDays(planStartDateIso(), 14) ? (
+                      {new Date() < trialEndChargeMorning(planStartDateIso()) ? (
                         <p className="text-sm text-zinc-700">
                           Résiliation pendant essai gratuit : <strong>aucun débit ne sera effectué</strong>.
                         </p>
@@ -2403,7 +2448,8 @@ export function ProfilePage() {
                 <p className="text-sm font-semibold text-zinc-900">Statut de facturation</p>
                 {isTrialActive ? (
                   <p className="mt-1 text-sm text-zinc-700">
-                    Essai gratuit actif jusqu&apos;au <strong>{fmtLongDate(trialEndDate.toISOString())}</strong>. Aucune
+                    Essai gratuit actif jusqu&apos;au <strong>{fmtLongDate(trialEndFirstCharge.toISOString())}</strong>{' '}
+                    (premier prélèvement à cette date). Aucune
                     facture disponible avant le premier paiement.
                   </p>
                 ) : latestInvoice ? (
@@ -2452,7 +2498,9 @@ export function ProfilePage() {
                   </p>
                 )}
                 <p className="mt-1 text-xs text-zinc-500">
-                  Prochaine échéance automatique : {fmtLongDate(billingAutopay.nextDueIso)}
+                  {isTrialActive
+                    ? `Premier prélèvement : ${fmtLongDate(nextAutopayDueDate(planStartDateIso()).toISOString())} (fin des 14 jours d’essai).`
+                    : `Prochaine échéance automatique : ${fmtLongDate(nextAutopayDueDate(planStartDateIso()).toISOString())}.`}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
                   Fiscalité : B2B = autoliquidation sur facture. B2C = TVA adaptée selon le pays client.
