@@ -48,14 +48,18 @@ function DashboardSocieteRedirect() {
   return null
 }
 
-class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
   constructor(props: { children: ReactNode }) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, errorMessage: '' }
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    return { hasError: true, errorMessage: msg.slice(0, 400) }
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
@@ -71,6 +75,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
             <p className="mt-2 text-sm text-zinc-600">
               Rechargez la page. Si le probleme persiste, reconnectez-vous puis reessayez.
             </p>
+            {this.state.errorMessage ? (
+              <pre className="mt-3 max-h-32 overflow-auto rounded-lg bg-zinc-100 p-2 text-left text-xs text-zinc-700 whitespace-pre-wrap break-words">
+                {this.state.errorMessage}
+              </pre>
+            ) : null}
             <button
               type="button"
               onClick={() => window.location.reload()}

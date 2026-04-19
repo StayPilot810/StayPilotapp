@@ -71,7 +71,7 @@ function nightsBetween(start: Date, end: Date) {
 }
 
 function profileSaveMessageLooksLikeError(msg: string): boolean {
-  const t = msg.trim()
+  const t = String(msg ?? '').trim()
   if (!t) return false
   return /refus|invalide|impossible|erreur|échou|veuillez|stripe|indisponible|incorrect|expir|manquant|correspond|introuvable|bloqu/i.test(
     t,
@@ -972,7 +972,7 @@ export function ProfilePage() {
   }
 
   async function sendActivityDigestIfDue() {
-    const toEmail = (email || account?.email || '').trim()
+    const toEmail = String(email || account?.email || '').trim()
     if (!toEmail || !notifications || !digestEmailsEnabled) return
     const cadence = String(digest || 'weekly')
     const accountKey =
@@ -995,7 +995,7 @@ export function ProfilePage() {
         body: JSON.stringify({
           mode: 'activity_digest',
           to: toEmail,
-          firstName: firstName.trim(),
+          firstName: safeAccountText(firstName),
           locale: mailLocale,
           cadence,
           ...summary,
@@ -1109,7 +1109,7 @@ export function ProfilePage() {
         setPlanPolicy(policyPayload)
       }
 
-      const targetEmail = (email || account?.email || '').trim()
+      const targetEmail = String(email || account?.email || '').trim()
       let mailSent = false
       if (targetEmail) {
         try {
@@ -1119,7 +1119,7 @@ export function ProfilePage() {
             body: JSON.stringify({
               mode: 'plan_change_confirmation',
               to: targetEmail,
-              firstName: firstName.trim(),
+              firstName: safeAccountText(firstName),
               locale: mailLocale,
               oldPlan,
               newPlan: nextPlan,
@@ -1215,10 +1215,16 @@ export function ProfilePage() {
   }
 
   function accessCutoffDateIso(endAtIso: string) {
-    const d = new Date(endAtIso)
-    d.setDate(d.getDate() + 1)
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString()
+    try {
+      const d = new Date(endAtIso)
+      if (!Number.isFinite(d.getTime())) return new Date().toISOString()
+      d.setDate(d.getDate() + 1)
+      d.setHours(0, 0, 0, 0)
+      if (!Number.isFinite(d.getTime())) return new Date().toISOString()
+      return d.toISOString()
+    } catch {
+      return new Date().toISOString()
+    }
   }
 
   function readAndSyncBillingRecovery(next: BillingRecoveryState | null) {
@@ -1235,6 +1241,7 @@ export function ProfilePage() {
     if (billingAutopay.paymentMethodValid) return
     const now = new Date()
     const dueDate = new Date(billingAutopay.nextDueIso)
+    if (!Number.isFinite(dueDate.getTime())) return
     if (now < dueDate) return
 
     const elapsedMs = now.getTime() - dueDate.getTime()
@@ -1258,8 +1265,13 @@ export function ProfilePage() {
       readAndSyncBillingRecovery(nextState)
     }
 
-    const suspendAtIso = suspensionDateFromFailure(dueDate.toISOString()).toISOString()
-    const toEmail = (email || account?.email || '').trim()
+    let suspendAtIso = now.toISOString()
+    try {
+      suspendAtIso = suspensionDateFromFailure(dueDate.toISOString()).toISOString()
+    } catch {
+      /* dates localStorage corrompues */
+    }
+    const toEmail = String(email || account?.email || '').trim()
     const attemptsToNotify = expectedAttempts - billingAutopay.lastNotifiedAttempt
     if (toEmail && attemptsToNotify > 0) {
       for (let attempt = billingAutopay.lastNotifiedAttempt + 1; attempt <= expectedAttempts; attempt += 1) {
@@ -1307,7 +1319,11 @@ export function ProfilePage() {
   }
 
   useEffect(() => {
-    runBillingRecoveryEngine()
+    try {
+      runBillingRecoveryEngine()
+    } catch {
+      /* données billingAutopay / recovery invalides — ne pas faire tomber l’app */
+    }
   }, [account?.email, billingAutopay, billingRecovery, email])
 
   useEffect(() => {
