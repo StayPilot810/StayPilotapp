@@ -139,6 +139,42 @@ export async function clearLocalAccountsIfRemoteServerEmpty(): Promise<void> {
   }
 }
 
+/**
+ * Recharge le blob comptes depuis le serveur (même réponse que la connexion) en réutilisant
+ * l’identifiant de session et le mot de passe déjà présents en local. Utile quand un prestataire
+ * vient de s’inscrire sur un autre appareil : sans cela, l’hôte ne voit pas le nouveau compte.
+ */
+export async function tryRefreshStoredAccountsFromRemote(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  try {
+    const st = (await fetch('/api/auth-status', { method: 'GET' }).then((r) =>
+      r.json().catch(() => ({})),
+    )) as { remoteAuth?: boolean }
+    if (!st?.remoteAuth) return false
+    const idRaw = (
+      window.localStorage.getItem('staypilot_login_identifier') ||
+      window.localStorage.getItem('staypilot_current_user') ||
+      ''
+    ).trim()
+    if (!idRaw) return false
+    const idNorm = normalizeStoredLoginPiece(idRaw)
+    const acc = getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, idNorm))
+    if (!acc?.password) return false
+    const res = await fetch('/api/auth-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: idRaw, password: acc.password }),
+    })
+    if (!res.ok) return false
+    const data = (await res.json().catch(() => ({}))) as { accounts?: StoredAccount[] }
+    if (!Array.isArray(data.accounts)) return false
+    saveStoredAccounts(data.accounts)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function hasAnyAccount() {
   return getStoredAccounts().length > 0
 }

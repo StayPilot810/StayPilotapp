@@ -125,7 +125,7 @@ export default defineConfig(() => {
 
             const networkDetail = `${String(result?.error || '')} ${String(result?.message || '')}`.toLowerCase()
             const canRelayRemotely =
-              body?.provider === 'beds24' &&
+              (body?.provider === 'beds24' || body?.provider === 'superhote') &&
               req.headers['x-staypilot-relay'] !== 'vercel' &&
               (networkDetail.includes('enotfound') ||
                 networkDetail.includes('fetch failed') ||

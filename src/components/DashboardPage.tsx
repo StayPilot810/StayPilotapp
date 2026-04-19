@@ -8,6 +8,7 @@ import {
   type StoredAccount,
 } from '../lib/accounts'
 import { useLanguage } from '../hooks/useLanguage'
+import { useCleanerAssignedListingReactive } from '../hooks/useCleanerAssignedListingReactive'
 import { canAccessDashboardPath, getPlanTierFromValue } from '../utils/subscriptionAccess'
 
 export function DashboardPage() {
@@ -53,6 +54,7 @@ export function DashboardPage() {
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
   const currentRole = (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
   const isCleanerSession = currentRole === 'cleaner'
+  const cleanerHasAssignedListing = useCleanerAssignedListingReactive(isCleanerSession)
   const [currentPlanRaw, setCurrentPlanRaw] = useState('Pro')
 
   useEffect(() => {
@@ -144,17 +146,22 @@ export function DashboardPage() {
     const matchAccount = (a: StoredAccount) => storedAccountMatchesNormalizedId(a, savedIdentifier)
     const cleaner = accounts.find((a) => matchAccount(a) && (a.role || 'host') === 'cleaner')
     if (!cleaner) return ''
-    const hostUsername = (cleaner.hostUsername || '').trim().toLowerCase()
-    if (!hostUsername) return ''
+    const hostRef = (cleaner.hostUsername || '').trim()
+    if (!hostRef) return ''
+    const hostRefNorm = normalizeStoredLoginPiece(hostRef)
     const host = accounts.find(
-      (a) => normalizeStoredLoginPiece(a.username) === hostUsername && (a.role || 'host') === 'host',
+      (a) =>
+        (a.role || 'host') === 'host' &&
+        (normalizeStoredLoginPiece(a.username) === hostRefNorm || normalizeStoredLoginPiece(a.email) === hostRefNorm),
     )
     if (!host) return String(cleaner.hostUsername ?? '').trim() || ''
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
   }, [isCleanerSession])
 
   const tabs = isCleanerSession
-    ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
+    ? cleanerHasAssignedListing
+      ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
+      : [t.dashboardTabCleaning]
     : [
         t.dashboardTabConnect,
         t.dashboardTabCalendar,
@@ -168,7 +175,11 @@ export function DashboardPage() {
       ]
   const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
-  const rowOneTabs = isCleanerSession ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies] : [tabs[1], primaryTab, tabs[2], tabs[3]]
+  const rowOneTabs = isCleanerSession
+    ? cleanerHasAssignedListing
+      ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
+      : [primaryTab]
+    : [tabs[1], primaryTab, tabs[2], tabs[3]]
   const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,

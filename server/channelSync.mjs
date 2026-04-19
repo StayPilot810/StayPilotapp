@@ -5,6 +5,7 @@ const BEDS24_BASE_URLS = ['https://api.beds24.com/v2', 'https://beds24.com/api/v
 const HOSTAWAY_BASE_URL = 'https://api.hostaway.com/v1'
 const GUESTY_BASE_URL = 'https://open-api.guesty.com'
 const LODGIFY_BASE_URL = 'https://api.lodgify.com/v2'
+const SUPERHOTE_API_BASE = 'https://app.superhote.com/api/v2'
 
 function pickString(v) {
   return typeof v === 'string' ? v.trim() : ''
@@ -51,7 +52,7 @@ function normalizeBeds24Credential(rawValue) {
 
 function normalizeProvider(provider) {
   const p = pickString(provider).toLowerCase()
-  if (p === 'beds24' || p === 'hostaway' || p === 'guesty' || p === 'lodgify') return p
+  if (p === 'beds24' || p === 'hostaway' || p === 'guesty' || p === 'lodgify' || p === 'superhote') return p
   return ''
 }
 
@@ -1012,13 +1013,168 @@ async function syncLodgify({ apiToken, accountId }) {
   }
 }
 
+async function superhotePostJson(path, bodyObj) {
+  const res = await fetch(`${SUPERHOTE_API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(bodyObj),
+  })
+  const text = await res.text()
+  let json = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    json = { _raw: text }
+  }
+  return { ok: res.ok, status: res.status, json }
+}
+
+function collectSuperhoteBookingsFromJson(root, propertyId) {
+  const out = []
+  const seen = new Set()
+  const pushOne = (checkIn, checkOut, guestName, id) => {
+    const cin = pickString(checkIn)
+    const cout = pickString(checkOut)
+    if (!cin || !cout) return
+    const dedup = `${cin}|${cout}|${id || ''}`
+    if (seen.has(dedup)) return
+    seen.add(dedup)
+    out.push({
+      id: pickString(id) || `superhote-${cin}-${cout}`,
+      propertyId,
+      checkIn: cin,
+      checkOut: cout,
+      guestName: pickString(guestName) || 'Occupe',
+      channel: 'superhote',
+      status: 'reserved',
+    })
+  }
+  const visit = (node, depth) => {
+    if (depth > 14 || node == null) return
+    if (Array.isArray(node)) {
+      node.forEach((x) => visit(x, depth + 1))
+      return
+    }
+    if (typeof node !== 'object') return
+    const cin = pickString(
+      node.checkin ||
+        node.checkIn ||
+        node.checking ||
+        node.start_date ||
+        node.startDate ||
+        node.arrival ||
+        node.date_from ||
+        node.dateFrom,
+    )
+    const cout = pickString(
+      node.checkout ||
+        node.checkOut ||
+        node.end_date ||
+        node.endDate ||
+        node.departure ||
+        node.date_to ||
+        node.dateTo,
+    )
+    if (cin && cout) {
+      pushOne(
+        cin,
+        cout,
+        pickString(node.guest_name || node.guestName || node.name || node.title),
+        pickString(node.id || node.booking_id || node.bookingId || node.reservation_id),
+      )
+    }
+    for (const v of Object.values(node)) visit(v, depth + 1)
+  }
+  visit(root, 0)
+  return out
+}
+
+async function syncSuperhote({ apiToken, accountId }) {
+  const apiKey = pickString(apiToken)
+  const propertyKey = pickString(accountId)
+  if (!apiKey || !propertyKey) return { status: 400, ok: false, error: 'missing_superhote_credentials' }
+
+  const now = new Date()
+  const y = now.getFullYear()
+  const startDate = `${y - 1}-01-01`
+  const endDate = `${y + 1}-12-31`
+
+  const res = await superhotePostJson('/get-availabilities', {
+    api_key: apiKey,
+    property_key: propertyKey,
+    start_date: startDate,
+    end_date: endDate,
+    nbr_adults: '2',
+    nbr_children: '0',
+  })
+
+  if (!res.ok) {
+    const detail = pickString(res.json?.message || res.json?.error || res.json?.msg || res.json?._raw)
+    return {
+      status: res.status >= 400 && res.status < 600 ? res.status : 502,
+      ok: false,
+      error: 'superhote_request_failed',
+      message:
+        detail ||
+        'SuperHote a refuse la requete. Verifiez la cle API (champ cle API) et la cle logement / property_key (champ identifiant compte) depuis SuperHote.',
+    }
+  }
+
+  const j = res.json
+  if (j && typeof j === 'object' && !Array.isArray(j)) {
+    const errFlag =
+      j.success === false ||
+      j.status === 'error' ||
+      (typeof j.error === 'string' &&
+        j.error.trim() &&
+        !['false', '0', 'no', 'none'].includes(String(j.error).trim().toLowerCase()))
+    if (errFlag) {
+      const msg = pickString(j.message || j.error || j.msg)
+      return {
+        status: 401,
+        ok: false,
+        error: 'superhote_auth_error',
+        message: msg || 'Cle API ou property_key refusee par SuperHote.',
+      }
+    }
+  }
+
+  const root = j && typeof j === 'object' && !Array.isArray(j) ? j : {}
+  const propName =
+    pickString(root.property_name || root.propertyName || root.name || root.title) || `SuperHote ${propertyKey}`
+  const properties = [{ id: propertyKey, name: propName, address: pickString(root.address || root.city || '') }]
+  const bookings = collectSuperhoteBookingsFromJson(root, propertyKey)
+
+  const data = {
+    properties,
+    bookings,
+    syncedAt: new Date().toISOString(),
+  }
+  if (bookings.length === 0) {
+    data.scopeWarning = {
+      code: 'superhote_calendar_partial',
+      message:
+        "Connexion SuperHote reussie : le logement est importe. L'API publique documentee (disponibilites) ne renvoie pas toujours l'historique complet des reservations : le calendrier peut rester partiel tant que SuperHote n'expose pas un endpoint liste-reservations.",
+    }
+  }
+  return {
+    status: 200,
+    ok: true,
+    provider: 'superhote',
+    data,
+  }
+}
+
 export async function syncOfficialChannelData(body) {
   const provider = normalizeProvider(body?.provider)
   const apiToken = pickString(body?.apiToken)
   const accountId = pickString(body?.accountId)
   const ical = pickString(body?.ical)
   if (!provider) return { status: 400, ok: false, error: 'invalid_provider' }
-  const needsAccountId = provider === 'hostaway' || provider === 'guesty'
+  const needsAccountId = provider === 'hostaway' || provider === 'guesty' || provider === 'superhote'
   if (!apiToken || (needsAccountId && !accountId)) {
     return { status: 400, ok: false, error: 'missing_required_fields' }
   }
@@ -1028,6 +1184,7 @@ export async function syncOfficialChannelData(body) {
   if (provider === 'hostaway') result = await syncHostaway({ apiToken, accountId, ical })
   if (provider === 'guesty') result = await syncGuesty({ apiToken, accountId, ical })
   if (provider === 'lodgify') result = await syncLodgify({ apiToken, accountId, ical })
+  if (provider === 'superhote') result = await syncSuperhote({ apiToken, accountId, ical })
   if (result?.ok) {
     const bookings = Array.isArray(result?.data?.bookings) ? result.data.bookings : []
     const missingFinanceCount = bookings.filter(

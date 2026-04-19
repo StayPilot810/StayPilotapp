@@ -66,7 +66,7 @@ const fr: PricingPlansCopy = {
     'Accès anticipé aux nouveautés qui poussent encaissement & occupation',
   ],
   mandatoryChannelManagerNote:
-    'Channel manager obligatoire pour accéder à StayPilot : Beds24, Hostaway, Guesty ou Lodgify.',
+    'Channel manager obligatoire pour accéder à StayPilot : Beds24, Hostaway, Guesty, Lodgify ou SuperHote.',
 }
 
 const en: PricingPlansCopy = {
@@ -110,7 +110,7 @@ const en: PricingPlansCopy = {
     'Early access to drops that push payouts and occupancy',
   ],
   mandatoryChannelManagerNote:
-    'A channel manager is required to use StayPilot: Beds24, Hostaway, Guesty, or Lodgify.',
+    'A channel manager is required to use StayPilot: Beds24, Hostaway, Guesty, Lodgify, or SuperHote.',
 }
 
 const es: PricingPlansCopy = {
@@ -154,7 +154,7 @@ const es: PricingPlansCopy = {
     'Acceso anticipado a novedades que empujan cobro y ocupación',
   ],
   mandatoryChannelManagerNote:
-    'Channel manager obligatorio para usar StayPilot: Beds24, Hostaway, Guesty o Lodgify.',
+    'Channel manager obligatorio para usar StayPilot: Beds24, Hostaway, Guesty, Lodgify o SuperHote.',
 }
 
 const de: PricingPlansCopy = {
@@ -198,7 +198,7 @@ const de: PricingPlansCopy = {
     'Early Access auf Features für Auszahlung & Auslastung',
   ],
   mandatoryChannelManagerNote:
-    'Für StayPilot ist ein Channel-Manager erforderlich: Beds24, Hostaway, Guesty oder Lodgify.',
+    'Für StayPilot ist ein Channel-Manager erforderlich: Beds24, Hostaway, Guesty, Lodgify oder SuperHote.',
 }
 
 const it: PricingPlansCopy = {
@@ -242,7 +242,7 @@ const it: PricingPlansCopy = {
     'Accesso anticipato alle novità su incasso e occupazione',
   ],
   mandatoryChannelManagerNote:
-    'Per usare StayPilot è obbligatorio un channel manager: Beds24, Hostaway, Guesty o Lodgify.',
+    'Per usare StayPilot è obbligatorio un channel manager: Beds24, Hostaway, Guesty, Lodgify o SuperHote.',
 }
 
 export const pricingPlansTranslations: Record<Locale, PricingPlansCopy> = {

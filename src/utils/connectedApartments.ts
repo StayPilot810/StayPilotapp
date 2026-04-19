@@ -1,6 +1,6 @@
 import type { OfficialChannelOtaLinks } from './officialChannelData'
 import { readOfficialChannelSyncData } from './officialChannelData'
-import { readScopedStorage } from './sessionStorageScope'
+import { readScopedStoragePreferHostForCleaner } from './cleanerHostScopedStorage'
 import { getCurrentPlanTier, getListingLimitForPlan } from './subscriptionAccess'
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
@@ -73,9 +73,9 @@ export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
       return listingLimit == null ? mapped : mapped.slice(0, listingLimit)
     }
 
-    const channelsRaw = readScopedStorage(CHANNEL_STORAGE_KEY)
-    const accessRaw = readScopedStorage(ACCESS_STORAGE_KEY)
-    const namesRaw = readScopedStorage(APARTMENT_NAME_KEY)
+    const channelsRaw = readScopedStoragePreferHostForCleaner(CHANNEL_STORAGE_KEY)
+    const accessRaw = readScopedStoragePreferHostForCleaner(ACCESS_STORAGE_KEY)
+    const namesRaw = readScopedStoragePreferHostForCleaner(APARTMENT_NAME_KEY)
     const connected = channelsRaw ? (JSON.parse(channelsRaw) as Partial<Record<ChannelKey, boolean>>) : {}
     const access = accessRaw
       ? (JSON.parse(accessRaw) as Partial<Record<ChannelKey, { ical?: string; address?: string }>>)
@@ -110,7 +110,7 @@ export function getConnectedListingsCountRaw(): number {
       return official.properties.length
     }
 
-    const channelsRaw = readScopedStorage(CHANNEL_STORAGE_KEY)
+    const channelsRaw = readScopedStoragePreferHostForCleaner(CHANNEL_STORAGE_KEY)
     const connected = channelsRaw ? (JSON.parse(channelsRaw) as Partial<Record<ChannelKey, boolean>>) : {}
     let n = 0
     ;(['airbnb', 'booking', 'channelManager'] as const).forEach((platform) => {

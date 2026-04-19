@@ -8,6 +8,7 @@ import {
   extractCalendarNameFromIcalText,
   fetchIcalBody,
 } from '../utils/icalAddress'
+import { pushOfficialChannelSyncToServer } from '../utils/officialChannelSyncRemote'
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
@@ -40,6 +41,7 @@ const CHANNEL_PROVIDER_LABELS: Record<string, string> = {
   hostaway: 'Hostaway',
   guesty: 'Guesty',
   lodgify: 'Lodgify',
+  superhote: 'SuperHote',
 }
 
 function notifyConnectionsUpdated() {
@@ -95,7 +97,8 @@ export function DashboardConnectPage() {
       tutorialBody: 'Choisissez votre channel manager et la langue de la vidéo, puis ouvrez la lecture.',
       hideVideo: 'Masquer la vidéo',
       showVideo: 'Voir la vidéo',
-      videoHint: 'Beds24 et Lodgify : vidéo guide avec voix disponible. Hostaway, Guesty : vidéo à venir.',
+      videoHint:
+        'Beds24 et Lodgify : vidéo guide avec voix disponible. Hostaway, Guesty, SuperHote : vidéo à venir.',
       videoFallback: 'Votre navigateur ne lit pas la vidéo MP4.',
       videoOnlyFor:
         "La vidéo pas à pas avec voix est disponible pour Beds24 et Lodgify. Sélectionnez l'un de ces channel managers pour afficher la vidéo.",
@@ -109,7 +112,7 @@ export function DashboardConnectPage() {
       tutorialBody: 'Choose your channel manager and video language, then play.',
       hideVideo: 'Hide video',
       showVideo: 'Show video',
-      videoHint: 'Beds24 and Lodgify: guided voice video available. Hostaway, Guesty: coming soon.',
+      videoHint: 'Beds24 and Lodgify: guided voice video available. Hostaway, Guesty, SuperHote: coming soon.',
       videoFallback: 'Your browser does not support MP4 video playback.',
       videoOnlyFor:
         'The step-by-step voice video is available for Beds24 and Lodgify. Select one of these managers to display it.',
@@ -123,7 +126,7 @@ export function DashboardConnectPage() {
       tutorialBody: 'Elige tu channel manager y el idioma del video, luego abre la reproducción.',
       hideVideo: 'Ocultar video',
       showVideo: 'Ver video',
-      videoHint: 'Beds24 y Lodgify: video guiado con voz disponible. Hostaway, Guesty: próximamente.',
+      videoHint: 'Beds24 y Lodgify: video guiado con voz disponible. Hostaway, Guesty, SuperHote: próximamente.',
       videoFallback: 'Tu navegador no admite reproducción de video MP4.',
       videoOnlyFor:
         'El video paso a paso con voz está disponible para Beds24 y Lodgify. Selecciona uno para mostrarlo.',
@@ -137,7 +140,7 @@ export function DashboardConnectPage() {
       tutorialBody: 'Wählen Sie Ihren Channel Manager und die Sprache, dann starten Sie das Video.',
       hideVideo: 'Video ausblenden',
       showVideo: 'Video anzeigen',
-      videoHint: 'Beds24 und Lodgify: Sprachvideo verfügbar. Hostaway, Guesty: folgt.',
+      videoHint: 'Beds24 und Lodgify: Sprachvideo verfügbar. Hostaway, Guesty, SuperHote: folgt.',
       videoFallback: 'Ihr Browser unterstützt keine MP4-Videowiedergabe.',
       videoOnlyFor:
         'Das Schritt-für-Schritt-Video mit Stimme ist für Beds24 und Lodgify verfügbar. Wählen Sie einen davon aus.',
@@ -151,7 +154,7 @@ export function DashboardConnectPage() {
       tutorialBody: 'Scegli il tuo channel manager e la lingua del video, poi avvia la riproduzione.',
       hideVideo: 'Nascondi video',
       showVideo: 'Mostra video',
-      videoHint: 'Beds24 e Lodgify: video guida con voce disponibile. Hostaway, Guesty: in arrivo.',
+      videoHint: 'Beds24 e Lodgify: video guida con voce disponibile. Hostaway, Guesty, SuperHote: in arrivo.',
       videoFallback: 'Il tuo browser non supporta la riproduzione MP4.',
       videoOnlyFor:
         'Il video passo-passo con voce è disponibile per Beds24 e Lodgify. Seleziona uno di questi manager.',
@@ -164,7 +167,8 @@ export function DashboardConnectPage() {
   const [selectedProvider, setSelectedProvider] = useState(() => {
     try {
       const saved = (readScopedStorage(CHANNEL_MANAGER_PROVIDER_KEY) || '').trim().toLowerCase()
-      if (saved === 'beds24' || saved === 'hostaway' || saved === 'guesty' || saved === 'lodgify') return saved
+      if (saved === 'beds24' || saved === 'hostaway' || saved === 'guesty' || saved === 'lodgify' || saved === 'superhote')
+        return saved
     } catch {
       /* ignore */
     }
@@ -326,7 +330,9 @@ export function DashboardConnectPage() {
           ? 'Champs obligatoires manquants : cle API Lodgify.'
           : selectedProvider === 'beds24'
             ? 'Champs obligatoires manquants : cle API (ou invite code) Beds24.'
-            : 'Champs obligatoires manquants : cle API et identifiant compte du channel manager.',
+            : selectedProvider === 'superhote'
+              ? 'Champs obligatoires manquants : cle API SuperHote + cle logement (property_key).'
+              : 'Champs obligatoires manquants : cle API et identifiant compte du channel manager.',
       )
       setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
       return
@@ -432,6 +438,7 @@ export function DashboardConnectPage() {
             bookings: limitedBookings,
           }),
         )
+        void pushOfficialChannelSyncToServer()
         if (selectedProvider === 'beds24' && typeof syncJson.data.connectionToken === 'string' && syncJson.data.connectionToken.trim()) {
           setAccessInputs((prev) => {
             const next = {
@@ -561,7 +568,9 @@ export function DashboardConnectPage() {
               <p className="mt-1 text-xs text-zinc-600">
               Source complète pour stats, réservations, logements, statuts et synchronisation avancée.
               </p>
-              <p className="mt-2 text-[11px] font-semibold text-emerald-700">Exemples: Hostaway, Guesty, Lodgify, Beds24.</p>
+              <p className="mt-2 text-[11px] font-semibold text-emerald-700">
+                Exemples: Beds24, Hostaway, Guesty, Lodgify, SuperHote.
+              </p>
               <p className="mt-2 text-[11px] font-semibold text-zinc-700">
                 Le client se connecte lui-même: aucune saisie manuelle de ta part.
               </p>
@@ -599,6 +608,7 @@ export function DashboardConnectPage() {
                 <option value="hostaway">Hostaway</option>
                 <option value="guesty">Guesty</option>
                 <option value="lodgify">Lodgify</option>
+                <option value="superhote">SuperHote</option>
               </select>
               {connectedChannels.channelManager ? (
                 <p className="mt-1 text-[11px] text-zinc-500">
@@ -691,7 +701,13 @@ export function DashboardConnectPage() {
 
           <div className="mt-4 border-t border-zinc-100 pt-4">
             <h3 className="text-sm font-bold text-zinc-900">
-              {selectedProvider === 'lodgify' ? 'Etapes Lodgify (une par une)' : 'Etapes Beds24 (une par une)'}
+              {selectedProvider === 'lodgify'
+                ? 'Etapes Lodgify (une par une)'
+                : selectedProvider === 'superhote'
+                  ? 'Etapes SuperHote (une par une)'
+                  : selectedProvider === 'beds24'
+                    ? 'Etapes Beds24 (une par une)'
+                    : `Etapes ${CHANNEL_PROVIDER_LABELS[selectedProvider] ?? selectedProvider} (une par une)`}
             </h3>
             {selectedProvider === 'lodgify' ? (
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-700">
@@ -715,7 +731,42 @@ export function DashboardConnectPage() {
                   Cliquez sur <span className="font-medium text-zinc-800">Connecter</span> pour lancer la synchronisation.
                 </li>
               </ol>
-            ) : (
+            ) : selectedProvider === 'superhote' ? (
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-700">
+                <li>
+                  Connectez-vous a <span className="font-medium text-zinc-800">SuperHote</span> (navigateur ou application).
+                </li>
+                <li>
+                  Recuperez votre <span className="font-medium text-zinc-800">cle API</span> (parametres / integrations API selon votre
+                  interface SuperHote).
+                </li>
+                <li>
+                  Recuperez la <span className="font-medium text-zinc-800">cle logement</span> (souvent appelee{' '}
+                  <span className="font-medium text-zinc-800">property_key</span> dans la documentation API SuperHote) pour le logement a
+                  synchroniser.
+                </li>
+                <li>
+                  Dans StayPilot, collez la cle API dans <span className="font-medium text-zinc-800">Cle API</span> et la cle logement dans{' '}
+                  <span className="font-medium text-zinc-800">Identifiant compte</span> (champ reutilise pour cette valeur).
+                </li>
+                <li>
+                  Documentation publique :{' '}
+                  <a
+                    className="font-medium text-sky-700 underline"
+                    href="https://help.superhote.com/support/solutions/articles/150000053090-int%C3%A9grer-l-api-rest-de-superhote-pour-r%C3%A9cup%C3%A9rer-les-disponibilit%C3%A9s-ou-cr%C3%A9er-des-r%C3%A9servations-"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    API REST SuperHote (disponibilites)
+                  </a>
+                  .
+                </li>
+                <li>
+                  Cliquez sur <span className="font-medium text-zinc-800">Connecter</span> : StayPilot appelle l endpoint documente{' '}
+                  <span className="font-medium text-zinc-800">get-availabilities</span> pour valider les cles et importer le logement.
+                </li>
+              </ol>
+            ) : selectedProvider === 'beds24' ? (
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-700">
                 <li>Connectez-vous a votre compte Beds24 (navigateur).</li>
                 <li>
@@ -748,6 +799,18 @@ export function DashboardConnectPage() {
                   que le detail Airbnb / Booking lorsque les donnees sont disponibles.
                 </li>
               </ol>
+            ) : (
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-700">
+                <li>
+                  Ouvrez le tableau de bord <span className="font-medium text-zinc-800">{CHANNEL_PROVIDER_LABELS[selectedProvider] ?? selectedProvider}</span> et creez ou copiez une <span className="font-medium text-zinc-800">cle API</span> (client secret, API key, etc. selon le fournisseur).
+                </li>
+                <li>
+                  Recuperez l <span className="font-medium text-zinc-800">identifiant compte</span> demande par ce fournisseur (souvent un ID client ou compte proprietaire).
+                </li>
+                <li>
+                  Dans StayPilot, collez la cle dans <span className="font-medium text-zinc-800">Cle API</span> et l identifiant dans le second champ, puis <span className="font-medium text-zinc-800">Connecter</span>.
+                </li>
+              </ol>
             )}
           </div>
         </div>
@@ -760,7 +823,9 @@ export function DashboardConnectPage() {
                 ? 'Pour Beds24 : cle API ou invite code (StayPilot convertit l invite si besoin). Identifiant compte optionnel (Owner id recommande).'
                 : selectedProvider === 'lodgify'
                   ? 'Pour Lodgify : cle API obligatoire. Numero de compte optionnel (si renseigne, il doit correspondre a la cle API).'
-                  : 'Cle API + identifiant compte obligatoires.'}
+                  : selectedProvider === 'superhote'
+                    ? 'Pour SuperHote : cle API + cle logement (property_key) obligatoires, comme dans la documentation API SuperHote.'
+                    : 'Cle API + identifiant compte obligatoires.'}
             </p>
             <p>Aucune autre information n'est demandee.</p>
           </div>
@@ -819,7 +884,12 @@ export function DashboardConnectPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-600">
-                Identifiant compte {selectedProvider} {selectedProvider === 'hostaway' || selectedProvider === 'guesty' ? '(obligatoire)' : '(optionnel)'}
+                Identifiant compte {selectedProvider}{' '}
+                {selectedProvider === 'hostaway' ||
+                selectedProvider === 'guesty' ||
+                selectedProvider === 'superhote'
+                  ? '(obligatoire)'
+                  : '(optionnel)'}
               </label>
               <input
                 type="text"
@@ -839,7 +909,9 @@ export function DashboardConnectPage() {
                     ? 'Ex: 164301 (Owner id / proprietaire)'
                     : selectedProvider === 'lodgify'
                       ? 'Optionnel: numero de compte Lodgify'
-                      : 'Ex: account_67890'
+                      : selectedProvider === 'superhote'
+                        ? 'Cle logement SuperHote (property_key)'
+                        : 'Ex: account_67890'
                 }
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
               />
@@ -922,7 +994,7 @@ export function DashboardConnectPage() {
                         </tbody>
                       </table>
                       <p className="border-t border-zinc-100 px-3 py-2 text-[11px] text-zinc-500">
-                        Airbnb / Booking : detection depuis les donnees du channel manager (ex. Beds24) a la derniere
+                        Airbnb / Booking : detection depuis les donnees du channel manager (ex. Beds24, Lodgify, SuperHote) a la derniere
                         sync. Reconnectez pour mettre a jour.
                       </p>
                     </div>

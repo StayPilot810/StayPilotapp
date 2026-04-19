@@ -8,6 +8,7 @@ import {
   normalizeStoredLoginPiece,
   safeAccountText,
   storedAccountMatchesNormalizedId,
+  tryRefreshStoredAccountsFromRemote,
 } from '../lib/accounts'
 import { isServerAccountsMandatory } from '../lib/serverAccountsPolicy'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
@@ -16,7 +17,13 @@ import {
   PROVIDER_ASSIGNMENTS_STORAGE_KEY,
   readProviderAssignmentsMap,
 } from '../utils/cleaningProviderAssignments'
+import { pushCleaningProviderAssignmentsToServer } from '../utils/cleaningProviderAssignmentsRemote'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
+import {
+  getCleanerAssignmentMatchKeysForCurrentSession,
+  providerAssignmentMatchesCleanerSession,
+  squashAssignmentLabel,
+} from '../utils/cleanerAssignmentIdentity'
 import { getOfficialCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
 
 type InvoiceDirection = 'received' | 'sent'
@@ -87,6 +94,8 @@ const LS_CURRENT_ROLE = 'staypilot_current_role'
 const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
 const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 const MAX_CHAT_IMAGE_DATA_URL_LEN = 500_000
+/** Valeur du select « Aucune attribution » : enregistrer retire la prestataire du logement choisi. */
+const NO_PROVIDER_ASSIGNMENT_VALUE = '__staypilot_no_cleaning_provider__'
 
 const cleaningCopy: Record<
   Locale,
@@ -277,6 +286,7 @@ const cleaningUiCopy: Record<
     backToCleaningTools: string
     photoPlaceholder: string
     noProviderYet: string
+    providerAssignEmptyHint: string
     removePhotoAria: string
     addPhotos: string
     yes: string
@@ -293,6 +303,8 @@ const cleaningUiCopy: Record<
     backToCleaningTools: '← Retour aux outils prestataire menage',
     photoPlaceholder: 'Ecrire un message... (photo optionnelle)',
     noProviderYet: 'Aucun prestataire enregistre',
+    providerAssignEmptyHint:
+      "Seuls les comptes prestataires créés avec votre lien ou code d'invitation apparaissent ici. La liste se met à jour depuis le serveur à l'ouverture de cette page : si quelqu'un vient de s'inscrire sur un autre appareil, rechargez la page ou déconnectez-vous puis reconnectez-vous. Sinon, l'inscription n'était probablement pas liée à votre invitation.",
     removePhotoAria: 'Retirer la photo',
     addPhotos: 'Ajouter des photos',
     yes: 'Oui',
@@ -308,6 +320,8 @@ const cleaningUiCopy: Record<
     backToCleaningTools: '← Back to cleaning tools',
     photoPlaceholder: 'Write a message... (optional photo)',
     noProviderYet: 'No provider registered',
+    providerAssignEmptyHint:
+      'Only cleaning accounts created with your invite link or code appear here. The list is refreshed from the server when you open this page: if someone just signed up on another device, reload or sign out and sign back in. Otherwise they may have signed up without your invitation.',
     removePhotoAria: 'Remove photo',
     addPhotos: 'Add photos',
     yes: 'Yes',
@@ -323,6 +337,8 @@ const cleaningUiCopy: Record<
     backToCleaningTools: '← Volver a herramientas de limpieza',
     photoPlaceholder: 'Escribir un mensaje... (foto opcional)',
     noProviderYet: 'Ningun proveedor registrado',
+    providerAssignEmptyHint:
+      'Solo aparecen aquí las cuentas de limpieza creadas con su enlace o código de invitación. La lista se actualiza desde el servidor al abrir esta página: si alguien se acaba de registrar en otro dispositivo, recargue o cierre sesión y vuelva a entrar. Si no, es posible que se registrara sin su invitación.',
     removePhotoAria: 'Quitar foto',
     addPhotos: 'Agregar fotos',
     yes: 'Si',
@@ -338,6 +354,8 @@ const cleaningUiCopy: Record<
     backToCleaningTools: '← Zuruck zu Reinigungs-Tools',
     photoPlaceholder: 'Nachricht schreiben... (optionales Foto)',
     noProviderYet: 'Kein Dienstleister registriert',
+    providerAssignEmptyHint:
+      'Hier erscheinen nur Reinigungskonten, die mit Ihrem Einladungslink oder -code erstellt wurden. Die Liste wird beim Öffnen dieser Seite vom Server geladen: Hat sich jemand gerade auf einem anderen Gerät registriert, laden Sie neu oder melden Sie sich ab und wieder an. Andernfalls wurde vermutlich ohne Ihre Einladung registriert.',
     removePhotoAria: 'Foto entfernen',
     addPhotos: 'Fotos hinzufugen',
     yes: 'Ja',
@@ -353,6 +371,8 @@ const cleaningUiCopy: Record<
     backToCleaningTools: '← Torna agli strumenti pulizie',
     photoPlaceholder: 'Scrivi un messaggio... (foto opzionale)',
     noProviderYet: 'Nessun fornitore registrato',
+    providerAssignEmptyHint:
+      "Qui compaiono solo gli account pulizie creati con il suo link o codice d'invito. L'elenco si aggiorna dal server aprendo questa pagina: se qualcuno si è appena registrato su un altro dispositivo, ricarichi o esca e rientri. Altrimenti la registrazione non era collegata al suo invito.",
     removePhotoAria: 'Rimuovi foto',
     addPhotos: 'Aggiungi foto',
     yes: 'Si',
@@ -592,6 +612,7 @@ function readProviderAssignments(): Record<string, string> {
 function saveProviderAssignments(map: Record<string, string>) {
   writeScopedStorage(PROVIDER_ASSIGNMENTS_KEY, JSON.stringify(map))
   notifyCleaningProviderAssignmentsUpdated()
+  void pushCleaningProviderAssignmentsToServer(map)
 }
 
 type SuiviMenageReport = {
@@ -779,6 +800,8 @@ export function DashboardCleaningPage() {
   const [providerAssignments, setProviderAssignments] = useState<Record<string, string>>(() => readProviderAssignments())
   const [selectedProviderLink, setSelectedProviderLink] = useState('')
   const [selectedApartmentLink, setSelectedApartmentLink] = useState('')
+  /** Sous-navigation hôte : attribuer vs retirer une attribution (écrans prestataire / tâches). */
+  const [hostProviderLinkTab, setHostProviderLinkTab] = useState<'assign' | 'unassign'>('assign')
   const [providerLinkMsg, setProviderLinkMsg] = useState('')
   const [hasNewInvoiceNotice, setHasNewInvoiceNotice] = useState(false)
   const [pendingChatCount, setPendingChatCount] = useState(0)
@@ -811,11 +834,13 @@ export function DashboardCleaningPage() {
     return full || currentAccount.username || ''
   }, [currentAccount])
   const cleanerAssignedApartmentNames = useMemo(() => {
-    if (isHostSession || !cleanerDisplayName) return []
+    if (isHostSession) return []
+    const keys = getCleanerAssignmentMatchKeysForCurrentSession()
+    if (keys.size === 0) return []
     return apartments
-      .filter((a) => (providerAssignments[a.id] || '').trim().toLowerCase() === cleanerDisplayName.trim().toLowerCase())
+      .filter((a) => providerAssignmentMatchesCleanerSession(providerAssignments[a.id] || '', keys))
       .map((a) => a.name)
-  }, [apartments, providerAssignments, isHostSession, cleanerDisplayName])
+  }, [apartments, providerAssignments, isHostSession, accountsRevision, currentUser, currentAccount])
   const cleanerHasNoAssignedListings = useMemo(
     () => !isHostSession && cleanerAssignedApartmentNames.length === 0,
     [isHostSession, cleanerAssignedApartmentNames.length],
@@ -935,6 +960,27 @@ export function DashboardCleaningPage() {
     () => hostCleanerOptions.slice().sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })),
     [hostCleanerOptions],
   )
+  const hostAssignedListingRows = useMemo(() => {
+    if (!isHostSession) return [] as Array<{ id: string; name: string; providerLabel: string }>
+    return apartments
+      .map((a) => {
+        const raw = (providerAssignments[a.id] || '').trim()
+        const lu = normalizeStoredLoginPiece(raw)
+        const cleanerAcc = lu
+          ? getStoredAccounts().find(
+              (x) =>
+                String(x.role || 'host').trim().toLowerCase() === 'cleaner' &&
+                normalizeStoredLoginPiece(x.username) === lu,
+            )
+          : undefined
+        const full = cleanerAcc
+          ? `${String(cleanerAcc.firstName || '').trim()} ${String(cleanerAcc.lastName || '').trim()}`.trim()
+          : ''
+        const providerLabel = full || cleanerAcc?.username || raw
+        return { id: a.id, name: a.name, providerLabel }
+      })
+      .filter((r) => r.providerLabel.length > 0)
+  }, [isHostSession, apartments, providerAssignments, accountsRevision])
   const chatCleanerOptions = assignableCleanerOptions
   const currentHostUsername = isHostSession ? currentUsername : (currentAccount?.hostUsername || '').trim().toLowerCase()
   const currentCleanerUsername = isHostSession ? chatCleanerUsername : currentUsername
@@ -968,10 +1014,36 @@ export function DashboardCleaningPage() {
     if (!key) return ''
     return usernameLabelMap.get(key) || raw
   }
+
+  useEffect(() => {
+    if (!isHostSession || assignableCleanerOptions.length === 0) return
+    setProviderAssignments((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const [aptId, raw] of Object.entries(prev)) {
+        const v = String(raw || '').trim()
+        if (!v) continue
+        if (assignableCleanerOptions.some((o) => o.username === v)) continue
+        const hit = assignableCleanerOptions.find(
+          (o) => o.label === v || squashAssignmentLabel(o.label) === squashAssignmentLabel(v),
+        )
+        if (hit) {
+          next[aptId] = hit.username
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [isHostSession, assignableCleanerOptions])
+
   const canSendInvoice = useMemo(() => {
     if (isHostSession) {
       if (!effectiveInvoiceProvider) return false
-      return hostCleanerOptions.some((o) => o.label === provider.trim())
+      const p = provider.trim()
+      const pNorm = normalizeStoredLoginPiece(p)
+      return hostCleanerOptions.some(
+        (o) => o.label === p || o.username === p || normalizeStoredLoginPiece(o.username) === pNorm,
+      )
     }
     return Boolean(effectiveInvoiceProvider && (currentAccount?.hostUsername || '').trim())
   }, [isHostSession, effectiveInvoiceProvider, hostCleanerOptions, provider, currentAccount])
@@ -1118,6 +1190,30 @@ export function DashboardCleaningPage() {
 
   useEffect(() => {
     if (!isHostSession) return
+    let cancelled = false
+    let visTimer: ReturnType<typeof setTimeout> | undefined
+    const run = async () => {
+      const refreshed = await tryRefreshStoredAccountsFromRemote()
+      if (!cancelled && refreshed) setAccountsRevision((n) => n + 1)
+    }
+    void run()
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      window.clearTimeout(visTimer)
+      visTimer = window.setTimeout(() => {
+        void run()
+      }, 400)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      window.clearTimeout(visTimer)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [isHostSession])
+
+  useEffect(() => {
+    if (!isHostSession) return
     const hostInviteOwner = (currentAccount?.username || currentUser || '').trim().toLowerCase()
     if (!hostInviteOwner) return
     ensureCleanerInvite(hostInviteOwner)
@@ -1155,8 +1251,9 @@ export function DashboardCleaningPage() {
   }, [])
 
   useEffect(() => {
+    if (!isHostSession) return
     saveProviderAssignments(providerAssignments)
-  }, [providerAssignments])
+  }, [providerAssignments, isHostSession])
 
   useEffect(() => {
     setApartments(getConnectedApartmentsFromStorage())
@@ -1669,8 +1766,69 @@ export function DashboardCleaningPage() {
     saveSuiviReports(merged)
   }
 
+  function unlinkProviderForApartmentId(apartmentId: string) {
+    const id = apartmentId.trim()
+    if (!id) {
+      setProviderLinkMsg(
+        l('Logement introuvable.', 'Listing not found.', 'Alojamiento no encontrado.', 'Unterkunft nicht gefunden.', 'Alloggio non trovato.'),
+      )
+      return
+    }
+    const assigned = (providerAssignments[id] || '').trim()
+    if (!assigned) {
+      setProviderLinkMsg(
+        l(
+          'Ce logement n’a pas de prestataire assignée.',
+          'This listing has no assigned provider.',
+          'Este alojamiento no tiene proveedor asignado.',
+          'Dieser Unterkunft ist kein Reinigungsdienst zugewiesen.',
+          'Questo alloggio non ha un fornitore assegnato.',
+        ),
+      )
+      return
+    }
+    setProviderAssignments((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    const apt = apartments.find((a) => a.id === id)
+    setProviderLinkMsg(
+      `${l('Attribution supprimée', 'Assignment removed', 'Asignación eliminada', 'Zuweisung entfernt', 'Assegnazione rimossa')} — ${apt?.name || id}.`,
+    )
+  }
+
   function linkProviderToApartment() {
+    const aptId = selectedApartmentLink.trim()
     const selectedProvider = selectedProviderLink.trim()
+    const isNoProviderChoice = selectedProvider === NO_PROVIDER_ASSIGNMENT_VALUE
+
+    if (isNoProviderChoice) {
+      if (!aptId) {
+        setProviderLinkMsg(
+          l(
+            "Choisissez d'abord le logement pour lequel vous voulez enlever l’attribution.",
+            'Choose the listing you want to clear of an assignment first.',
+            'Elige primero el alojamiento del que quieres quitar la asignación.',
+            'Wählen Sie zuerst die Unterkunft, für die Sie die Zuweisung entfernen möchten.',
+            'Scegli prima l alloggio per cui vuoi togliere l assegnazione.',
+          ),
+        )
+        return
+      }
+      setProviderAssignments((prev) => {
+        const next = { ...prev }
+        delete next[aptId]
+        return next
+      })
+      const apt = apartments.find((a) => a.id === aptId)
+      setProviderLinkMsg(
+        `${l('Aucune attribution enregistrée', 'No provider assignment saved', 'Sin asignación guardada', 'Keine Zuweisung gespeichert', 'Nessuna assegnazione salvata')} — ${apt?.name || aptId}.`,
+      )
+      setSelectedProviderLink('')
+      return
+    }
+
     if (!selectedProvider) {
       setProviderLinkMsg(
         l(
@@ -1683,7 +1841,8 @@ export function DashboardCleaningPage() {
       )
       return
     }
-    if (!assignableCleanerOptions.some((opt) => opt.label === selectedProvider)) {
+    const chosen = assignableCleanerOptions.find((opt) => opt.username === selectedProvider)
+    if (!chosen) {
       setProviderLinkMsg(
         l(
           'Choisissez une prestataire qui apparaît dans la liste après inscription.',
@@ -1695,29 +1854,15 @@ export function DashboardCleaningPage() {
       )
       return
     }
-    if (!selectedApartmentLink.trim()) {
+    if (!aptId) {
       setProviderLinkMsg('Selectionnez ensuite un logement.')
       return
     }
-    setProviderAssignments((prev) => ({ ...prev, [selectedApartmentLink]: selectedProvider }))
-    const apt = apartments.find((a) => a.id === selectedApartmentLink)
+    setProviderAssignments((prev) => ({ ...prev, [aptId]: chosen.username }))
+    const apt = apartments.find((a) => a.id === aptId)
     setProviderLinkMsg(
-      `${l('Attribution enregistrée', 'Assignment saved', 'Asignación guardada', 'Zuweisung gespeichert', 'Assegnazione salvata')} : ${selectedProvider} ${l('sur', 'to', 'en', 'für', 'su')} ${apt?.name || l('ce logement', 'this listing', 'este alojamiento', 'diese Unterkunft', 'questo alloggio')}.`,
+      `${l('Attribution enregistrée', 'Assignment saved', 'Asignación guardada', 'Zuweisung gespeichert', 'Assegnazione salvata')} : ${chosen.label} ${l('sur', 'to', 'en', 'für', 'su')} ${apt?.name || l('ce logement', 'this listing', 'este alojamiento', 'diese Unterkunft', 'questo alloggio')}.`,
     )
-  }
-
-  function unlinkProviderFromApartment() {
-    if (!selectedApartmentLink.trim()) {
-      setProviderLinkMsg("Sélectionnez d'abord le logement à désattribuer.")
-      return
-    }
-    setProviderAssignments((prev) => {
-      const next = { ...prev }
-      delete next[selectedApartmentLink]
-      return next
-    })
-    const apt = apartments.find((a) => a.id === selectedApartmentLink)
-    setProviderLinkMsg(`Attribution supprimee pour ${apt?.name || 'ce logement'}.`)
   }
 
   return (
@@ -2042,144 +2187,274 @@ export function DashboardCleaningPage() {
               {ui.backToCleaningTools}
             </button>
 
-            <div className="mt-4 rounded-xl border-2 border-sky-200 bg-zinc-50 p-4 sm:p-5">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">
-                {l(
-                  'Selection prestataire / logement',
-                  'Provider / listing selection',
-                  'Seleccion proveedor / alojamiento',
-                  'Auswahl Dienstleister / Unterkunft',
-                  'Selezione fornitore / alloggio',
-                )}
-              </p>
-              <p className="text-sm font-semibold text-zinc-900">
-                {l(
-                  'Assigner ce logement a :',
-                  'Assign this listing to:',
-                  'Asignar este alojamiento a:',
-                  'Diese Unterkunft zuweisen an:',
-                  'Assegna questo alloggio a:',
-                )}
-              </p>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-zinc-700">
-                  {l('Logement disponible', 'Available listing', 'Alojamiento disponible', 'Verfugbare Unterkunft', 'Alloggio disponibile')}
-                  <select
-                    value={selectedApartmentLink}
-                    onChange={(e) => setSelectedApartmentLink(e.target.value)}
-                    disabled={!apartments.length}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                  >
-                    {apartments.length === 0 ? (
-                      <option value="">{l('Aucun logement connecte', 'No connected apartment', 'Ningun alojamiento conectado', 'Keine verbundene Unterkunft', 'Nessun alloggio collegato')}</option>
-                    ) : (
-                      <>
-                        <option value="">{l('Choisir un logement', 'Choose an apartment', 'Elegir un alojamiento', 'Unterkunft auswahlen', 'Scegli un alloggio')}</option>
-                        {apartments.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                </label>
-                <label className="text-xs font-semibold text-zinc-700">
+            {isHostSession ? (
+              <div
+                className="mt-4 inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1"
+                role="tablist"
+                aria-label={l('Attributions prestataire ménage', 'Cleaning provider assignments', 'Asignaciones de limpieza', 'Reinigungszuordnungen', 'Assegnazioni pulizie')}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={hostProviderLinkTab === 'assign'}
+                  onClick={() => setHostProviderLinkTab('assign')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                    hostProviderLinkTab === 'assign' ? 'bg-white text-sky-800 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  {l('Attribuer', 'Assign', 'Asignar', 'Zuweisen', 'Assegna')}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={hostProviderLinkTab === 'unassign'}
+                  onClick={() => setHostProviderLinkTab('unassign')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                    hostProviderLinkTab === 'unassign' ? 'bg-white text-rose-800 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
                   {l(
-                    'Prestataire menage disponible',
-                    'Available cleaning provider',
-                    'Proveedor de limpieza disponible',
-                    'Verfugbarer Reinigungsdienst',
-                    'Fornitore pulizie disponibile',
+                    'Retirer une attribution',
+                    'Remove an assignment',
+                    'Quitar una asignación',
+                    'Zuweisung entfernen',
+                    'Rimuovi un’assegnazione',
                   )}
-                  <select
-                    value={selectedProviderLink}
-                    onChange={(e) => setSelectedProviderLink(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  >
-                    <option value="">
-                      {assignableCleanerOptions.length > 0
-                        ? l(
-                            'Choisir une prestataire ménage',
-                            'Choose a cleaning provider',
-                            'Elegir una proveedora de limpieza',
-                            'Reinigungsdienst wählen',
-                            'Scegli una fornitore pulizie',
-                          )
-                        : ui.noProviderYet}
-                    </option>
-                    {assignableCleanerOptions.map((opt) => (
-                      <option key={opt.username} value={opt.label}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                </button>
               </div>
-              {assignableCleanerOptions.length === 0 ? (
-                <p className="mt-2 text-xs text-zinc-600">
+            ) : null}
+
+            {(!isHostSession || hostProviderLinkTab === 'assign') ? (
+              <div className="mt-4 rounded-xl border-2 border-sky-200 bg-zinc-50 p-4 sm:p-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">
                   {l(
-                    "Aucune prestataire n'est encore liée à votre compte. Partagez le lien ou le code d'inscription : dès qu'elle aura créé son compte StayPilot, son nom apparaîtra ici et vous pourrez lui attribuer un logement. Si elle s'est inscrite sur un autre appareil, déconnectez-vous puis reconnectez-vous pour rafraîchir la liste.",
-                    'No provider is linked to your account yet. Share the signup link or invitation code: once they create their StayPilot account, their name appears here and you can assign a listing. If they signed up on another device, sign out and sign back in to refresh the list.',
-                    'Ninguna proveedora está vinculada a tu cuenta todavía. Comparte el enlace o el código: cuando cree su cuenta StayPilot, su nombre aparecerá aquí. Si se registró en otro dispositivo, cierra sesión y vuelve a entrar para actualizar la lista.',
-                    'Noch keine Dienstleisterin verknüpft. Teilen Sie Link oder Code: Nach der StayPilot-Registrierung erscheint der Name hier. Wenn die Registrierung auf einem anderen Gerät erfolgte, abmelden und wieder anmelden, um die Liste zu aktualisieren.',
-                    'Nessuna fornitore collegata. Condividi link o codice: dopo la registrazione StayPilot il nome compare qui. Se si è registrata su un altro dispositivo, esci e rientra per aggiornare l’elenco.',
+                    'Selection prestataire / logement',
+                    'Provider / listing selection',
+                    'Seleccion proveedor / alojamiento',
+                    'Auswahl Dienstleister / Unterkunft',
+                    'Selezione fornitore / alloggio',
                   )}
                 </p>
-              ) : null}
-              {selectedApartmentLink && selectedProviderLink ? (
-                <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
-                  {l('Attribution en preparation :', 'Assignment in progress:', 'Asignacion en preparacion:', 'Zuordnung in Vorbereitung:', 'Assegnazione in preparazione:')}{' '}
-                  <strong>{apartments.find((a) => a.id === selectedApartmentLink)?.name || selectedApartmentLink}</strong>{' '}
-                  {l('a', 'to', 'a', 'an', 'a')} <strong>{selectedProviderLink}</strong>
+                <p className="text-sm font-semibold text-zinc-900">
+                  {l(
+                    'Assigner ce logement a :',
+                    'Assign this listing to:',
+                    'Asignar este alojamiento a:',
+                    'Diese Unterkunft zuweisen an:',
+                    'Assegna questo alloggio a:',
+                  )}
                 </p>
-              ) : null}
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-zinc-700">
+                    {l('Logement disponible', 'Available listing', 'Alojamiento disponible', 'Verfugbare Unterkunft', 'Alloggio disponibile')}
+                    <select
+                      value={selectedApartmentLink}
+                      onChange={(e) => setSelectedApartmentLink(e.target.value)}
+                      disabled={!apartments.length}
+                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                    >
+                      {apartments.length === 0 ? (
+                        <option value="">{l('Aucun logement connecte', 'No connected apartment', 'Ningun alojamiento conectado', 'Keine verbundene Unterkunft', 'Nessun alloggio collegato')}</option>
+                      ) : (
+                        <>
+                          <option value="">{l('Choisir un logement', 'Choose an apartment', 'Elegir un alojamiento', 'Unterkunft auswahlen', 'Scegli un alloggio')}</option>
+                          {apartments.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name}
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-zinc-700">
+                    {l(
+                      'Prestataire menage disponible',
+                      'Available cleaning provider',
+                      'Proveedor de limpieza disponible',
+                      'Verfugbarer Reinigungsdienst',
+                      'Fornitore pulizie disponibile',
+                    )}
+                    <select
+                      value={selectedProviderLink}
+                      onChange={(e) => setSelectedProviderLink(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    >
+                      <option value="">
+                        {assignableCleanerOptions.length > 0
+                          ? l(
+                              'Choisir une prestataire ménage',
+                              'Choose a cleaning provider',
+                              'Elegir una proveedora de limpieza',
+                              'Reinigungsdienst wählen',
+                              'Scegli una fornitore pulizie',
+                            )
+                          : ui.noProviderYet}
+                      </option>
+                      {assignableCleanerOptions.map((opt) => (
+                        <option key={opt.username} value={opt.username}>
+                          {opt.label}
+                        </option>
+                      ))}
+                      {isHostSession ? (
+                        <option value={NO_PROVIDER_ASSIGNMENT_VALUE}>
+                          {l('Aucune attribution', 'No assignment', 'Sin asignación', 'Keine Zuweisung', 'Nessuna assegnazione')}
+                        </option>
+                      ) : null}
+                    </select>
+                  </label>
+                </div>
+                {assignableCleanerOptions.length === 0 ? (
+                  <p className="mt-2 text-xs text-zinc-600">
+                    {l(
+                      "Aucune prestataire n'est encore liée à votre compte. Partagez le lien ou le code d'inscription : dès qu'elle aura créé son compte StayPilot, son nom apparaîtra ici et vous pourrez lui attribuer un logement. Si elle s'est inscrite sur un autre appareil, déconnectez-vous puis reconnectez-vous pour rafraîchir la liste.",
+                      'No provider is linked to your account yet. Share the signup link or invitation code: once they create their StayPilot account, their name appears here and you can assign a listing. If they signed up on another device, sign out and sign back in to refresh the list.',
+                      'Ninguna proveedora está vinculada a tu cuenta todavía. Comparte el enlace o el código: cuando cree su cuenta StayPilot, su nombre aparecerá aquí. Si se registró en otro dispositivo, cierra sesión y vuelve a entrar para actualizar la lista.',
+                      'Noch keine Dienstleisterin verknüpft. Teilen Sie Link oder Code: Nach der StayPilot-Registrierung erscheint der Name hier. Wenn die Registrierung auf einem anderen Gerät erfolgte, abmelden und wieder anmelden, um die Liste zu aktualisieren.',
+                      'Nessuna fornitore collegata. Condividi link o codice: dopo la registrazione StayPilot il nome compare qui. Se si è registrata su un altro dispositivo, esci e rientra per aggiornare l’elenco.',
+                    )}
+                  </p>
+                ) : null}
+                {selectedApartmentLink && selectedProviderLink ? (
+                  selectedProviderLink === NO_PROVIDER_ASSIGNMENT_VALUE ? (
+                    <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                      {l(
+                        'En enregistrant : aucune prestataire ne sera assignée sur',
+                        'On save: no provider will be assigned to',
+                        'Al guardar: no habrá proveedora asignada en',
+                        'Beim Speichern: keiner Dienstleisterin zugewiesen für',
+                        'Salvando: nessuna fornitore assegnata su',
+                      )}{' '}
+                      <strong>{apartments.find((a) => a.id === selectedApartmentLink)?.name || selectedApartmentLink}</strong>
+                      {l(
+                        " (l'attribution existante sera effacée).",
+                        ' (any existing assignment will be cleared).',
+                        ' (se borrará la asignación actual).',
+                        ' (bestehende Zuweisung wird entfernt).',
+                        " (l'assegnazione attuale verrà rimossa).",
+                      )}
+                    </p>
+                  ) : (
+                    <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
+                      {l('Attribution en preparation :', 'Assignment in progress:', 'Asignacion en preparacion:', 'Zuordnung in Vorbereitung:', 'Assegnazione in preparazione:')}{' '}
+                      <strong>{apartments.find((a) => a.id === selectedApartmentLink)?.name || selectedApartmentLink}</strong>{' '}
+                      {l('a', 'to', 'a', 'an', 'a')}{' '}
+                      <strong>
+                        {assignableCleanerOptions.find((o) => o.username === selectedProviderLink)?.label ||
+                          selectedProviderLink}
+                      </strong>
+                    </p>
+                  )
+                ) : null}
 
-              <button
-                type="button"
-                onClick={linkProviderToApartment}
-                className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
-              >
-                Enregistrer l attribution
-              </button>
-              <button
-                type="button"
-                onClick={unlinkProviderFromApartment}
-                disabled={!selectedApartmentLink || !providerAssignments[selectedApartmentLink]}
-                className="mt-4 ml-2 inline-flex rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Supprimer l attribution
-              </button>
+                <button
+                  type="button"
+                  onClick={linkProviderToApartment}
+                  className="mt-4 inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+                >
+                  {l('Enregistrer l’attribution', 'Save assignment', 'Guardar asignación', 'Zuweisung speichern', 'Salva assegnazione')}
+                </button>
 
-              {providerLinkMsg ? (
-                <p className="mt-2 text-xs font-semibold text-zinc-700">{providerLinkMsg}</p>
-              ) : null}
+                <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
+                  <p className="text-xs font-semibold text-zinc-900">{l('Attributions actuelles', 'Current assignments', 'Asignaciones actuales', 'Aktuelle Zuordnungen', 'Assegnazioni attuali')}</p>
+                  {apartments.length === 0 ? (
+                    <p className="mt-1 text-xs text-zinc-600">{l('Aucun logement connecte pour le moment.', 'No connected apartment for now.', 'Ningun alojamiento conectado por ahora.', 'Aktuell keine verbundene Unterkunft.', 'Nessun alloggio collegato al momento.')}</p>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-xs text-zinc-700">
+                      {apartments.map((a) => (
+                        <li key={`assign-${a.id}`}>
+                          {a.name}:{' '}
+                          <strong>
+                            {(() => {
+                              const raw = (providerAssignments[a.id] || '').trim()
+                              if (!raw) {
+                                return l(
+                                  'Aucune prestataire assignée',
+                                  'No provider assigned',
+                                  'Ningún proveedor asignado',
+                                  'Kein Dienstleister zugewiesen',
+                                  'Nessun fornitore assegnato',
+                                )
+                              }
+                              const lu = normalizeStoredLoginPiece(raw)
+                              const cleanerAcc = getStoredAccounts().find(
+                                (x) =>
+                                  String(x.role || 'host').trim().toLowerCase() === 'cleaner' &&
+                                  normalizeStoredLoginPiece(x.username) === lu,
+                              )
+                              const full = cleanerAcc
+                                ? `${String(cleanerAcc.firstName || '').trim()} ${String(cleanerAcc.lastName || '').trim()}`.trim()
+                                : ''
+                              return full || cleanerAcc?.username || raw
+                            })()}
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-              <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
-                <p className="text-xs font-semibold text-zinc-900">{l('Attributions actuelles', 'Current assignments', 'Asignaciones actuales', 'Aktuelle Zuordnungen', 'Assegnazioni attuali')}</p>
-                {apartments.length === 0 ? (
-                  <p className="mt-1 text-xs text-zinc-600">{l('Aucun logement connecte pour le moment.', 'No connected apartment for now.', 'Ningun alojamiento conectado por ahora.', 'Aktuell keine verbundene Unterkunft.', 'Nessun alloggio collegato al momento.')}</p>
+            {isHostSession && hostProviderLinkTab === 'unassign' ? (
+              <div className="mt-4 rounded-xl border-2 border-rose-200 bg-rose-50/60 p-4 sm:p-5">
+                <p className="text-sm font-semibold text-rose-950">
+                  {l(
+                    'Retirer la prestataire d’un ou plusieurs logements',
+                    'Remove the provider from one or more listings',
+                    'Quitar la proveedora de uno o más alojamientos',
+                    'Dienstleisterin von einer oder mehreren Unterkünften entfernen',
+                    'Rimuovi la fornitore da uno o più alloggi',
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-rose-900/90">
+                  {l(
+                    'Chaque logement déjà attribué apparaît ci-dessous : vous pouvez retirer l’attribution à tout moment, même s’il n’y a qu’une seule prestataire.',
+                    'Each listing that already has an assignment appears below: you can remove it at any time, even if you only have one provider.',
+                    'Cada alojamiento ya asignado aparece abajo: puede quitar la asignación en cualquier momento, aunque solo haya una proveedora.',
+                    'Jede bereits zugewiesene Unterkunft steht unten: Sie können die Zuweisung jederzeit entfernen, auch bei nur einer Dienstleisterin.',
+                    'Ogni alloggio già assegnato compare sotto: puoi rimuovere l’assegnazione in qualsiasi momento, anche con una sola fornitore.',
+                  )}
+                </p>
+                {hostAssignedListingRows.length === 0 ? (
+                  <p className="mt-3 text-sm text-rose-900/85">
+                    {l(
+                      'Aucune attribution active à retirer pour l’instant.',
+                      'No active assignment to remove right now.',
+                      'No hay ninguna asignación activa que quitar por ahora.',
+                      'Derzeit gibt es keine aktive Zuweisung zum Entfernen.',
+                      'Non c’è alcuna assegnazione attiva da rimuovere al momento.',
+                    )}
+                  </p>
                 ) : (
-                  <ul className="mt-2 space-y-1 text-xs text-zinc-700">
-                    {apartments.map((a) => (
-                      <li key={`assign-${a.id}`}>
-                        {a.name}:{' '}
-                        <strong>
-                          {providerAssignments[a.id] ||
-                            l(
-                              'Aucune prestataire assignée',
-                              'No provider assigned',
-                              'Ningún proveedor asignado',
-                              'Kein Dienstleister zugewiesen',
-                              'Nessun fornitore assegnato',
-                            )}
-                        </strong>
+                  <ul className="mt-3 space-y-2">
+                    {hostAssignedListingRows.map((row) => (
+                      <li
+                        key={`unassign-${row.id}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200/80 bg-white px-3 py-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-zinc-900">{row.name}</p>
+                          <p className="text-xs text-zinc-600">
+                            {l('Prestataire :', 'Provider:', 'Proveedora:', 'Dienstleisterin:', 'Fornitore:')}{' '}
+                            <span className="font-medium text-zinc-800">{row.providerLabel}</span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => unlinkProviderForApartmentId(row.id)}
+                          className="inline-flex shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100"
+                        >
+                          {l('Retirer cette attribution', 'Remove this assignment', 'Quitar esta asignación', 'Diese Zuweisung entfernen', 'Rimuovi questa assegnazione')}
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-            </div>
+            ) : null}
+
+            {providerLinkMsg ? <p className="mt-3 text-xs font-semibold text-zinc-700">{providerLinkMsg}</p> : null}
           </div>
 
           <div
@@ -2625,7 +2900,44 @@ export function DashboardCleaningPage() {
                   : 'Vue prestataire : cochez les tâches réalisées'}
               </div>
 
-              {taskViewerRole === 'provider' && isHostSession ? (
+              {isHostSession ? (
+                <div
+                  className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1"
+                  role="tablist"
+                  aria-label={l('Attributions prestataire ménage', 'Cleaning provider assignments', 'Asignaciones de limpieza', 'Reinigungszuordnungen', 'Assegnazioni pulizie')}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={hostProviderLinkTab === 'assign'}
+                    onClick={() => setHostProviderLinkTab('assign')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      hostProviderLinkTab === 'assign' ? 'bg-white text-sky-800 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+                    }`}
+                  >
+                    {l('Attribuer', 'Assign', 'Asignar', 'Zuweisen', 'Assegna')}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={hostProviderLinkTab === 'unassign'}
+                    onClick={() => setHostProviderLinkTab('unassign')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      hostProviderLinkTab === 'unassign' ? 'bg-white text-rose-800 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+                    }`}
+                  >
+                    {l(
+                      'Retirer une attribution',
+                      'Remove an assignment',
+                      'Quitar una asignación',
+                      'Zuweisung entfernen',
+                      'Rimuovi un’assegnazione',
+                    )}
+                  </button>
+                </div>
+              ) : null}
+
+              {taskViewerRole === 'provider' && isHostSession && hostProviderLinkTab === 'assign' ? (
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
                   <p className="text-sm font-semibold text-zinc-900">{l('Qui consulte la checklist ?', 'Who is viewing the checklist?', 'Quien consulta la checklist?', 'Wer sieht die Checkliste?', 'Chi consulta la checklist?')}</p>
                   <p className="mt-1 text-xs text-zinc-600">
@@ -2655,7 +2967,7 @@ export function DashboardCleaningPage() {
                   )}
                 </div>
               ) : null}
-              {isHostSession ? (
+              {isHostSession && hostProviderLinkTab === 'assign' ? (
                 <div className="rounded-lg border-2 border-sky-200 bg-sky-50 px-3 py-3">
                   <p className="text-sm font-semibold text-zinc-900">
                     {l(
@@ -2666,7 +2978,7 @@ export function DashboardCleaningPage() {
                       'Assegna questo alloggio a un fornitore pulizie',
                     )}
                   </p>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
                     <label className="text-sm text-zinc-700">
                       {l('Logement', 'Listing', 'Alojamiento', 'Unterkunft', 'Alloggio')}
                       <select
@@ -2702,10 +3014,13 @@ export function DashboardCleaningPage() {
                             : ui.noProviderYet}
                         </option>
                         {assignableCleanerOptions.map((opt) => (
-                          <option key={opt.username} value={opt.label}>
+                          <option key={opt.username} value={opt.username}>
                             {opt.label}
                           </option>
                         ))}
+                        <option value={NO_PROVIDER_ASSIGNMENT_VALUE}>
+                          {l('Aucune attribution', 'No assignment', 'Sin asignación', 'Keine Zuweisung', 'Nessuna assegnazione')}
+                        </option>
                       </select>
                     </label>
                     <button
@@ -2715,16 +3030,72 @@ export function DashboardCleaningPage() {
                     >
                       {l('Assigner', 'Assign', 'Asignar', 'Zuweisen', 'Assegna')}
                     </button>
-                    <button
-                      type="button"
-                      onClick={unlinkProviderFromApartment}
-                      disabled={!selectedApartmentLink || !providerAssignments[selectedApartmentLink]}
-                      className="inline-flex rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {l('Retirer', 'Unassign', 'Quitar', 'Entfernen', 'Rimuovi')}
-                    </button>
                   </div>
+                  {assignableCleanerOptions.length === 0 ? (
+                    <p className="mt-2 text-xs leading-relaxed text-zinc-600">{ui.providerAssignEmptyHint}</p>
+                  ) : null}
                 </div>
+              ) : null}
+              {isHostSession && hostProviderLinkTab === 'unassign' ? (
+                <div className="rounded-lg border-2 border-rose-200 bg-rose-50/60 px-3 py-3">
+                  <p className="text-sm font-semibold text-rose-950">
+                    {l(
+                      'Retirer la prestataire d’un ou plusieurs logements',
+                      'Remove the provider from one or more listings',
+                      'Quitar la proveedora de uno o más alojamientos',
+                      'Dienstleisterin von einer oder mehreren Unterkünften entfernen',
+                      'Rimuovi la fornitore da uno o più alloggi',
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-rose-900/90">
+                    {l(
+                      'Chaque logement déjà attribué apparaît ci-dessous : vous pouvez retirer l’attribution à tout moment, même s’il n’y a qu’une seule prestataire.',
+                      'Each listing that already has an assignment appears below: you can remove it at any time, even if you only have one provider.',
+                      'Cada alojamiento ya asignado aparece abajo: puede quitar la asignación en cualquier momento, aunque solo haya una proveedora.',
+                      'Jede bereits zugewiesene Unterkunft steht unten: Sie können die Zuweisung jederzeit entfernen, auch bei nur einer Dienstleisterin.',
+                      'Ogni alloggio già assegnato compare sotto: puoi rimuovere l’assegnazione in qualsiasi momento, anche con una sola fornitore.',
+                    )}
+                  </p>
+                  {hostAssignedListingRows.length === 0 ? (
+                    <p className="mt-3 text-sm text-rose-900/85">
+                      {l(
+                        'Aucune attribution active à retirer pour l’instant.',
+                        'No active assignment to remove right now.',
+                        'No hay ninguna asignación activa que quitar por ahora.',
+                        'Derzeit gibt es keine aktive Zuweisung zum Entfernen.',
+                        'Non c’è alcuna assegnazione attiva da rimuovere al momento.',
+                      )}
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {hostAssignedListingRows.map((row) => (
+                        <li
+                          key={`tasks-unassign-${row.id}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200/80 bg-white px-3 py-2.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-zinc-900">{row.name}</p>
+                            <p className="text-xs text-zinc-600">
+                              {l('Prestataire :', 'Provider:', 'Proveedora:', 'Dienstleisterin:', 'Fornitore:')}{' '}
+                              <span className="font-medium text-zinc-800">{row.providerLabel}</span>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => unlinkProviderForApartmentId(row.id)}
+                            className="inline-flex shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100"
+                          >
+                            {l('Retirer cette attribution', 'Remove this assignment', 'Quitar esta asignación', 'Diese Zuweisung entfernen', 'Rimuovi questa assegnazione')}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+
+              {isHostSession && providerLinkMsg ? (
+                <p className="text-xs font-semibold text-zinc-700">{providerLinkMsg}</p>
               ) : null}
 
               <div>

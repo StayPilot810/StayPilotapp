@@ -2,8 +2,11 @@ import { CalendarDays, Filter } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { Locale } from '../i18n/navbar'
 import { useLanguage } from '../hooks/useLanguage'
-import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import {
+  getCleanerAssignmentMatchKeysForCurrentSession,
+  providerAssignmentMatchesCleanerSession,
+} from '../utils/cleanerAssignmentIdentity'
 import {
   CLEANING_PROVIDER_ASSIGNMENTS_UPDATED_EVENT,
   readProviderAssignmentsMap,
@@ -493,18 +496,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     const isCleaner = role === 'cleaner'
     if (isCleaner && list.length > 0) {
       const assignments = readProviderAssignmentsMap()
-      const uid = (
-        typeof window !== 'undefined'
-          ? localStorage.getItem('staypilot_current_user') || localStorage.getItem('staypilot_login_identifier') || ''
-          : ''
-      ).trim()
-      const lower = uid.toLowerCase()
-      const acc = lower ? getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, lower)) : undefined
-      const matchKey = acc
-        ? (`${acc.firstName || ''} ${acc.lastName || ''}`.trim() || acc.username || '').trim().toLowerCase()
-        : ''
-      if (matchKey) {
-        list = list.filter((apt) => (assignments[apt.id] || '').trim().toLowerCase() === matchKey)
+      const keys = getCleanerAssignmentMatchKeysForCurrentSession()
+      if (keys.length) {
+        list = list.filter((apt) =>
+          providerAssignmentMatchesCleanerSession(String(assignments[apt.id] ?? ''), keys),
+        )
       } else {
         list = []
       }

@@ -1102,7 +1102,7 @@ export function SignupPage() {
                 </div>
                 {role === 'host' ? (
                   <p className="mt-2 text-[11px] font-normal text-zinc-500">
-                    Channel manager obligatoire pour acceder a StayPilot : Beds24, Hostaway, Guesty ou Lodgify.
+                    Channel manager obligatoire pour acceder a StayPilot : Beds24, Hostaway, Guesty, Lodgify ou SuperHote.
                   </p>
                 ) : null}
                 {emailVerifyMsg ? (

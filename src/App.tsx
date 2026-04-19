@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react'
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react'
 import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
@@ -39,6 +39,7 @@ import { AiChatWidget } from './components/AiChatWidget'
 import { ProfilePage } from './components/ProfilePage'
 import { FeaturesVideoPage } from './components/FeaturesVideoPage'
 import { useAppPathname } from './hooks/useAppPathname'
+import { useCleanerAssignedListingReactive } from './hooks/useCleanerAssignedListingReactive'
 import { canAccessDashboardPath, getPlanTierFromValue } from './utils/subscriptionAccess'
 import {
   clearStaypilotClientSessionAndCaches,
@@ -46,6 +47,18 @@ import {
   saveStoredAccounts,
   storedAccountMatchesNormalizedId,
 } from './lib/accounts'
+import { isServerAccountsMandatory } from './lib/serverAccountsPolicy'
+import { readProviderAssignmentsMap } from './utils/cleaningProviderAssignments'
+import {
+  pullCleaningProviderAssignmentsFromServer,
+  pushCleaningProviderAssignmentsToServer,
+} from './utils/cleaningProviderAssignmentsRemote'
+import { OFFICIAL_CHANNEL_SYNC_KEY } from './utils/officialChannelData'
+import {
+  pullOfficialChannelSyncFromServer,
+  pushOfficialChannelSyncToServer,
+} from './utils/officialChannelSyncRemote'
+import { readScopedStorage } from './utils/sessionStorageScope'
 
 function DashboardSocieteRedirect() {
   useEffect(() => {
@@ -121,13 +134,72 @@ export default function App() {
 
   const currentRoleRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_role') : null
   const isCleanerSession = (currentRoleRaw || '').trim().toLowerCase() === 'cleaner'
+  const cleanerHasAssignedListing = useCleanerAssignedListingReactive(isCleanerSession)
+  const hostAssignmentsPushOnceRef = useRef(false)
+  const hostOfficialSyncPushOnceRef = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isServerAccountsMandatory()) return
+    const pullCleanerData = async () => {
+      await pullCleaningProviderAssignmentsFromServer()
+      await pullOfficialChannelSyncFromServer()
+    }
+    void (async () => {
+      if (isCleanerSession) {
+        await pullCleanerData()
+        return
+      }
+      if (Object.keys(readProviderAssignmentsMap()).length === 0) {
+        await pullCleaningProviderAssignmentsFromServer()
+      }
+      const syncRaw = readScopedStorage(OFFICIAL_CHANNEL_SYNC_KEY)
+      if (!syncRaw?.trim()) {
+        await pullOfficialChannelSyncFromServer()
+      }
+    })()
+  }, [isCleanerSession])
+
+  useEffect(() => {
+    if (!isServerAccountsMandatory() || !isCleanerSession) return
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      void (async () => {
+        await pullCleaningProviderAssignmentsFromServer()
+        await pullOfficialChannelSyncFromServer()
+      })()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [isCleanerSession])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isServerAccountsMandatory() || isCleanerSession) return
+    if (hostAssignmentsPushOnceRef.current) return
+    const map = readProviderAssignmentsMap()
+    if (Object.keys(map).length === 0) return
+    hostAssignmentsPushOnceRef.current = true
+    void pushCleaningProviderAssignmentsToServer(map)
+  }, [isCleanerSession])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isServerAccountsMandatory() || isCleanerSession) return
+    if (hostOfficialSyncPushOnceRef.current) return
+    const raw = readScopedStorage(OFFICIAL_CHANNEL_SYNC_KEY)
+    if (!raw?.trim()) return
+    hostOfficialSyncPushOnceRef.current = true
+    void pushOfficialChannelSyncToServer()
+  }, [isCleanerSession])
   const cleanerAllowedDashboardPaths = new Set([
     '/dashboard',
     '/dashboard/calendrier',
     '/dashboard/prestataire-menage',
     '/dashboard/consommables',
   ])
-  const cleanerDashboardAllowed = cleanerAllowedDashboardPaths.has(pathname)
+  const cleanerDashboardAllowed =
+    cleanerAllowedDashboardPaths.has(pathname) &&
+    (pathname === '/dashboard/calendrier' || pathname === '/dashboard/consommables'
+      ? cleanerHasAssignedListing
+      : true)
   const billingRecoveryRaw =
     typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_billing_recovery_v1') : null
   let billingSuspended = false

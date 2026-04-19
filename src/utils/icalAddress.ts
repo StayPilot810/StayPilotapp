@@ -1,3 +1,4 @@
+import { readScopedStoragePreferHostForCleaner } from './cleanerHostScopedStorage'
 import { readScopedStorage, writeScopedStorage } from './sessionStorageScope'
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
@@ -96,8 +97,8 @@ function shouldAutoFillAddress(stored: string | undefined) {
 }
 
 export async function enrichReservationAccessAddressesFromIcal(): Promise<boolean> {
-  const rawChannels = readScopedStorage(CHANNEL_STORAGE_KEY)
-  const rawAccess = readScopedStorage(ACCESS_STORAGE_KEY)
+  const rawChannels = readScopedStoragePreferHostForCleaner(CHANNEL_STORAGE_KEY)
+  const rawAccess = readScopedStoragePreferHostForCleaner(ACCESS_STORAGE_KEY)
   if (!rawAccess) return false
 
   let connected: Partial<Record<ChannelKey, boolean>> = {}

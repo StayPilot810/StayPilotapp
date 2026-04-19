@@ -1,4 +1,4 @@
-import { readScopedStorage } from './sessionStorageScope'
+import { readScopedStoragePreferHostForCleaner } from './cleanerHostScopedStorage'
 export const OFFICIAL_CHANNEL_SYNC_KEY = 'staypilot_official_channel_sync'
 
 export type OfficialChannelOtaLinks = {
@@ -10,7 +10,7 @@ export type OfficialSyncedProperty = {
   id: string
   name: string
   address?: string
-  /** Présence de liens OTA détectée dans la réponse du channel (ex. champs Beds24). */
+  /** Présence de liens OTA détectée dans la réponse du channel (ex. Beds24, Lodgify, SuperHote…). */
   channelLinks?: OfficialChannelOtaLinks
 }
 
@@ -46,7 +46,7 @@ export type OfficialChannelSyncData = {
 
 export function readOfficialChannelSyncData(): OfficialChannelSyncData | null {
   try {
-    const raw = readScopedStorage(OFFICIAL_CHANNEL_SYNC_KEY)
+    const raw = readScopedStoragePreferHostForCleaner(OFFICIAL_CHANNEL_SYNC_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as OfficialChannelSyncData
     if (!Array.isArray(parsed?.properties) || !Array.isArray(parsed?.bookings)) return null

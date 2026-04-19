@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
-import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
+import {
+  readScopedStoragePreferHostForCleaner,
+  writeScopedStoragePreferHostForCleaner,
+} from '../utils/cleanerHostScopedStorage'
 import { isTestModeEnabled } from '../utils/testMode'
 
 type SupplyRow = {
@@ -126,7 +129,7 @@ function syncRowsToConnectedListings(prev: SupplyRow[], listingNames: string[]):
 
 function initialSuppliesState(): { rows: SupplyRow[]; snapshot: string } {
   try {
-    const raw = readScopedStorage(STORAGE_ROWS_KEY)
+    const raw = readScopedStoragePreferHostForCleaner(STORAGE_ROWS_KEY)
     const base = raw ? (JSON.parse(raw) as SupplyRow[]) : SUPPLIES_V1
     const opts = getApartmentOptionsFromConnections()
     const rows = opts.length ? syncRowsToConnectedListings(base, opts) : base
@@ -428,7 +431,7 @@ export function DashboardSuppliesPage() {
   )
 
   const saveAll = () => {
-    writeScopedStorage(STORAGE_ROWS_KEY, JSON.stringify(rows))
+    writeScopedStoragePreferHostForCleaner(STORAGE_ROWS_KEY, JSON.stringify(rows))
     setSavedSnapshot(JSON.stringify({ rows }))
     setHasPendingChanges(false)
   }
