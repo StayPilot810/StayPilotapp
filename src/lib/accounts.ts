@@ -30,6 +30,11 @@ export function normalizeStoredLoginPiece(value: unknown) {
   return String(value ?? '').trim().toLowerCase()
 }
 
+/** Champ compte lu depuis JSON (prénom, username, etc.) : toujours une chaîne, jamais d’appel `.trim()` sur un non-string. */
+export function safeAccountText(value: unknown) {
+  return String(value ?? '').trim()
+}
+
 /** Identifiant courant (email ou username) déjà en minuscules — tolère champs non-string après JSON.parse. */
 export function storedAccountMatchesNormalizedId(
   a: Pick<StoredAccount, 'email' | 'username'>,

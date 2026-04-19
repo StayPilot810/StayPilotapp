@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { findAccountForLogin, getStoredAccounts, saveStoredAccounts, type StoredAccount } from '../lib/accounts'
+import {
+  clearLocalAccountsIfRemoteServerEmpty,
+  findAccountForLogin,
+  getStoredAccounts,
+  normalizeStoredLoginPiece,
+  saveStoredAccounts,
+  storedAccountMatchesNormalizedId,
+  type StoredAccount,
+} from '../lib/accounts'
 import {
   isServerAccountsMandatory,
   serverAccountsConfigErrorMessage,
@@ -26,7 +34,6 @@ export function LoginPage() {
   const [autoConnected, setAutoConnected] = useState(false)
   const [connected, setConnected] = useState(false)
   const [loginError, setLoginError] = useState('')
-  const [accountsCount, setAccountsCount] = useState(0)
   const [forgotOpen, setForgotOpen] = useState(false)
   const [forgotIdentifier, setForgotIdentifier] = useState('')
   const [forgotCodeInput, setForgotCodeInput] = useState('')
@@ -63,8 +70,11 @@ export function LoginPage() {
   }, [])
 
   useEffect(() => {
-    const accounts = getStoredAccounts()
-    setAccountsCount(accounts.length)
+    if (remoteKvOk !== true) return
+    void clearLocalAccountsIfRemoteServerEmpty()
+  }, [remoteKvOk])
+
+  useEffect(() => {
     const remembered = localStorage.getItem(LS_REMEMBER) === 'true'
     const savedIdentifier = localStorage.getItem(LS_IDENTIFIER) ?? ''
     const sessionActive = localStorage.getItem(LS_SESSION_ACTIVE) === 'true'
@@ -131,9 +141,9 @@ export function LoginPage() {
         const data = await res.json().catch(() => ({}))
         if (res.ok && Array.isArray(data.accounts)) {
           saveStoredAccounts(data.accounts as StoredAccount[])
-          const idNorm = normalize(identifier)
-          const account = (data.accounts as StoredAccount[]).find(
-            (a) => normalize(a.email) === idNorm || normalize(a.username) === idNorm,
+          const idNorm = normalizeStoredLoginPiece(identifier)
+          const account = (data.accounts as StoredAccount[]).find((a) =>
+            storedAccountMatchesNormalizedId(a, idNorm),
           )
           if (account) {
             applyLoginSuccess(account)
@@ -179,15 +189,8 @@ export function LoginPage() {
     applyLoginSuccess(account)
   }
 
-  function normalize(value: string) {
-    return value.trim().toLowerCase()
-  }
-
   function findAccountByIdentifier(rawIdentifier: string) {
-    const idNorm = normalize(rawIdentifier)
-    return getStoredAccounts().find(
-      (a) => normalize(a.email) === idNorm || normalize(a.username) === idNorm,
-    )
+    return getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, rawIdentifier))
   }
 
   function otpStorageKeyForEmail(targetEmail: string) {
@@ -455,11 +458,6 @@ export function LoginPage() {
             {t.loginBack}
           </a>
           <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-[2rem]">{t.loginTitle}</h1>
-          <p className="mt-2 text-center text-xs font-medium text-zinc-500">
-            {accountsCount > 0
-              ? `${accountsCount} ${t.loginAccountsDetectedSome}`
-              : t.loginAccountsDetectedNone}
-          </p>
 
           {autoConnected ? (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">

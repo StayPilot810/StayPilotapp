@@ -3,7 +3,12 @@ import { jsPDF } from 'jspdf'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Locale } from '../i18n/navbar'
-import { getStoredAccounts, normalizeStoredLoginPiece, storedAccountMatchesNormalizedId } from '../lib/accounts'
+import {
+  getStoredAccounts,
+  normalizeStoredLoginPiece,
+  safeAccountText,
+  storedAccountMatchesNormalizedId,
+} from '../lib/accounts'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
 import { getOfficialCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
@@ -896,7 +901,7 @@ export function DashboardCleaningPage() {
     return uniq.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
   }, [invoices])
   const hasRegisteredProviders = providerOptions.length > 0
-  const cleanerInvoiceProviderName = cleanerDisplayName.trim() || currentAccount?.username?.trim() || ''
+  const cleanerInvoiceProviderName = cleanerDisplayName.trim() || safeAccountText(currentAccount?.username) || ''
   const effectiveInvoiceProvider = isHostSession ? provider.trim() : cleanerInvoiceProviderName
   const currentUsername = (currentAccount?.username || currentUser || '').trim().toLowerCase()
   const hostCleanerAccounts = useMemo(() => {
@@ -1373,7 +1378,7 @@ export function DashboardCleaningPage() {
     if (!label.trim() || !canSendInvoice || !month || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return
     const senderUsername = currentUsername
     if (!senderUsername) return
-    const hostRecipient = currentAccount?.hostUsername?.trim() || ''
+    const hostRecipient = safeAccountText(currentAccount?.hostUsername)
     const selectedCleaner = hostCleanerOptions.find((o) => o.label === provider.trim())
     const recipientUsername = isHostSession ? (selectedCleaner?.username || '').trim() : hostRecipient
     if (!recipientUsername) return

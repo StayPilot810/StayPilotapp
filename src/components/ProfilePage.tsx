@@ -3,6 +3,7 @@ import { Check, Eye, EyeOff } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import {
   getStoredAccounts,
+  safeAccountText,
   saveStoredAccounts,
   storedAccountMatchesNormalizedId,
   type StoredAccount,
@@ -1565,12 +1566,12 @@ export function ProfilePage() {
   }
 
   async function requestPasswordOtp(flow: 'change' | 'forgot') {
-    const targetEmail = (email || account?.email || '').trim()
+    const targetEmail = String(email || account?.email || '').trim()
     if (!targetEmail) {
       setSaveMsg("Adresse e-mail manquante pour envoyer le code.")
       return
     }
-    if (!account?.username?.trim()) {
+    if (!safeAccountText(account?.username)) {
       setSaveMsg('Compte incomplet (identifiant manquant).')
       return
     }
@@ -1582,7 +1583,7 @@ export function ProfilePage() {
         const res = await fetch('/api/auth-password-otp-request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: account.username.trim() }),
+          body: JSON.stringify({ identifier: safeAccountText(account.username) }),
         })
         if (res.status === 404) {
           setSaveMsg('Compte introuvable.')
@@ -1683,7 +1684,7 @@ export function ProfilePage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              username: account.username.trim(),
+              username: safeAccountText(account.username),
               oldPassword: currentPasswordInput,
               newPassword: newPasswordInput,
             }),
@@ -1814,7 +1815,7 @@ export function ProfilePage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              identifier: account.username.trim(),
+              identifier: safeAccountText(account.username),
               code: forgotOtpInput.trim(),
               newPassword: forgotNewPasswordInput,
             }),
@@ -1914,12 +1915,12 @@ export function ProfilePage() {
   }
 
   async function validatePasswordOtp(flow: 'change' | 'forgot') {
-    const targetEmail = (email || account?.email || '').trim()
+    const targetEmail = String(email || account?.email || '').trim()
     if (!targetEmail) {
       setSaveMsg("Adresse e-mail manquante pour vérifier le code.")
       return
     }
-    if (!account?.username?.trim()) {
+    if (!safeAccountText(account?.username)) {
       setSaveMsg('Compte incomplet (identifiant manquant).')
       return
     }
@@ -1934,7 +1935,7 @@ export function ProfilePage() {
         const res = await fetch('/api/auth-verify-password-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: account.username.trim(), code: input.trim() }),
+          body: JSON.stringify({ identifier: safeAccountText(account.username), code: input.trim() }),
         })
         if (!res.ok) {
           setSaveMsg('Code invalide ou expire. Demandez un nouveau code.')

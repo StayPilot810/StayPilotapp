@@ -103,7 +103,7 @@ export function DashboardPage() {
     const host = accounts.find(
       (a) => normalizeStoredLoginPiece(a.username) === hostUsername && (a.role || 'host') === 'host',
     )
-    if (!host) return cleaner.hostUsername?.trim() || ''
+    if (!host) return String(cleaner.hostUsername ?? '').trim() || ''
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
   }, [isCleanerSession])
 

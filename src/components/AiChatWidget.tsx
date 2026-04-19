@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { useAppPathname } from '../hooks/useAppPathname'
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { CONTACT_EMAIL } from '../i18n/contactPage'
-import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
+import { getStoredAccounts, safeAccountText, storedAccountMatchesNormalizedId } from '../lib/accounts'
 
 type ChatTurn =
   | { role: 'assistant'; content: string }
@@ -82,7 +82,7 @@ export function AiChatWidget() {
     currentUserKey && typeof window !== 'undefined'
       ? getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, currentUserKey))
       : undefined
-  const customerFirstName = activeAccount?.firstName?.trim() || ''
+  const customerFirstName = safeAccountText(activeAccount?.firstName)
   const isIdentifiedSession = sessionLoggedIn && currentUserKey.length > 0
   const storageKey = isIdentifiedSession ? `staypilot_ai_chat_history_${currentUserKey}` : ''
 
