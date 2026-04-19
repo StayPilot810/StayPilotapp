@@ -22,6 +22,7 @@ import {
 } from '../utils/hostPublishedReviews'
 import { moderateHostReviewQuote } from '../utils/reviewModeration'
 import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur } from '../utils/planPricing'
+import { getPlanTierFromValue } from '../utils/subscriptionAccess'
 
 const LS_IDENTIFIER = 'staypilot_login_identifier'
 const LS_CURRENT_PLAN = 'staypilot_current_plan'
