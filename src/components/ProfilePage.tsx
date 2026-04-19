@@ -11,7 +11,7 @@ import {
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { pricingPlansTranslations } from '../i18n/pricingPlans'
 import { MOCK_BOOKINGS } from '../data/demoCalendarBookings'
-import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { getConnectedApartmentsFromStorage, getConnectedListingsCountRaw } from '../utils/connectedApartments'
 import { CONTACT_EMAIL } from '../i18n/contactPage'
 import {
   appendHostPublishedReview,
@@ -22,7 +22,8 @@ import {
 } from '../utils/hostPublishedReviews'
 import { moderateHostReviewQuote } from '../utils/reviewModeration'
 import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur } from '../utils/planPricing'
-import { getPlanTierFromValue } from '../utils/subscriptionAccess'
+import { getListingLimitForPlan, getPlanTierFromValue } from '../utils/subscriptionAccess'
+import { getClientInvoicePdfLabels, normalizeClientInvoicePdfLang } from '../utils/clientInvoicePdfI18n'
 
 const LS_IDENTIFIER = 'staypilot_login_identifier'
 const LS_CURRENT_PLAN = 'staypilot_current_plan'
@@ -120,6 +121,31 @@ function normalizePlanLabel(raw: string) {
   if (normalized === 'pro') return 'Pro'
   if (normalized === 'scale') return 'Scale'
   return 'Starter'
+}
+
+function planChangeRemoteErrorMessage(code?: string, detail?: string) {
+  switch (String(code || '').trim()) {
+    case 'invalid_password':
+      return 'Mot de passe du compte refusé par le serveur. Déconnectez-vous puis reconnectez-vous et réessayez.'
+    case 'no_active_subscription':
+      return "Aucun abonnement actif n'est lié à ce compte côté paiement. Terminez l'inscription ou contactez le support."
+    case 'stripe_unavailable':
+      return 'Le service de paiement est momentanément indisponible. Réessayez plus tard.'
+    case 'stripe_update_failed':
+      return detail
+        ? `Stripe a refusé le changement : ${detail}`
+        : 'Stripe a refusé le changement. Vérifiez votre moyen de paiement ou contactez le support.'
+    case 'missing_plan_price_id':
+      return 'Les tarifs catalogue ne sont pas configurés sur le serveur (variables Stripe).'
+    case 'subscription_mismatch':
+      return "L'abonnement Stripe ne correspond pas à ce compte. Contactez le support."
+    case 'plan_sync_failed':
+      return 'Stripe a été mis à jour mais la mise à jour du compte a échoué. Contactez le support.'
+    case 'account_not_found':
+      return 'Compte introuvable sur le serveur.'
+    default:
+      return 'Impossible de finaliser le changement de forfait. Réessayez ou contactez le support.'
+  }
 }
 
 function addDays(baseIso: string, days: number) {
@@ -396,6 +422,10 @@ export function ProfilePage() {
   })
   const [planChangeConfirmOpen, setPlanChangeConfirmOpen] = useState(false)
   const [planChangeLoading, setPlanChangeLoading] = useState(false)
+  const starterListingLimit = getListingLimitForPlan('starter') ?? 0
+  const connectedListingsCountRaw = getConnectedListingsCountRaw()
+  const showStarterListingsCapWarning =
+    getPlanTierFromValue(planSelection) === 'starter' && connectedListingsCountRaw > starterListingLimit
   const [clientInvoices, setClientInvoices] = useState<ClientAutoInvoice[]>(() => {
     try {
       const raw = localStorage.getItem(LS_CLIENT_AUTO_INVOICES)
@@ -445,6 +475,19 @@ export function ProfilePage() {
       .toUpperCase()
       .slice(0, 2) || 'FR',
   )
+
+  useEffect(() => {
+    const cc = String(account?.countryCode ?? 'FR')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+      .slice(0, 2)
+    setInvoiceCountryCode(cc.length === 2 ? cc : 'FR')
+  }, [account?.countryCode])
+
+  useEffect(() => {
+    setInvoiceClientType(account?.clientType === 'b2b' && account?.vatVerified ? 'b2b' : 'b2c')
+  }, [account?.clientType, account?.vatVerified])
 
   useEffect(() => {
     const sync = () => setExistingHostReview(getHostReviewForAccount(reviewAccountKey))
@@ -582,7 +625,7 @@ export function ProfilePage() {
       const planLabel = normalizePlanLabel(String(currentPlan || 'Starter'))
       const vatRateByCountry: Record<string, number> = {
         FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
-        SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
+        SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, EL: 24, HR: 25, HU: 27,
         SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
       }
       const normalizedCountry = String(invoiceCountryCode).trim().toUpperCase() || 'FR'
@@ -630,7 +673,20 @@ export function ProfilePage() {
     } catch {
       /* évite de faire tomber toute l’app si données localStorage atypiques */
     }
-  }, [account?.email, account?.vatVerified, billingAutopay.nextDueIso, billingAutopay.paymentMethodValid, currentPlan, email, firstName, invoiceClientType, invoiceCountryCode, lastName, username])
+  }, [
+    account?.countryCode,
+    account?.email,
+    account?.vatVerified,
+    billingAutopay.nextDueIso,
+    billingAutopay.paymentMethodValid,
+    currentPlan,
+    email,
+    firstName,
+    invoiceClientType,
+    invoiceCountryCode,
+    lastName,
+    username,
+  ])
 
   function savePersonalInfo() {
     if (accountIndex < 0 || !personalFormValid) return
@@ -1153,17 +1209,56 @@ export function ProfilePage() {
       const effectiveAtIso = Number.isFinite(billingDue.getTime())
         ? billingDue.toISOString()
         : new Date().toISOString()
+
+      let stripeUpgradeHandled = false
+      let resolvedPlanLabel = nextPlan
+
+      if (isUpgrade) {
+        const st = await fetch('/api/auth-status', { method: 'GET' }).then((r) => r.json().catch(() => ({})))
+        if (st?.remoteAuth) {
+          if (!account?.id || !account?.password) {
+            setSaveMsg(
+              'Le compte en ligne nécessite une session avec mot de passe. Déconnectez-vous puis reconnectez-vous avant de changer de forfait.',
+            )
+            return
+          }
+          const planKey = getPlanTierFromValue(nextPlan)
+          const res = await fetch('/api/stripe-change-subscription-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: account.id,
+              planKey,
+              password: account.password,
+            }),
+          })
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: string
+            plan?: string
+            message?: string
+          }
+          if (!res.ok) {
+            setSaveMsg(planChangeRemoteErrorMessage(data?.error, data?.message))
+            return
+          }
+          stripeUpgradeHandled = true
+          if (typeof data.plan === 'string' && data.plan.trim()) {
+            resolvedPlanLabel = normalizePlanLabel(data.plan.trim())
+          }
+        }
+      }
+
       if (isUpgrade) {
         localStorage.removeItem(`${LS_PLAN_CHANGE_POLICY_PREFIX}${planChangeAccountKey}`)
         setPlanPolicy(null)
-        localStorage.setItem(LS_CURRENT_PLAN, nextPlan)
+        localStorage.setItem(LS_CURRENT_PLAN, resolvedPlanLabel)
         if (accountIndex >= 0) {
           const next = [...accounts]
-          next[accountIndex] = { ...next[accountIndex], plan: nextPlan }
+          next[accountIndex] = { ...next[accountIndex], plan: resolvedPlanLabel }
           saveStoredAccounts(next)
         }
-        setCurrentPlan(nextPlan)
-        setPlanSelection(nextPlan)
+        setCurrentPlan(resolvedPlanLabel)
+        setPlanSelection(resolvedPlanLabel)
       } else {
         const policyPayload: PlanChangePolicyState = {
           requestedAtIso: new Date().toISOString(),
@@ -1189,7 +1284,7 @@ export function ProfilePage() {
               firstName: safeAccountText(firstName),
               locale: mailLocale,
               oldPlan,
-              newPlan: nextPlan,
+              newPlan: isUpgrade ? resolvedPlanLabel : nextPlan,
               nextBillingIso: effectiveAtIso,
             }),
           })
@@ -1200,11 +1295,17 @@ export function ProfilePage() {
       }
       setSaveMsg(
         isUpgrade
-          ? mailSent
-            ? `Upgrade appliqué immédiatement (${oldPlan} -> ${nextPlan}). E-mail de confirmation envoyé. Nouveau tarif facturé à partir du ${fmtLongDate(
-                effectiveAtIso,
-              )}.`
-            : `Upgrade appliqué immédiatement (${oldPlan} -> ${nextPlan}). Nouveau tarif facturé à partir du ${fmtLongDate(effectiveAtIso)}.`
+          ? stripeUpgradeHandled
+            ? mailSent
+              ? `Nouveau forfait ${resolvedPlanLabel} enregistré (Stripe + compte). E-mail de confirmation envoyé. Prochain prélèvement au nouveau tarif à partir du ${fmtLongDate(
+                  effectiveAtIso,
+                )}.`
+              : `Nouveau forfait ${resolvedPlanLabel} enregistré (Stripe + compte). Prochain prélèvement au nouveau tarif à partir du ${fmtLongDate(effectiveAtIso)}.`
+            : mailSent
+              ? `Upgrade appliqué immédiatement (${oldPlan} -> ${resolvedPlanLabel}). E-mail de confirmation envoyé. Nouveau tarif facturé à partir du ${fmtLongDate(
+                  effectiveAtIso,
+                )}.`
+              : `Upgrade appliqué immédiatement (${oldPlan} -> ${resolvedPlanLabel}). Nouveau tarif facturé à partir du ${fmtLongDate(effectiveAtIso)}.`
           : mailSent
             ? `Downgrade programmé (${oldPlan} -> ${nextPlan}). Vous gardez vos accès actuels jusqu'au ${fmtLongDate(
                 effectiveAtIso,
@@ -1451,6 +1552,7 @@ export function ProfilePage() {
 
   function generateClientInvoicePdf(invoice: ClientAutoInvoice) {
     const company = companyInvoiceIdentity()
+    const L = getClientInvoicePdfLabels(normalizeClientInvoicePdfLang(pricingLocale))
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const issueLabel = fmtLongDate(invoice.issuedAtIso)
     const dueLabel = fmtLongDate(invoice.dueAtIso)
@@ -1463,48 +1565,46 @@ export function ProfilePage() {
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(17)
-    doc.text('FACTURE CLIENT - STAYPILOT', 14, 18)
+    doc.text(L.title, 14, 18)
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(11)
-    doc.text(`Societe: ${company.name}`, 14, 28)
-    doc.text(`Adresse: ${company.address}`, 14, 34)
-    doc.text(`Formation: ${company.formationNo} | Licence: ${company.licenseNo}`, 14, 40)
+    doc.text(`${L.company}: ${company.name}`, 14, 28)
+    doc.text(`${L.address}: ${company.address}`, 14, 34)
+    doc.text(`${L.formation}: ${company.formationNo} | ${L.licence}: ${company.licenseNo}`, 14, 40)
 
     doc.setFont('helvetica', 'bold')
-    doc.text('Facture pour', 14, 52)
+    doc.text(L.invoiceFor, 14, 52)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Client: ${invoice.clientName}`, 14, 58)
-    doc.text(`E-mail: ${invoice.clientEmail}`, 14, 64)
-    doc.text(`Bien: ${invoice.apartment}`, 14, 70)
+    doc.text(`${L.client}: ${invoice.clientName}`, 14, 58)
+    doc.text(`${L.email}: ${invoice.clientEmail}`, 14, 64)
+    doc.text(`${L.property}: ${invoice.apartment}`, 14, 70)
 
     doc.setFont('helvetica', 'bold')
-    doc.text('Ligne de facturation', 14, 84)
+    doc.text(L.billingLine, 14, 84)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Description: Abonnement StayPilot - ${invoice.planLabel}`, 14, 90)
-    doc.text(`Date emission: ${issueLabel}`, 14, 96)
-    doc.text(`Date échéance: ${dueLabel}`, 14, 102)
-    doc.text(`Montant HT: ${amountHtLabel}`, 14, 108)
-    doc.text(`TVA (${invoice.vatRate}%): ${vatLabel}`, 14, 114)
-    doc.text(`Montant TTC: ${amountTtcLabel}`, 14, 120)
-    doc.text(`Type client: ${invoice.clientType.toUpperCase()} - Pays: ${invoice.countryCode}`, 14, 126)
+    doc.text(`${L.description}: ${L.subscriptionPrefix} - ${invoice.planLabel}`, 14, 90)
+    doc.text(`${L.issueDate}: ${issueLabel}`, 14, 96)
+    doc.text(`${L.dueDate}: ${dueLabel}`, 14, 102)
+    doc.text(`${L.amountHT}: ${amountHtLabel}`, 14, 108)
+    doc.text(`${L.vat} (${invoice.vatRate}%): ${vatLabel}`, 14, 114)
+    doc.text(`${L.amountTTC}: ${amountTtcLabel}`, 14, 120)
     doc.text(
-      invoice.taxMode === 'reverse_charge'
-        ? 'Mention fiscale: Autoliquidation de la TVA (B2B).'
-        : `Mention fiscale: TVA collectee selon le taux ${invoice.vatRate}% (${invoice.countryCode}).`,
+      `${L.clientType}: ${invoice.clientType.toUpperCase()} - ${L.country}: ${invoice.countryCode}`,
       14,
-      132,
+      126,
     )
+    const mention =
+      invoice.taxMode === 'reverse_charge' ? L.mentionReverse : L.mentionCollected(invoice.vatRate, invoice.countryCode)
+    doc.text(mention, 14, 132)
 
     doc.setFontSize(10)
-    doc.text(
-      "Paiement : le changement de forfait n'est pas débité immédiatement. Le nouveau tarif s'applique à la prochaine échéance.",
-      14,
-      140,
-    )
+    const paymentLines = doc.splitTextToSize(L.paymentNote, 182)
+    doc.text(paymentLines, 14, 140)
 
     doc.setFont('helvetica', 'bold')
-    doc.text('Merci pour votre confiance.', 14, 154)
+    const thanksY = 140 + Math.max(6, paymentLines.length * 5)
+    doc.text(L.thanks, 14, thanksY)
 
     const out = `facture-client-${invoice.clientName.toLowerCase().replace(/\s+/g, '-')}-${invoice.id}.pdf`
     doc.save(out)
@@ -1520,11 +1620,11 @@ export function ProfilePage() {
     try {
       const digits = paymentCardNumber.replace(/\D/g, '')
       if (digits.length < 13 || digits.length > 19) {
-        setSaveMsg('Veuillez saisir un numero de carte valide.')
+        setSaveMsg('Veuillez saisir un numéro de carte valide.')
         return
       }
       if (!luhnCheck(digits)) {
-        setSaveMsg('Numero de carte invalide. Verifiez les chiffres saisis.')
+        setSaveMsg('Numéro de carte invalide. Vérifiez les chiffres saisis.')
         return
       }
       const cvcDigits = paymentCvc.replace(/\D/g, '')
@@ -1533,7 +1633,9 @@ export function ProfilePage() {
         return
       }
       if (!expiryIsValid(paymentExpiry.trim()) || !paymentHolder.trim()) {
-        setSaveMsg('Veuillez completer les coordonnees bancaires (carte + titulaire + expiration + code securite).')
+        setSaveMsg(
+          'Veuillez compléter les coordonnées bancaires (carte + titulaire + expiration + code de sécurité).',
+        )
         return
       }
       if (paymentHolder.trim().length < 3) {
@@ -1884,7 +1986,7 @@ export function ProfilePage() {
           })
         } catch {
           setForgotPasswordLoading(false)
-          setSaveMsg('Reinitialisation impossible pour le moment.')
+          setSaveMsg('Réinitialisation impossible pour le moment.')
           return
         }
         const data = await res.json().catch(() => ({}))
@@ -1893,7 +1995,7 @@ export function ProfilePage() {
           setSaveMsg(
             data?.error === 'invalid_code' || data?.error === 'otp_expired'
               ? 'Code invalide ou expire. Demandez un nouveau code.'
-              : 'Reinitialisation impossible pour le moment.',
+              : 'Réinitialisation impossible pour le moment.',
           )
           return
         }
@@ -2147,6 +2249,18 @@ export function ProfilePage() {
                   En cas de changement aujourd’hui, vous gardez votre tarif actuel jusqu’à la prochaine échéance. Le
                   nouveau montant est débité uniquement le mois prochain.
                 </p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Les changements de forfait doivent être effectués de bonne foi. Des allers-retours répétés ou
+                  manifestement abusifs peuvent être refusés ou alignés sur le forfait correspondant à l’usage réel du
+                  service, comme prévu aux{' '}
+                  <a
+                    href="/cgu"
+                    className="font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
+                  >
+                    conditions générales d’utilisation (CGU)
+                  </a>
+                  .
+                </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <select
                     value={planSelection}
@@ -2165,6 +2279,26 @@ export function ProfilePage() {
                     Valider le changement
                   </button>
                 </div>
+                {showStarterListingsCapWarning ? (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <p className="font-semibold">Logements connectés</p>
+                    <p className="mt-1">
+                      Vous avez <strong>{connectedListingsCountRaw}</strong> logement
+                      {connectedListingsCountRaw > 1 ? 's' : ''} connecté
+                      {connectedListingsCountRaw > 1 ? 's' : ''}. Le forfait Starter n’en active que{' '}
+                      <strong>{starterListingLimit}</strong> à la fois : les autres ne s’affichent plus dans le tableau
+                      de bord tant que vous restez sur ce forfait (ordre défini par la synchronisation).
+                    </p>
+                    <p className="mt-2">
+                      <a
+                        href="/dashboard/connecter-logements"
+                        className="font-semibold text-amber-900 underline decoration-amber-700 underline-offset-2 hover:text-amber-950"
+                      >
+                        Choisir / gérer mes logements connectés
+                      </a>
+                    </p>
+                  </div>
+                ) : null}
               </div>
               {planPolicy && Date.now() < new Date(planPolicy.effectiveAtIso).getTime() ? (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
@@ -2204,6 +2338,25 @@ export function ProfilePage() {
                       </p>
                     )
                   })()}
+                  {showStarterListingsCapWarning ? (
+                    <div className="mt-3 rounded-lg border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-950">
+                      <p className="font-semibold">Rappel Starter (3 logements actifs)</p>
+                      <p className="mt-1">
+                        Avec <strong>{connectedListingsCountRaw}</strong> logement
+                        {connectedListingsCountRaw > 1 ? 's' : ''} connecté
+                        {connectedListingsCountRaw > 1 ? 's' : ''}, seuls les <strong>{starterListingLimit}</strong>{' '}
+                        premiers resteront visibles après prise d’effet du forfait Starter.
+                      </p>
+                      <p className="mt-2">
+                        <a
+                          href="/dashboard/connecter-logements"
+                          className="font-semibold text-amber-900 underline decoration-amber-700 underline-offset-2 hover:text-amber-950"
+                        >
+                          Choisir / gérer mes logements connectés
+                        </a>
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="mt-1 text-xs">
                     Une fois confirmé, ce changement est verrouillé jusqu’à la prochaine échéance de facturation.
                   </p>
@@ -2276,7 +2429,7 @@ export function ProfilePage() {
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
                 Statut paiement :{' '}
                 {billingRecovery?.suspended
-                  ? 'Suspendu (coordonnees bancaires requises)'
+                  ? 'Suspendu (coordonnées bancaires requises)'
                   : billingCancellation
                     ? 'Résiliation programmée'
                     : 'Actif'}
@@ -2297,7 +2450,7 @@ export function ProfilePage() {
                   </p>
                   <p className="mt-1">
                     {billingRecovery.suspended
-                      ? 'L acces est bloque jusqu a la mise a jour des coordonnees bancaires.'
+                      ? "L'accès est bloqué jusqu'à la mise à jour des coordonnées bancaires."
                       : `Nouvelle tentative automatique chaque jour. Suspension au 3e echec.`}
                   </p>
                 </div>
@@ -2434,8 +2587,8 @@ export function ProfilePage() {
                     actif.
                   </p>
                   <p className="mt-1">
-                    A partir du <strong>{fmtLongDate(accessCutoffDateIso(billingCancellation.endAtIso))}</strong>, vous
-                    n aurez plus acces aux services premium.
+                    À partir du <strong>{fmtLongDate(accessCutoffDateIso(billingCancellation.endAtIso))}</strong>, vous
+                    n&apos;aurez plus accès aux services premium.
                   </p>
                 </div>
               ) : null}
@@ -2454,7 +2607,7 @@ export function ProfilePage() {
                   </p>
                 ) : latestInvoice ? (
                   <p className="mt-1 text-sm text-zinc-700">
-                    Dernière facture: plan <strong>{String(latestInvoice.planLabel ?? '')}</strong> —{' '}
+                    Dernière facture : plan <strong>{String(latestInvoice.planLabel ?? '')}</strong> —{' '}
                     <strong>
                       {Number.isFinite(Number(latestInvoice.amountEur))
                         ? Number(latestInvoice.amountEur).toFixed(2)
@@ -2636,11 +2789,15 @@ export function ProfilePage() {
                       placeholder="FR"
                       className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     />
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      Aligné sur le pays du compte à l&apos;inscription (ou après vérification TVA). Vous pouvez
+                      l&apos;ajuster manuellement si besoin — le taux TVA sur la facture suit ce code.
+                    </p>
                   </label>
                 </div>
                 {clientInvoices.length > 0 ? (
                   <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                    <p className="text-xs font-semibold text-zinc-700">Dernieres factures generees</p>
+                    <p className="text-xs font-semibold text-zinc-700">Dernières factures générées</p>
                     <div className="mt-2 space-y-1 text-xs text-zinc-600">
                       {clientInvoices.slice(0, 5).map((inv) => (
                         <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5">
@@ -2847,7 +3004,7 @@ export function ProfilePage() {
               {forgotPasswordOpen ? (
                 <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
                   <p className="text-xs text-zinc-600">
-                    Reinitialisation locale du mot de passe. Une confirmation est envoyee par e-mail.
+                    Réinitialisation locale du mot de passe. Une confirmation est envoyée par e-mail.
                   </p>
                   <div className="grid grid-cols-3 gap-2 text-[11px]">
                     <div className={`rounded-md border px-2 py-1 text-center font-semibold ${forgotOtpRequested ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-zinc-200 bg-white text-zinc-500'}`}>
@@ -2857,7 +3014,7 @@ export function ProfilePage() {
                       2. Valider le code
                     </div>
                     <div className={`rounded-md border px-2 py-1 text-center font-semibold ${forgotOtpValidated ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-500'}`}>
-                      3. Reinitialiser
+                      3. Réinitialiser
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -2936,7 +3093,7 @@ export function ProfilePage() {
                     disabled={forgotPasswordLoading || !forgotOtpValidated}
                     className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {forgotPasswordLoading ? 'Reinitialisation...' : 'Reinitialiser le mot de passe'}
+                    {forgotPasswordLoading ? 'Réinitialisation…' : 'Réinitialiser le mot de passe'}
                   </button>
                 </div>
               ) : null}

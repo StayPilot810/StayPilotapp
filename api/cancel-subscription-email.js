@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   } catch (e) {
     res.status(500).json({
       error: 'email_send_failed',
-      message: e instanceof Error ? e.message : 'Erreur envoi e-mail',
+      message: e instanceof Error ? e.message : "Erreur d'envoi d'e-mail",
     })
   }
 }

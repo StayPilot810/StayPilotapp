@@ -318,14 +318,6 @@ export function DashboardConnectPage() {
     notifyConnectionsUpdated()
   }, [accessInputs, connectedChannels])
 
-  const onSaveConnections = () => {
-    // Keep "connected" status tied to successful provider sync only.
-    // Saving credentials alone should not mark channels as connected.
-    writeScopedStorage(STORAGE_KEY, JSON.stringify(connectedChannels))
-    writeScopedStorage(RESERVATION_ACCESS_KEY, JSON.stringify(sanitizeAccessInputsForStorage(accessInputs)))
-    notifyConnectionsUpdated()
-  }
-
   const onConnectOne = async (platform: ChannelKey) => {
     const isValid = hasValidConnection(platform)
     if (!isValid) {
@@ -366,8 +358,8 @@ export function DashboardConnectPage() {
         }
 
         const localCall = await callSync('/api/channel-sync')
-        let syncRes = localCall.res
-        let syncJson: {
+        const syncRes = localCall.res
+        const syncJson: {
           ok?: boolean
           error?: string
           message?: string

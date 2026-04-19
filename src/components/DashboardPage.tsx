@@ -3,6 +3,7 @@ import { CalendarDays, ChartColumn, Gem, MessageCircle, Package, Sparkles, Walle
 import {
   getStoredAccounts,
   normalizeStoredLoginPiece,
+  saveStoredAccounts,
   storedAccountMatchesNormalizedId,
   type StoredAccount,
 } from '../lib/accounts'
@@ -55,6 +56,47 @@ export function DashboardPage() {
   const [currentPlanRaw, setCurrentPlanRaw] = useState('Pro')
 
   useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    if (sp.get('checkout') !== 'success') return
+    const sessionId = sp.get('session_id')?.trim()
+    if (!sessionId) return
+    const doneKey = `staypilot_host_checkout_done_${sessionId}`
+    if (sessionStorage.getItem(doneKey)) return
+    sessionStorage.setItem(doneKey, '1')
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/complete-host-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          accounts?: StoredAccount[]
+          accountId?: string
+        }
+        if (!res.ok || !data.ok || !Array.isArray(data.accounts)) return
+        saveStoredAccounts(data.accounts)
+        const acc =
+          (data.accountId && data.accounts.find((a) => a.id === data.accountId)) ||
+          data.accounts[data.accounts.length - 1]
+        if (!acc?.username) return
+        localStorage.setItem('staypilot_current_user', String(acc.username).trim())
+        localStorage.setItem('staypilot_login_identifier', String(acc.username).trim().toLowerCase())
+        localStorage.setItem('staypilot_session_active', 'true')
+        localStorage.setItem('staypilot_current_plan', String(acc.plan || 'Pro').trim())
+        localStorage.setItem('staypilot_current_role', String(acc.role || 'host').trim())
+        window.dispatchEvent(new Event('staypilot-session-changed'))
+        window.history.replaceState({}, '', '/dashboard')
+        window.location.reload()
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
     const localizePlanLabel = (plan: string) => {
       const normalized = plan.trim().toLowerCase()
       if (normalized === 'starter') return t.starterName
@@ -64,23 +106,27 @@ export function DashboardPage() {
       return plan
     }
 
-    const sessionPlan = localStorage.getItem('staypilot_current_plan')?.trim()
-    if (sessionPlan) {
-      setCurrentPlanRaw(sessionPlan)
-      setActivePlanLabel(localizePlanLabel(sessionPlan))
-      return
+    function applyPlanFromSession() {
+      const savedIdentifier = localStorage.getItem('staypilot_login_identifier')?.trim().toLowerCase()
+      const accounts = getStoredAccounts()
+      const currentAccount =
+        accounts.find((a) => storedAccountMatchesNormalizedId(a, savedIdentifier || '')) ?? accounts[0]
+      const accountPlan = (currentAccount?.plan || '').trim()
+      const sessionPlan = (localStorage.getItem('staypilot_current_plan') || '').trim()
+
+      const effective = accountPlan || sessionPlan || 'Pro'
+
+      if (accountPlan && accountPlan !== sessionPlan) {
+        localStorage.setItem('staypilot_current_plan', accountPlan)
+      }
+
+      setCurrentPlanRaw(effective)
+      setActivePlanLabel(localizePlanLabel(effective))
     }
 
-    const savedIdentifier = localStorage.getItem('staypilot_login_identifier')?.trim().toLowerCase()
-    const accounts = getStoredAccounts()
-
-    const currentAccount =
-      accounts.find((a) => storedAccountMatchesNormalizedId(a, savedIdentifier || '')) ?? accounts[0]
-
-    if (currentAccount?.plan) {
-      setCurrentPlanRaw(currentAccount.plan)
-      setActivePlanLabel(localizePlanLabel(currentAccount.plan))
-    }
+    applyPlanFromSession()
+    window.addEventListener('staypilot-session-changed', applyPlanFromSession)
+    return () => window.removeEventListener('staypilot-session-changed', applyPlanFromSession)
   }, [t.planFreeLabel, t.proName, t.scaleName, t.starterName])
   const planTier = useMemo(() => getPlanTierFromValue(currentPlanRaw), [currentPlanRaw])
 

@@ -35,14 +35,12 @@ export default async function handler(req, res) {
     const stripe = getStripeClient()
     const event = stripe.webhooks.constructEvent(rawBody, signature, secret)
 
-    // TODO: Persist this in DB when backend billing storage is ready.
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object
-      console.log('[stripe] checkout.session.completed', session.id)
-    }
-    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
-      const subscription = event.data.object
-      console.log(`[stripe] ${event.type}`, subscription.id)
+    const { processStripeBillingWebhook } = await import('../server/stripeBillingKv.mjs')
+    const billingResult = await processStripeBillingWebhook(event, process.env)
+    if (billingResult?.handled) {
+      console.log('[stripe] billing_kv', event.type, billingResult.reason || 'ok')
+    } else {
+      console.log('[stripe] event', event.type, billingResult?.reason || '')
     }
 
     res.status(200).json({ received: true })

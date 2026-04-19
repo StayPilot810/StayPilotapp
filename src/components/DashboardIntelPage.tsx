@@ -26,19 +26,6 @@ type HolidayItem = {
   name: string
 }
 
-type GdeltArticle = {
-  seendate?: string
-  title?: string
-}
-
-type EarthquakeFeature = {
-  properties?: {
-    mag?: number
-    time?: number
-    place?: string
-  }
-}
-
 type TicketmasterResponse = {
   _embedded?: {
     events?: Array<{
@@ -77,39 +64,11 @@ type BandsintownEvent = {
   datetime?: string
 }
 
-type SongkickResponse = {
-  resultsPage?: {
-    results?: {
-      event?: Array<{
-        displayName?: string
-        start?: { date?: string }
-        type?: string
-      }>
-    }
-  }
-}
-
 type MeetupResponse = {
   events?: Array<{
     name?: string
     dateTime?: string
   }>
-}
-
-type NewsApiResponse = {
-  articles?: Array<{
-    title?: string
-    publishedAt?: string
-  }>
-}
-
-type NytResponse = {
-  response?: {
-    docs?: Array<{
-      headline?: { main?: string }
-      pub_date?: string
-    }>
-  }
 }
 
 type PriceLabsResponse = {
@@ -193,27 +152,6 @@ const SKI_MARKERS = [
   'ski',
   'montagne',
 ]
-const MEGA_ARTISTS = ['jul', 'david guetta', 'taylor swift', 'coldplay', 'beyonce', 'drake']
-const MAJOR_SPORT_KEYWORDS = [
-  'f1',
-  'formula 1',
-  'grand prix',
-  'rugby',
-  'tennis',
-  'roland garros',
-  'wimbledon',
-  'football',
-  'soccer',
-  'american football',
-  'nfl',
-  'nba',
-  'basket',
-  'champions league',
-  'euro',
-  'world cup',
-  'olympic',
-]
-
 function emptyLiveSignalDay(): LiveSignalDay {
   return {
     concerts: 0,
@@ -278,15 +216,9 @@ function MapResizer() {
   return null
 }
 
-const INTEL_TUTORIAL_VO_OPTIONS = [
-  { lang: 'fr', src: '/intel-watch-tutorial.mp4' },
-  { lang: 'en', src: '/intel-watch-tutorial.en.mp4' },
-  { lang: 'es', src: '/intel-watch-tutorial.es.mp4' },
-  { lang: 'de', src: '/intel-watch-tutorial.de.mp4' },
-  { lang: 'it', src: '/intel-watch-tutorial.it.mp4' },
-] as const
+type IntelTutorialLang = 'fr' | 'en' | 'es' | 'de' | 'it'
 
-function normalizeTutorialLocale(locale: string): (typeof INTEL_TUTORIAL_VO_OPTIONS)[number]['lang'] {
+function normalizeTutorialLocale(locale: string): IntelTutorialLang {
   const value = locale.toLowerCase()
   if (value.startsWith('fr')) return 'fr'
   if (value.startsWith('en')) return 'en'
@@ -655,11 +587,10 @@ export function DashboardIntelPage() {
   const [isBroadCityAnalysis, setIsBroadCityAnalysis] = useState(false)
   const [targetPosition, setTargetPosition] = useState<[number, number] | null>(null)
   const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'custom'>('month')
-  const [pricingMode, setPricingMode] = useState<'standard' | 'ultra'>('ultra')
+  const [pricingMode] = useState<'standard' | 'ultra'>('ultra')
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
   const [rangeStart, setRangeStart] = useState(formatIsoDate(today))
   const [rangeEnd, setRangeEnd] = useState(formatIsoDate(plus30Days))
-  const [rangeError, setRangeError] = useState('')
   const [searchedLabel, setSearchedLabel] = useState('')
   const [locationContext, setLocationContext] = useState<LocationContext>({
     city: 'Paris',
@@ -676,8 +607,7 @@ export function DashboardIntelPage() {
   const [hoveredDayEvent, setHoveredDayEvent] = useState<{ date: string; event: string } | null>(null)
   const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
-  const [providerStatus, setProviderStatus] = useState<Record<string, 'connected' | 'missing_key' | 'error'>>({})
-  const [showWatchInfo, setShowWatchInfo] = useState(false)
+  const [, setProviderStatus] = useState<Record<string, 'connected' | 'missing_key' | 'error'>>({})
   const currentYear = new Date().getFullYear()
   const frenchSchoolHolidayRanges: DateRange[] = [
     { start: `${currentYear}-02-10`, end: `${currentYear}-03-10`, label: 'Vacances scolaires d hiver (zones FR)' },
@@ -817,7 +747,6 @@ export function DashboardIntelPage() {
       ? copy.analysisPrecisionMessage
       : ''
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'long' })
-  const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
   const localAddressNeedle = `${locationContext.city} ${locationContext.country}`.toLowerCase()
   const matchesLocalArea = (text: string) => {
     const normalized = (text || '').toLowerCase()

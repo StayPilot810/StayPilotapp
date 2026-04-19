@@ -1,7 +1,9 @@
 import Stripe from 'stripe'
+import { deletePendingHostCheckout, saveHostCheckoutPending } from './hostCheckoutPending.mjs'
 
 const PLAN_KEYS = ['starter', 'pro', 'scale']
-const B2C_TTC_MONTHLY_CENTS = {
+/** Montants TTC mensuels (centimes) pour abonnements B2C créés via Checkout `price_data`. */
+export const B2C_TTC_MONTHLY_CENTS = {
   starter: 1999,
   pro: 5999,
   scale: 9999,
@@ -11,7 +13,7 @@ function getStripeSecret(env = process.env) {
   return (env.STRIPE_SECRET_KEY || '').trim()
 }
 
-function getPriceIdForPlan(planKey, env = process.env) {
+export function getPriceIdForPlan(planKey, env = process.env) {
   const key = String(planKey || '').trim().toLowerCase()
   if (!PLAN_KEYS.includes(key)) return ''
   const map = {
@@ -32,6 +34,14 @@ function computeUrls(env = process.env) {
     successUrl: `${base}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${base}/inscription?checkout=cancelled`,
   }
+}
+
+/** Stripe Tax / automatic_tax must be configured in the Dashboard; otherwise sessions.create fails. */
+function isStripeAutomaticTaxEnabled(env = process.env) {
+  const disable =
+    ['1', 'true', 'yes', 'on'].includes(String(env.STRIPE_CHECKOUT_DISABLE_AUTOMATIC_TAX || '').trim().toLowerCase()) ||
+    ['0', 'false', 'off', 'no'].includes(String(env.STRIPE_CHECKOUT_AUTOMATIC_TAX || 'true').trim().toLowerCase())
+  return !disable
 }
 
 export function getStripeClient(env = process.env) {
@@ -56,9 +66,19 @@ async function customerHasConsumedTrial(stripe, customerId) {
   }
 }
 
-async function shouldGrantTrialForEmail(stripe, email) {
+/**
+ * Par défaut : toujours 14 j d’essai sur Checkout (email connu ou saisi plus tard sur Stripe).
+ * Pour réactiver l’ancien blocage « un essai par e-mail côté Stripe », définir STRIPE_TRIAL_STRICT_EMAIL_CHECK=true sur Vercel.
+ */
+async function shouldGrantTrialForEmail(stripe, email, env = process.env) {
   const normalized = String(email || '').trim().toLowerCase()
-  if (!normalized) return false
+  if (!normalized) return true
+
+  const strict = ['1', 'true', 'yes'].includes(
+    String(env.STRIPE_TRIAL_STRICT_EMAIL_CHECK || '').trim().toLowerCase(),
+  )
+  if (!strict) return true
+
   try {
     const customers = await stripe.customers.list({ email: normalized, limit: 20 })
     if (!customers.data.length) return true
@@ -68,7 +88,6 @@ async function shouldGrantTrialForEmail(stripe, email) {
     }
     return true
   } catch {
-    // If Stripe lookup fails, stay conservative to avoid granting repeated free trials.
     return false
   }
 }
@@ -90,7 +109,20 @@ export async function createStripeCheckoutSession(payload = {}, env = process.en
   const email = String(payload.email || '').trim() || undefined
   const accountId = String(payload.accountId || '').trim()
   const locale = String(payload.locale || '').trim().toLowerCase() || 'fr'
-  const grantTrial = await shouldGrantTrialForEmail(stripe, email)
+
+  let pendingSignupId = ''
+  const pendingHost = payload?.pendingHostAccount
+  if (pendingHost && typeof pendingHost === 'object') {
+    const save = await saveHostCheckoutPending(pendingHost)
+    if (!save.ok) {
+      if (save.error === 'duplicate') return { ok: false, status: 409, error: 'duplicate_account' }
+      if (save.error === 'pending_host_requires_kv') return { ok: false, status: 503, error: 'pending_host_requires_kv' }
+      return { ok: false, status: 500, error: save.error || 'pending_save_failed' }
+    }
+    pendingSignupId = save.pendingId
+  }
+
+  const grantTrial = await shouldGrantTrialForEmail(stripe, email, env)
   const b2cAmount = B2C_TTC_MONTHLY_CENTS[planKey]
   const lineItems = isB2c
     ? [{
@@ -110,25 +142,52 @@ export async function createStripeCheckoutSession(payload = {}, env = process.en
     trialGranted: grantTrial ? 'true' : 'false',
     requestedBy: 'staypilot_web_pricing',
   }
-  if (accountId) metadata.accountId = accountId
+  if (pendingSignupId) {
+    metadata.pendingSignupId = pendingSignupId
+  } else if (accountId) {
+    metadata.accountId = accountId
+  }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: lineItems,
-    success_url: urls.successUrl,
-    cancel_url: urls.cancelUrl,
-    customer_email: email,
-    billing_address_collection: 'required',
-    automatic_tax: { enabled: true },
-    tax_id_collection: { enabled: !isB2c },
-    customer_creation: 'always',
-    allow_promotion_codes: true,
-    subscription_data: grantTrial
-      ? { trial_period_days: 14 }
-      : undefined,
-    locale: ['fr', 'en', 'es', 'de', 'it'].includes(locale) ? locale : 'fr',
-    metadata,
-  })
+  const subscription_data = {
+    metadata: { ...metadata },
+    ...(grantTrial ? { trial_period_days: 14 } : {}),
+  }
+
+  const automaticTaxEnabled = isStripeAutomaticTaxEnabled(env)
+
+  let session
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_collection: 'always',
+      payment_method_options: {
+        card: { request_three_d_secure: 'any' },
+      },
+      line_items: lineItems,
+      success_url: urls.successUrl,
+      cancel_url: urls.cancelUrl,
+      customer_email: email,
+      billing_address_collection: 'required',
+      ...(automaticTaxEnabled ? { automatic_tax: { enabled: true } } : {}),
+      tax_id_collection: { enabled: !isB2c },
+      allow_promotion_codes: true,
+      subscription_data,
+      locale: ['fr', 'en', 'es', 'de', 'it'].includes(locale) ? locale : 'fr',
+      metadata,
+    })
+  } catch (e) {
+    if (pendingSignupId) {
+      await deletePendingHostCheckout(pendingSignupId)
+    }
+    const raw = e instanceof Error ? e.message : String(e)
+    console.error('[stripeBilling] checkout.sessions.create failed', raw)
+    return {
+      ok: false,
+      status: 502,
+      error: 'stripe_session_failed',
+      message: raw,
+    }
+  }
 
   return {
     ok: true,

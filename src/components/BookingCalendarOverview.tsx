@@ -2,7 +2,12 @@ import { CalendarDays, Filter } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { Locale } from '../i18n/navbar'
 import { useLanguage } from '../hooks/useLanguage'
+import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import {
+  CLEANING_PROVIDER_ASSIGNMENTS_UPDATED_EVENT,
+  readProviderAssignmentsMap,
+} from '../utils/cleaningProviderAssignments'
 import { isTestModeEnabled } from '../utils/testMode'
 import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import {
@@ -13,6 +18,8 @@ import {
 const brandBlue = '#4f86f7'
 const airbnbRed = '#ef4444'
 const bookingBlue = '#006ce4'
+/** Blocs réservation en vue prestataire (pas de code couleur OTA). */
+const cleanerReservationBarColor = '#64748b'
 const CONNECTIONS_UPDATED_EVENT = 'sm-connections-updated'
 
 const BCP47: Record<Locale, string> = {
@@ -292,6 +299,18 @@ function addDays(base: Date, delta: number) {
   return d
 }
 
+function cleanerBarDateRangeLabel(
+  windowStart: Date,
+  booking: CalendarReservationDetail,
+  fmt: Intl.DateTimeFormat,
+) {
+  const d0 = addDays(windowStart, booking.start - 1)
+  const d1 = addDays(windowStart, booking.end - 1)
+  const a = capitalizeFirst(fmt.format(d0))
+  const b = capitalizeFirst(fmt.format(d1))
+  return a === b ? a : `${a} – ${b}`
+}
+
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
@@ -323,6 +342,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         "Veuillez connecter vos logements pour afficher le calendrier des réservations et l'analyse détaillée.",
       noListingsHint:
         "Une fois connectes, vous retrouverez ici la meme vue interactive que sur la page d accueil.",
+      cleanerNotAssignedTitle: 'Votre hôte ne vous a pas encore attribué de logement pour le ménage.',
+      cleanerNotAssignedHint:
+        "Dès qu'un logement vous est assigné dans l'outil ménage, son calendrier apparaît ici (dates et nom du logement uniquement).",
+      cleanerNoSyncTitle: "Aucun calendrier n'est disponible pour l'instant.",
+      cleanerNoSyncHint: 'Votre hôte doit connecter ses logements dans StayPilot pour synchroniser des dates.',
     },
     en: {
       testListing1: 'Test listing 1',
@@ -332,6 +356,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       reset: 'Reset',
       noListingsTitle: 'Please connect your listings to display the reservation calendar and detailed analytics.',
       noListingsHint: 'Once connected, you will find the same interactive view here as on the home page.',
+      cleanerNotAssignedTitle: 'Your host has not assigned any listing to you for cleaning yet.',
+      cleanerNotAssignedHint:
+        'Once a listing is assigned to you in the cleaning tools, its calendar appears here (dates and listing name only).',
+      cleanerNoSyncTitle: 'No calendar is available yet.',
+      cleanerNoSyncHint: 'Your host needs to connect their listings in StayPilot before dates can show up here.',
     },
     es: {
       testListing1: 'Alojamiento de prueba 1',
@@ -341,6 +370,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       reset: 'Restablecer',
       noListingsTitle: 'Conecta tus alojamientos para mostrar el calendario de reservas y el análisis detallado.',
       noListingsHint: 'Una vez conectados, encontrarás aquí la misma vista interactiva que en la página de inicio.',
+      cleanerNotAssignedTitle: 'Tu anfitrión aún no te ha asignado ningún alojamiento para la limpieza.',
+      cleanerNotAssignedHint:
+        'Cuando te asignen un alojamiento en las herramientas de limpieza, su calendario aparecerá aquí (solo fechas y nombre del alojamiento).',
+      cleanerNoSyncTitle: 'Todavía no hay ningún calendario disponible.',
+      cleanerNoSyncHint: 'Tu anfitrión debe conectar sus alojamientos en StayPilot para que aparezcan fechas aquí.',
     },
     de: {
       testListing1: 'Testunterkunft 1',
@@ -350,6 +384,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       reset: 'Zurücksetzen',
       noListingsTitle: 'Bitte verbinden Sie Ihre Unterkünfte, um den Reservierungskalender und die Detailanalyse anzuzeigen.',
       noListingsHint: 'Nach der Verbindung sehen Sie hier dieselbe interaktive Ansicht wie auf der Startseite.',
+      cleanerNotAssignedTitle: 'Ihr Gastgeber hat Ihnen noch keine Unterkunft für die Reinigung zugewiesen.',
+      cleanerNotAssignedHint:
+        'Sobald im Reinigungstool eine Unterkunft zugewiesen wird, erscheint der Kalender hier (nur Daten und Unterkunftsname).',
+      cleanerNoSyncTitle: 'Derzeit ist kein Kalender verfügbar.',
+      cleanerNoSyncHint: 'Ihr Gastgeber muss die Unterkünfte in StayPilot verbinden, damit hier Daten angezeigt werden.',
     },
     it: {
       testListing1: 'Alloggio test 1',
@@ -360,6 +399,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       noListingsTitle:
         "Collega i tuoi alloggi per visualizzare il calendario delle prenotazioni e l'analisi dettagliata.",
       noListingsHint: 'Una volta collegati, troverai qui la stessa vista interattiva della home page.',
+      cleanerNotAssignedTitle: 'Il tuo host non ti ha ancora assegnato un alloggio per le pulizie.',
+      cleanerNotAssignedHint:
+        "Quando ti viene assegnato un alloggio negli strumenti pulizie, il calendario compare qui (solo date e nome dell'alloggio).",
+      cleanerNoSyncTitle: 'Nessun calendario è disponibile al momento.',
+      cleanerNoSyncHint: 'Il tuo host deve collegare gli alloggi in StayPilot perché compaiano le date qui.',
     },
   }[ll]
   const modalTitleId = useId()
@@ -379,8 +423,12 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   }>(null)
   const hidePopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [connectionsTick, setConnectionsTick] = useState(0)
+  const [assignmentsTick, setAssignmentsTick] = useState(0)
 
   const bcp47 = BCP47[locale]
+  const isCleanerSession =
+    typeof window !== 'undefined' &&
+    (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase() === 'cleaner'
   const canNavigateFreelyByMonth = mode === 'connected' && !isTestModeEnabled()
   const fmtShortDate = useMemo(
     () => new Intl.DateTimeFormat(bcp47, { day: '2-digit', month: '2-digit', year: 'numeric' }),
@@ -413,13 +461,15 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   const miniMonthIndex = miniCalendarCursor.getMonth()
   const miniDaysInMonth = new Date(miniYear, miniMonthIndex + 1, 0).getDate()
 
-  const connectedApartments = useMemo(() => {
+  const { connectedApartments, hostChannelCountBeforeCleanerFilter } = useMemo(() => {
     if (mode === 'generic') {
-      // Lock the home-page simulation so it never changes after a connection.
-      return Array.from({ length: DEMO_APARTMENT_ROW_COUNT }, (_, idx) => ({
-        id: `demo-${idx + 1}`,
-        name: apartmentName(t.apartmentLabel, idx + 1),
-      }))
+      return {
+        connectedApartments: Array.from({ length: DEMO_APARTMENT_ROW_COUNT }, (_, idx) => ({
+          id: `demo-${idx + 1}`,
+          name: apartmentName(t.apartmentLabel, idx + 1),
+        })),
+        hostChannelCountBeforeCleanerFilter: -1,
+      }
     }
 
     // Dashboard calendar must reflect the channel manager state.
@@ -430,15 +480,37 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         id: apt.id,
         name: apt.name,
       }))
-    if (fromConnected.length > 0) return fromConnected
-    if (isTestModeEnabled()) {
-      return [
+    let list = fromConnected
+    if (list.length === 0 && isTestModeEnabled()) {
+      list = [
         { id: 'test-1', name: c.testListing1 },
         { id: 'test-2', name: c.testListing2 },
       ]
     }
-    return []
-  }, [mode, t.apartmentLabel, connectionsTick])
+    const unfilteredCount = list.length
+    const role =
+      typeof window !== 'undefined' ? (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase() : ''
+    const isCleaner = role === 'cleaner'
+    if (isCleaner && list.length > 0) {
+      const assignments = readProviderAssignmentsMap()
+      const uid = (
+        typeof window !== 'undefined'
+          ? localStorage.getItem('staypilot_current_user') || localStorage.getItem('staypilot_login_identifier') || ''
+          : ''
+      ).trim()
+      const lower = uid.toLowerCase()
+      const acc = lower ? getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, lower)) : undefined
+      const matchKey = acc
+        ? (`${acc.firstName || ''} ${acc.lastName || ''}`.trim() || acc.username || '').trim().toLowerCase()
+        : ''
+      if (matchKey) {
+        list = list.filter((apt) => (assignments[apt.id] || '').trim().toLowerCase() === matchKey)
+      } else {
+        list = []
+      }
+    }
+    return { connectedApartments: list, hostChannelCountBeforeCleanerFilter: unfilteredCount }
+  }, [mode, t.apartmentLabel, connectionsTick, assignmentsTick, c.testListing1, c.testListing2])
 
   const officialSync = useMemo(() => {
     if (mode !== 'connected') return null
@@ -464,6 +536,33 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     return { start, end, days: daysInMonth }
   }, [selectedRange, viewYear, viewMonthIndex, daysInMonth])
 
+  const fmtCleanerBar = useMemo(
+    () => new Intl.DateTimeFormat(bcp47, { day: 'numeric', month: 'short' }),
+    [bcp47],
+  )
+
+  const emptyConnectedCalendarCopy = useMemo(() => {
+    if (mode !== 'connected' || connectedApartments.length > 0) return null
+    if (isCleanerSession) {
+      if (!isTestModeEnabled() && hostChannelCountBeforeCleanerFilter === 0) {
+        return { title: c.cleanerNoSyncTitle, hint: c.cleanerNoSyncHint }
+      }
+      return { title: c.cleanerNotAssignedTitle, hint: c.cleanerNotAssignedHint }
+    }
+    return { title: c.noListingsTitle, hint: c.noListingsHint }
+  }, [
+    mode,
+    connectedApartments.length,
+    isCleanerSession,
+    hostChannelCountBeforeCleanerFilter,
+    c.cleanerNoSyncTitle,
+    c.cleanerNoSyncHint,
+    c.cleanerNotAssignedTitle,
+    c.cleanerNotAssignedHint,
+    c.noListingsTitle,
+    c.noListingsHint,
+  ])
+
   const realBookings = useMemo(() => {
     if (mode !== 'connected') return []
     if (!officialSync?.bookings?.length) return []
@@ -475,9 +574,11 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
       propertyIdToAptIndex.set(propertyId, idx)
     })
 
-    const propertyIdToChannelLinks = new Map<string, any>()
+    const propertyIdToChannelLinks = new Map<string, Record<string, unknown>>()
     if (Array.isArray(officialSync.properties)) {
-      officialSync.properties.forEach((p: any) => propertyIdToChannelLinks.set(String(p.id), p.channelLinks))
+      officialSync.properties.forEach((p: Record<string, unknown>) =>
+        propertyIdToChannelLinks.set(String(p.id), (p.channelLinks as Record<string, unknown>) ?? {}),
+      )
     }
 
     const msPerDay = 24 * 60 * 60 * 1000
@@ -498,7 +599,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     const windowEndExclusive = addDays(startOfDay(displayWindow.end), 1)
 
     return officialSync.bookings
-      .map((b: any) => {
+      .map((b: Record<string, unknown>) => {
         const propertyId = String(b.propertyId ?? '')
         const aptIndex = propertyIdToAptIndex.get(propertyId)
         if (aptIndex == null) return null
@@ -520,7 +621,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         const nights = Math.floor((overlapEndExclusive.getTime() - overlapStart.getTime()) / msPerDay)
         if (start < 1 || end < 1 || start > displayWindow.days || end > displayWindow.days || nights < 1) return null
 
-        const links = propertyIdToChannelLinks.get(propertyId) as any
+        const links = propertyIdToChannelLinks.get(propertyId)
         const bookingChannel = String(b?.channel || '').toLowerCase()
         const channel: 'airbnb' | 'booking' =
           bookingChannel === 'booking' || bookingChannel.includes('booking')
@@ -635,6 +736,12 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     window.addEventListener(CONNECTIONS_UPDATED_EVENT, onUpdated)
     return () => window.removeEventListener(CONNECTIONS_UPDATED_EVENT, onUpdated)
   }, [mode])
+
+  useEffect(() => {
+    const onAssignments = () => setAssignmentsTick((v) => v + 1)
+    window.addEventListener(CLEANING_PROVIDER_ASSIGNMENTS_UPDATED_EVENT, onAssignments)
+    return () => window.removeEventListener(CLEANING_PROVIDER_ASSIGNMENTS_UPDATED_EVENT, onAssignments)
+  }, [])
 
   const closeModal = useCallback(() => setModal(null), [])
 
@@ -878,8 +985,13 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           referenceYear={viewYear}
           referenceMonthIndex={viewMonthIndex}
           referenceStartDate={displayWindow.start}
-          apartmentLabel={(n) => apartmentName(t.apartmentLabel, n)}
+          apartmentLabel={(n) => {
+            const row = calendarRowEntries[n - 1]
+            return row?.name || apartmentName(t.apartmentLabel, n)
+          }}
           nightsLabel={(n) => nightsText(t.nightsLabel, n)}
+          restrictedView={isCleanerSession && mode === 'connected'}
+          cleanerPrivacy={isCleanerSession && mode === 'connected'}
           onMouseEnter={clearHidePop}
           onMouseLeave={scheduleHidePop}
         />
@@ -889,7 +1001,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
         <div className="flex flex-col gap-3 border-b border-zinc-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-6">
           <div>
             <h3 className="text-base font-semibold tracking-tight text-zinc-900 sm:text-xl">
-              {t.calendarTitle}
+              {isCleanerSession && mode === 'connected' ? t.calendarTitleCleaner : t.calendarTitle}
             </h3>
             <div className="mt-1 flex items-center gap-2">
               <p className="text-[13px] font-medium text-[#71717a] sm:text-sm">{monthYearLabel}</p>
@@ -926,16 +1038,18 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 sm:justify-end sm:gap-4">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] sm:text-sm">
-              <span className="flex items-center gap-2 text-[#3f3f46]">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: airbnbRed }} />
-                {t.legendAirbnb}
-              </span>
-              <span className="flex items-center gap-2 text-[#3f3f46]">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: bookingBlue }} />
-                {t.legendBooking}
-              </span>
-            </div>
+            {isCleanerSession && mode === 'connected' ? null : (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] sm:text-sm">
+                <span className="flex items-center gap-2 text-[#3f3f46]">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: airbnbRed }} />
+                  {t.legendAirbnb}
+                </span>
+                <span className="flex items-center gap-2 text-[#3f3f46]">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: bookingBlue }} />
+                  {t.legendBooking}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1055,11 +1169,13 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           <div className="flex flex-wrap items-center gap-2">
             <select
               className="h-11 min-h-[44px] min-w-0 max-w-full flex-1 cursor-pointer rounded-xl border border-zinc-200/80 bg-white px-3 text-[13px] font-medium text-zinc-900 shadow-pm-xs outline-none focus:border-[#4f86f7] focus:ring-2 focus:ring-[#4f86f7]/20 sm:h-10 sm:min-h-0 sm:min-w-[11rem] sm:max-w-none sm:flex-none sm:text-sm"
-              aria-label={t.allApartments}
+              aria-label={isCleanerSession && mode === 'connected' ? t.allAssignedListings : t.allApartments}
               value={apartmentFilter}
               onChange={(e) => onApartmentChange(e.target.value)}
             >
-              <option value="all">{t.allApartments}</option>
+              <option value="all">
+                {isCleanerSession && mode === 'connected' ? t.allAssignedListings : t.allApartments}
+              </option>
               {calendarRowEntries.map((apt) => (
                 <option key={apt.id} value={String(apt.index + 1)}>
                   {apt.name}
@@ -1080,10 +1196,10 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           <div className="px-4 py-8 sm:px-6 sm:py-10">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-5 text-center sm:px-6 sm:py-6">
               <p className="text-sm font-semibold text-zinc-900">
-                {c.noListingsTitle}
+                {emptyConnectedCalendarCopy?.title ?? c.noListingsTitle}
               </p>
               <p className="mt-1 text-xs text-zinc-600">
-                {c.noListingsHint}
+                {emptyConnectedCalendarCopy?.hint ?? c.noListingsHint}
               </p>
             </div>
           </div>
@@ -1131,13 +1247,22 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                       const end = Math.min(displayWindow.days, b.end)
                       const colStart = start
                       const span = end - start + 1
-                      const bg = b.channel === 'airbnb' ? airbnbRed : bookingBlue
+                      const cleanerCal = isCleanerSession && mode === 'connected'
+                      const bg = cleanerCal
+                        ? cleanerReservationBarColor
+                        : b.channel === 'airbnb'
+                          ? airbnbRed
+                          : bookingBlue
+                      const barLabel = cleanerBarDateRangeLabel(displayWindow.start, b, fmtCleanerBar)
+                      const ariaLabel = cleanerCal
+                        ? `${aptEntry.name}, ${barLabel}`
+                        : `${b.guest}, ${nightsText(t.nightsLabel, b.nights)}, ${t.reservationNumberLabel} ${b.reservationId}`
                       return (
                         <div
                           key={b.reservationId}
                           role="button"
                           tabIndex={0}
-                          aria-label={`${b.guest}, ${nightsText(t.nightsLabel, b.nights)}, ${t.reservationNumberLabel} ${b.reservationId}`}
+                          aria-label={ariaLabel}
                           className="absolute inset-y-0.5 z-10 flex min-w-0 cursor-pointer items-center rounded-md px-1.5 py-0.5 shadow-sm transition-shadow hover:z-30 hover:shadow-md hover:ring-2 hover:ring-white/40 focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:px-2"
                           style={{
                             left: `calc((${colStart - 1}) / ${displayWindow.days} * 100%)`,
@@ -1157,12 +1282,18 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                           }}
                         >
                           <div className="min-w-0 truncate pointer-events-none">
-                            <p className="truncate text-xs font-semibold text-white">{b.guest}</p>
-                            <p className="truncate text-[9px] font-medium leading-tight text-white/90 sm:text-[10px]">
-                              <span>{nightsText(t.nightsLabel, b.nights)}</span>
-                              <span className="text-white/55"> · </span>
-                              <span className="font-mono tracking-tight text-white/95">{b.reservationId}</span>
-                            </p>
+                            {cleanerCal ? (
+                              <p className="truncate text-xs font-semibold text-white">{barLabel}</p>
+                            ) : (
+                              <>
+                                <p className="truncate text-xs font-semibold text-white">{b.guest}</p>
+                                <p className="truncate text-[9px] font-medium leading-tight text-white/90 sm:text-[10px]">
+                                  <span>{nightsText(t.nightsLabel, b.nights)}</span>
+                                  <span className="text-white/55"> · </span>
+                                  <span className="font-mono tracking-tight text-white/95">{b.reservationId}</span>
+                                </p>
+                              </>
+                            )}
                           </div>
                         </div>
                       )
@@ -1174,41 +1305,43 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-zinc-100 px-4 py-4 text-[13px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6 sm:py-5 sm:text-sm">
-          <div className="flex flex-col gap-2 text-[#3f3f46] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
-            <span className="inline-flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-[#71717a]" strokeWidth={2} />
-              <span className="font-medium">{t.footerOccupancy}</span>
-              <span className="font-semibold" style={{ color: brandBlue }}>
-                {computedStats.occupancyRate}
+        {isCleanerSession && mode === 'connected' ? null : (
+          <div className="flex flex-col gap-3 border-t border-zinc-100 px-4 py-4 text-[13px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6 sm:py-5 sm:text-sm">
+            <div className="flex flex-col gap-2 text-[#3f3f46] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-[#71717a]" strokeWidth={2} />
+                <span className="font-medium">{t.footerOccupancy}</span>
+                <span className="font-semibold" style={{ color: brandBlue }}>
+                  {computedStats.occupancyRate}
+                </span>
               </span>
-            </span>
-            <span>
-              <span className="font-medium">{t.footerTotalBookings}</span>
-              <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{computedStats.totalBookings}</span>
-            </span>
-            <span>
-              <span className="font-medium">{t.footerBookedNights}</span>
-              <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{computedStats.bookedNights}</span>
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 sm:justify-end">
-            <span className="flex items-center gap-2 text-[#3f3f46]">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: airbnbRed }} />
-              <span className="font-medium">{t.footerAirbnb}</span>
-              <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{computedStats.airbnbCount}</span>
-            </span>
-            <span className="flex items-center gap-2 text-[#3f3f46]">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: bookingBlue }} />
-              <span className="font-medium">{t.footerBooking}</span>
-              <span className="text-[#71717a]"> : </span>
-              <span className="font-semibold text-[#1a1a1a]">{computedStats.bookingCount}</span>
-            </span>
-          </div>
+              <span>
+                <span className="font-medium">{t.footerTotalBookings}</span>
+                <span className="text-[#71717a]"> : </span>
+                <span className="font-semibold text-[#1a1a1a]">{computedStats.totalBookings}</span>
+              </span>
+              <span>
+                <span className="font-medium">{t.footerBookedNights}</span>
+                <span className="text-[#71717a]"> : </span>
+                <span className="font-semibold text-[#1a1a1a]">{computedStats.bookedNights}</span>
+              </span>
             </div>
+            <div className="flex flex-wrap items-center gap-4 sm:justify-end">
+              <span className="flex items-center gap-2 text-[#3f3f46]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: airbnbRed }} />
+                <span className="font-medium">{t.footerAirbnb}</span>
+                <span className="text-[#71717a]"> : </span>
+                <span className="font-semibold text-[#1a1a1a]">{computedStats.airbnbCount}</span>
+              </span>
+              <span className="flex items-center gap-2 text-[#3f3f46]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: bookingBlue }} />
+                <span className="font-medium">{t.footerBooking}</span>
+                <span className="text-[#71717a]"> : </span>
+                <span className="font-semibold text-[#1a1a1a]">{computedStats.bookingCount}</span>
+              </span>
+            </div>
+          </div>
+        )}
           </>
         )}
       </div>

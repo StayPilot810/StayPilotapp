@@ -3,8 +3,6 @@ import type { Locale } from './navbar'
 export type AuthDashboardCopy = {
   loginBack: string
   loginTitle: string
-  loginAccountsDetectedNone: string
-  loginAccountsDetectedSome: string
   loginAutoConnected: string
   loginConnected: string
   loginIdentifierLabel: string
@@ -22,8 +20,6 @@ export type AuthDashboardCopy = {
   signupTitle: string
   signupTrialPrefix: string
   signupTrialSuffix: string
-  signupAccountsNone: string
-  signupAccountsSome: string
   signupPlanStarter: string
   signupPlanPro: string
   signupPlanScale: string
@@ -47,6 +43,10 @@ export type AuthDashboardCopy = {
   signupEmailVerifySent: string
   signupEmailVerifySendError: string
   signupEmailVerifyValidBadge: string
+  /** Rappel : l’étape e-mail est sous le bloc mot de passe (scroll). */
+  signupEmailVerifyScrollHint: string
+  /** Prestataire : code seul insuffisant sans lien avec identifiant hôte. */
+  signupCleanerInviteLinkHelp: string
   signupEmailInvalidFormat: string
   signupEmailAlreadyUsed: string
   signupCardTitle: string
@@ -153,8 +153,6 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
   fr: {
     loginBack: '← Retour au menu principal',
     loginTitle: 'Accédez à votre espace StayPilot',
-    loginAccountsDetectedNone: "Aucun compte détecté. Créez d'abord un compte via Inscription.",
-    loginAccountsDetectedSome: 'compte(s) détecté(s)',
     loginAutoConnected: 'Connexion automatique activée. Vous êtes déjà connecté.',
     loginConnected: 'Connecté. Vous pouvez continuer vers votre dashboard.',
     loginIdentifierLabel: "Email / nom d'utilisateur",
@@ -172,8 +170,6 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     signupTitle: 'Commencez à optimiser vos locations',
     signupTrialPrefix: '14 jours gratuits puis',
     signupTrialSuffix: 'selon le plan choisi',
-    signupAccountsNone: 'Aucun compte créé pour le moment',
-    signupAccountsSome: 'compte(s) déjà créé(s) sur cette application',
     signupPlanStarter: 'Plan Starter',
     signupPlanPro: 'Plan Pro',
     signupPlanScale: 'Plan Scale',
@@ -199,10 +195,15 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     signupEmailVerifySendError:
       "Impossible d'envoyer le code pour le moment (e-mail non configuré sur le serveur ou erreur réseau).",
     signupEmailVerifyValidBadge: 'Adresse e-mail vérifiée.',
+    signupEmailVerifyScrollHint:
+      'Faites défiler vers le bas : la confirmation d’e-mail (code à 6 chiffres) est obligatoire pour activer « Créer mon compte ».',
+    signupCleanerInviteLinkHelp:
+      'Vérifiez le code SPM-… ou demandez à votre hôte d’ouvrir une fois la section « Prestataire ménage » sur StayPilot (le code est alors enregistré). Le lien d’invitation reste le plus simple.',
     signupEmailInvalidFormat: 'Renseignez une adresse e-mail valide.',
     signupEmailAlreadyUsed: 'Cet e-mail est déjà utilisé par un compte existant.',
-    signupCardTitle: 'Carte bancaire (activation après 14 jours gratuits)',
-    signupCardSubtitle: "Votre carte est utilisée pour démarrer automatiquement l’abonnement à la fin de l’essai.",
+    signupCardTitle: 'Paiement par carte (Stripe, page sécurisée)',
+    signupCardSubtitle:
+      "Après validation du formulaire, une redirection obligatoire ouvre Stripe : vous y saisissez une carte réelle ; la banque peut exiger 3-D Secure. L'inscription hôte n'est considérée comme finalisée qu'après cette étape — nous ne collectons plus le numéro de carte sur ce site.",
     signupCardHolder: 'Nom sur la carte',
     signupCardNumber: 'Numéro de carte',
     signupCardExpiry: 'MM/AA',
@@ -301,20 +302,21 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     planFreeLabel: 'Gratuit',
   },
   en: {
-    loginBack: '← Back to main menu', loginTitle: 'Access your StayPilot space', loginAccountsDetectedNone: 'No account detected yet. Create one first via Sign up.',
-    loginAccountsDetectedSome: 'account(s) detected', loginAutoConnected: 'Auto-login enabled. You are already connected.', loginConnected: 'Connected. You can continue to your dashboard.',
+    loginBack: '← Back to main menu', loginTitle: 'Access your StayPilot space', loginAutoConnected: 'Auto-login enabled. You are already connected.', loginConnected: 'Connected. You can continue to your dashboard.',
     loginIdentifierLabel: 'Email / username', loginIdentifierPlaceholder: 'Email / username', loginPasswordLabel: 'Password', loginPasswordPlaceholder: 'Your password',
     loginRemember: 'Keep me logged in', loginForgot: 'Forgot password?', loginSubmit: 'Access my dashboard', loginFreeAccess: 'Access for free', loginError: 'Invalid credentials or no account exists yet.', loginTrust: 'Secure access • No shared data',
-    signupBack: '← Back to main menu', signupTitle: 'Start optimizing your rentals', signupTrialPrefix: '14 days free then', signupTrialSuffix: 'depending on selected plan',
-    signupAccountsNone: 'No account created yet', signupAccountsSome: 'account(s) already created in this app', signupPlanStarter: 'Starter plan', signupPlanPro: 'Pro plan', signupPlanScale: 'Scale plan',
+    signupBack: '← Back to main menu', signupTitle: 'Start optimizing your rentals', signupTrialPrefix: '14 days free then', signupTrialSuffix: 'depending on selected plan', signupPlanStarter: 'Starter plan', signupPlanPro: 'Pro plan', signupPlanScale: 'Scale plan',
     signupFirstName: 'First name', signupLastName: 'Last name', signupUsername: 'Username', signupEmail: 'Email', signupPassword: 'Password', signupCompanyOptional: 'Company (optional)', signupPhone: 'Phone number',
     signupPromoCodeLabel: 'Promo code (optional)', signupPromoCodePlaceholder: 'e.g. WELCOME2026', signupPromoCodeHint: 'Partner or launch offer code — leave blank if none.',
     signupEmailVerifyTitle: 'Confirm your email address', signupEmailVerifyExplain: 'We send a 6-digit code to this address to catch typos before you finish signing up.',
     signupEmailVerifySendCode: 'Send code', signupEmailVerifySending: 'Sending…', signupEmailVerifyPlaceholder: '6-digit code', signupEmailVerifyValidate: 'Verify code',
     signupEmailVerifyInvalid: 'Invalid or expired code. Request a new one.', signupEmailVerifySent: 'Code sent. Check your inbox (and spam).',
     signupEmailVerifySendError: 'Could not send the code right now (SMTP not configured or network error).', signupEmailVerifyValidBadge: 'Email verified.',
+    signupEmailVerifyScrollHint: 'Scroll down: confirm your email (6-digit code) — required before “Create my account” is enabled.',
+    signupCleanerInviteLinkHelp:
+      'Check the SPM-… code, or ask your host to open the Cleaning provider section once in StayPilot (the code is then registered). The invitation link is still the easiest option.',
     signupEmailInvalidFormat: 'Enter a valid email address.', signupEmailAlreadyUsed: 'This email is already used by an existing account.',
-    signupCardTitle: 'Card details (activation after 14-day free trial)', signupCardSubtitle: 'Your card starts billing automatically at trial end.', signupCardHolder: 'Name on card', signupCardNumber: 'Card number', signupCardExpiry: 'MM/YY', signupCardCvc: 'CVC',
+    signupCardTitle: 'Card payment (secure Stripe page)', signupCardSubtitle: 'After you submit this form, you are redirected to Stripe to enter a real card; your bank may require 3-D Secure. Host signup is only complete after that step — we no longer collect card numbers on this site.', signupCardHolder: 'Name on card', signupCardNumber: 'Card number', signupCardExpiry: 'MM/YY', signupCardCvc: 'CVC',
     signupSubmit: 'Create my account', signupDuplicateError: 'An account already exists with this email or username.', signupAlready: 'Already have an account?', signupLoginLink: 'Sign in',
     signupAdminTitle: 'Test admin — created accounts', signupAdminReset: 'Reset page / data', signupAdminCount: 'account(s) listed for testing', signupAdminNone: 'No test account saved',
     signupTrustTitle: 'Why customers stay', signupTrustSubtitle: 'Concrete outcomes you can see quickly.', signupTrustRevenue: '+18% average revenue during peak periods',
@@ -327,18 +329,21 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     dashboardTabEarlyAccess: 'Early access to new features', dashboardPremiumScale: 'Exclusive premium • Scale', dashboardBackToHub: 'Back to dashboard', dashboardConnectTitle: 'Connect your properties', dashboardConnectSubtitle: 'Connect your Airbnb, Booking and Channel Manager accounts.', dashboardConnectAirbnb: 'Airbnb connection', dashboardConnectBooking: 'Booking connection', dashboardConnectChannelManager: 'Channel Manager connection', dashboardConnectConnected: 'Connected', dashboardConnectPending: 'Not connected', dashboardConnectAction: 'Connect', dashboardConnectFailed: 'Connection failed, please check the fields.', dashboardChannelOptionalNote: 'ignore this if you do not have one', dashboardConnectEmailLabel: 'Account email', dashboardConnectTokenLabel: 'API token / app password', dashboardConnectPlaceholderEmail: 'email@example.com', dashboardConnectPlaceholderToken: 'Paste your token or app password', dashboardConnectGlobalAction: 'Connect everything at once', dashboardConnectHelper: 'Fill only the platforms you use, then launch global connection.', dashboardConnectionsOverviewTitle: 'All connections', dashboardConnectionsOverviewSubtitle: 'See Airbnb, Booking and Channel Manager at a glance.', dashboardConnectionsColumnPlatform: 'Platform', dashboardConnectionsColumnStatus: 'Status', dashboardConnectionsAllListings: 'All listings connected', dashboardConnectionsGlobalSync: 'Global sync', dashboardReservationAccessTitle: 'Connect Airbnb and Booking', dashboardReservationAccessSubtitle: 'Enter your credentials to sync reservations automatically.', dashboardIcalLabel: 'iCal link', dashboardApiLabel: 'API token', dashboardAccountIdLabel: 'Account ID', dashboardPlaceholderIcal: 'https://.../calendar.ics', dashboardPlaceholderApi: 'api_xxx...', dashboardPlaceholderAccountId: 'account_id', dashboardRequiredLinksTitle: 'Required links and access', dashboardRequiredLinksAirbnb: 'Airbnb: listing iCal links + API token (if available)', dashboardRequiredLinksBooking: 'Booking: API key + hotel ID / account ID', dashboardRequiredLinksChannelManager: 'Channel Manager: webhook URL + sync API key', dashboardSaveConnections: 'Save connections', dashboardChannelHelpTitle: 'How does it work?', dashboardChannelHelpBody: 'If you use a channel manager, connect your new properties to your channels. They will then appear automatically in your StayPilot account.', dashboardChannelPlanLimit: 'If your plan limit is lower than the number of properties connected in your channel manager, the most recently added apartments will not be taken into account.', dashboardSummaryTitle: 'Connected listings summary', dashboardSummaryPlatform: 'Platform', dashboardSummaryConnectedCount: 'Connected listings', dashboardSummaryShowListings: 'Show all connected listings', dashboardSummaryNoListings: 'No listing connected yet', dashboardReservationsTitle: 'Reservation information', dashboardReservationsSubtitle: 'All data collected for each connected reservation.', dashboardReservationId: 'Reservation ID', dashboardReservationPlatform: 'Platform', dashboardReservationGuest: 'Guest', dashboardReservationDates: 'Dates', dashboardReservationAmount: 'Amount', dashboardReservationStatus: 'Status', dashboardReservationListing: 'Listing', planFreeLabel: 'Free',
   },
   es: {
-    loginBack: '← Volver al menú principal', loginTitle: 'Accede a tu espacio StayPilot', loginAccountsDetectedNone: 'No hay cuentas detectadas. Crea una primero desde Registro.', loginAccountsDetectedSome: 'cuenta(s) detectada(s)',
+    loginBack: '← Volver al menú principal', loginTitle: 'Accede a tu espacio StayPilot',
     loginAutoConnected: 'Conexión automática activada. Ya estás conectado.', loginConnected: 'Conectado. Puedes continuar al dashboard.', loginIdentifierLabel: 'Email / usuario', loginIdentifierPlaceholder: 'Email / usuario',
     loginPasswordLabel: 'Contraseña', loginPasswordPlaceholder: 'Tu contraseña', loginRemember: 'Mantener sesión', loginForgot: '¿Olvidaste la contraseña?', loginSubmit: 'Acceder a mi dashboard', loginFreeAccess: 'Acceder gratis', loginError: 'Credenciales inválidas o no existe ninguna cuenta.', loginTrust: 'Acceso seguro • Sin datos compartidos',
-    signupBack: '← Volver al menú principal', signupTitle: 'Empieza a optimizar tus alquileres', signupTrialPrefix: '14 días gratis y luego', signupTrialSuffix: 'según el plan elegido', signupAccountsNone: 'Aún no hay cuentas creadas', signupAccountsSome: 'cuenta(s) ya creada(s) en esta app',
+    signupBack: '← Volver al menú principal', signupTitle: 'Empieza a optimizar tus alquileres', signupTrialPrefix: '14 días gratis y luego', signupTrialSuffix: 'según el plan elegido',
     signupPlanStarter: 'Plan Starter', signupPlanPro: 'Plan Pro', signupPlanScale: 'Plan Scale', signupFirstName: 'Nombre', signupLastName: 'Apellido', signupUsername: 'Nombre de usuario', signupEmail: 'Email', signupPassword: 'Contraseña', signupCompanyOptional: 'Empresa (opcional)', signupPhone: 'Número de teléfono',
     signupPromoCodeLabel: 'Código promocional (opcional)', signupPromoCodePlaceholder: 'Ej.: BIENVENIDA2026', signupPromoCodeHint: 'Código de socio u oferta — déjelo vacío si no tiene.',
     signupEmailVerifyTitle: 'Confirme su correo', signupEmailVerifyExplain: 'Enviamos un código de 6 dígitos para comprobar que el correo es correcto.',
     signupEmailVerifySendCode: 'Enviar código', signupEmailVerifySending: 'Enviando…', signupEmailVerifyPlaceholder: 'Código de 6 dígitos', signupEmailVerifyValidate: 'Verificar código',
     signupEmailVerifyInvalid: 'Código no válido o caducado. Solicite uno nuevo.', signupEmailVerifySent: 'Código enviado. Revise su bandeja (y spam).',
     signupEmailVerifySendError: 'No se pudo enviar el código (SMTP no configurado o error de red).', signupEmailVerifyValidBadge: 'Correo verificado.',
+    signupEmailVerifyScrollHint: 'Desplácese hacia abajo: debe confirmar el correo (código de 6 dígitos) para activar «Crear mi cuenta».',
+    signupCleanerInviteLinkHelp:
+      'Compruebe el código SPM-… o pida a su anfitrión que abra una vez la sección «Proveedor de limpieza» en StayPilot (el código queda registrado). El enlace de invitación sigue siendo lo más simple.',
     signupEmailInvalidFormat: 'Introduzca un correo válido.', signupEmailAlreadyUsed: 'Este correo ya está en uso.',
-    signupCardTitle: 'Tarjeta bancaria (activación tras 14 días gratis)', signupCardSubtitle: 'Tu tarjeta inicia el cobro automático al final de la prueba.', signupCardHolder: 'Nombre en la tarjeta', signupCardNumber: 'Número de tarjeta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
+    signupCardTitle: 'Pago con tarjeta (página segura de Stripe)', signupCardSubtitle: 'Tras enviar el formulario, Stripe abre en una página segura para introducir una tarjeta real; el banco puede pedir 3-D Secure. El alta de anfitrión solo queda completa tras ese paso; ya no pedimos el número de tarjeta en este sitio.', signupCardHolder: 'Nombre en la tarjeta', signupCardNumber: 'Número de tarjeta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
     signupSubmit: 'Crear mi cuenta', signupDuplicateError: 'Ya existe una cuenta con ese email o usuario.', signupAlready: '¿Ya tienes cuenta?', signupLoginLink: 'Iniciar sesión',
     signupAdminTitle: 'Admin test — cuentas creadas', signupAdminReset: 'Reset página / datos', signupAdminCount: 'cuenta(s) listada(s) para pruebas', signupAdminNone: 'No hay cuentas de prueba guardadas',
     signupTrustTitle: 'Por qué se quedan los clientes', signupTrustSubtitle: 'Resultados concretos visibles rápidamente.', signupTrustRevenue: '+18% de ingresos medios en periodos clave', signupTrustCalendar: 'Menos errores de calendario y dobles reservas',
@@ -351,18 +356,21 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     dashboardPremiumScale: 'Premium exclusivo • Scale', dashboardBackToHub: 'Volver al dashboard', dashboardConnectTitle: 'Conectar tus alojamientos', dashboardConnectSubtitle: 'Conecta tus cuentas de Airbnb, Booking y tu Channel Manager.', dashboardConnectAirbnb: 'Conexión Airbnb', dashboardConnectBooking: 'Conexión Booking', dashboardConnectChannelManager: 'Conexión Channel Manager', dashboardConnectConnected: 'Conectado', dashboardConnectPending: 'No conectado', dashboardConnectAction: 'Conectar', dashboardConnectFailed: 'Conexión fallida, revisa los campos.', dashboardChannelOptionalNote: 'ignorar si no tienes uno', dashboardConnectEmailLabel: 'Email de cuenta', dashboardConnectTokenLabel: 'Token API / contraseña de app', dashboardConnectPlaceholderEmail: 'email@ejemplo.com', dashboardConnectPlaceholderToken: 'Pega tu token o contraseña de aplicación', dashboardConnectGlobalAction: 'Conectar todo de una vez', dashboardConnectHelper: 'Completa solo las plataformas que usas y lanza la conexión global.', dashboardConnectionsOverviewTitle: 'Todas las conexiones', dashboardConnectionsOverviewSubtitle: 'Ve Airbnb, Booking y Channel Manager de un vistazo.', dashboardConnectionsColumnPlatform: 'Plataforma', dashboardConnectionsColumnStatus: 'Estado', dashboardConnectionsAllListings: 'Todos los anuncios conectados', dashboardConnectionsGlobalSync: 'Sincronización global', dashboardReservationAccessTitle: 'Conectar Airbnb y Booking', dashboardReservationAccessSubtitle: 'Introduce tus accesos para sincronizar reservas automáticamente.', dashboardIcalLabel: 'Enlace iCal', dashboardApiLabel: 'Token API', dashboardAccountIdLabel: 'ID de cuenta', dashboardPlaceholderIcal: 'https://.../calendar.ics', dashboardPlaceholderApi: 'api_xxx...', dashboardPlaceholderAccountId: 'account_id', dashboardRequiredLinksTitle: 'Enlaces y accesos necesarios', dashboardRequiredLinksAirbnb: 'Airbnb: enlaces iCal de anuncios + token API (si existe)', dashboardRequiredLinksBooking: 'Booking: API key + hotel ID / account ID', dashboardRequiredLinksChannelManager: 'Channel Manager: URL webhook + clave API de sincronización', dashboardSaveConnections: 'Guardar conexiones', dashboardChannelHelpTitle: '¿Cómo funciona?', dashboardChannelHelpBody: 'Si tienes un channel manager, conecta tus nuevos alojamientos a tus channels. Los alojamientos se mostrarán automáticamente en tu cuenta StayPilot.', dashboardChannelPlanLimit: 'Si tu plan es inferior al número de alojamientos conectados en tu channel manager, los últimos apartamentos integrados no se tendrán en cuenta.', dashboardSummaryTitle: 'Resumen de alojamientos conectados', dashboardSummaryPlatform: 'Plataforma', dashboardSummaryConnectedCount: 'Alojamientos conectados', dashboardSummaryShowListings: 'Ver todos los alojamientos conectados', dashboardSummaryNoListings: 'No hay alojamientos conectados por ahora', dashboardReservationsTitle: 'Información de reservas', dashboardReservationsSubtitle: 'Todos los datos recuperados para cada reserva conectada.', dashboardReservationId: 'ID reserva', dashboardReservationPlatform: 'Plataforma', dashboardReservationGuest: 'Huésped', dashboardReservationDates: 'Fechas', dashboardReservationAmount: 'Importe', dashboardReservationStatus: 'Estado', dashboardReservationListing: 'Alojamiento', planFreeLabel: 'Gratis',
   },
   de: {
-    loginBack: '← Zurück zum Hauptmenü', loginTitle: 'Greifen Sie auf Ihren StayPilot-Bereich zu', loginAccountsDetectedNone: 'Kein Konto erkannt. Erstellen Sie zuerst ein Konto über Registrierung.', loginAccountsDetectedSome: 'Konto/Konten erkannt',
+    loginBack: '← Zurück zum Hauptmenü', loginTitle: 'Greifen Sie auf Ihren StayPilot-Bereich zu',
     loginAutoConnected: 'Automatische Anmeldung aktiv. Sie sind bereits verbunden.', loginConnected: 'Verbunden. Sie können zum Dashboard weitergehen.', loginIdentifierLabel: 'E-Mail / Benutzername', loginIdentifierPlaceholder: 'E-Mail / Benutzername', loginPasswordLabel: 'Passwort', loginPasswordPlaceholder: 'Ihr Passwort',
     loginRemember: 'Angemeldet bleiben', loginForgot: 'Passwort vergessen?', loginSubmit: 'Zu meinem Dashboard', loginFreeAccess: 'Kostenlos zugreifen', loginError: 'Ungültige Anmeldedaten oder kein Konto vorhanden.', loginTrust: 'Sicherer Zugang • Keine geteilten Daten',
-    signupBack: '← Zurück zum Hauptmenü', signupTitle: 'Starten Sie die Optimierung Ihrer Vermietungen', signupTrialPrefix: '14 Tage gratis, danach', signupTrialSuffix: 'je nach gewähltem Plan', signupAccountsNone: 'Noch kein Konto erstellt', signupAccountsSome: 'Konto/Konten bereits in dieser App erstellt',
+    signupBack: '← Zurück zum Hauptmenü', signupTitle: 'Starten Sie die Optimierung Ihrer Vermietungen', signupTrialPrefix: '14 Tage gratis, danach', signupTrialSuffix: 'je nach gewähltem Plan',
     signupPlanStarter: 'Starter-Plan', signupPlanPro: 'Pro-Plan', signupPlanScale: 'Scale-Plan', signupFirstName: 'Vorname', signupLastName: 'Nachname', signupUsername: 'Benutzername', signupEmail: 'E-Mail', signupPassword: 'Passwort', signupCompanyOptional: 'Unternehmen (optional)', signupPhone: 'Telefonnummer',
     signupPromoCodeLabel: 'Aktionscode (optional)', signupPromoCodePlaceholder: 'z. B. WILLKOMMEN2026', signupPromoCodeHint: 'Partner- oder Launch-Code — leer lassen, wenn keiner.',
     signupEmailVerifyTitle: 'E-Mail bestätigen', signupEmailVerifyExplain: 'Wir senden einen 6-stelligen Code, um Tippfehler zu vermeiden.',
     signupEmailVerifySendCode: 'Code senden', signupEmailVerifySending: 'Wird gesendet…', signupEmailVerifyPlaceholder: '6-stelliger Code', signupEmailVerifyValidate: 'Code prüfen',
     signupEmailVerifyInvalid: 'Ungültiger oder abgelaufener Code. Fordern Sie einen neuen an.', signupEmailVerifySent: 'Code gesendet. Posteingang prüfen (auch Spam).',
     signupEmailVerifySendError: 'Code konnte nicht gesendet werden (SMTP nicht konfiguriert oder Netzwerkfehler).', signupEmailVerifyValidBadge: 'E-Mail bestätigt.',
+    signupEmailVerifyScrollHint: 'Nach unten scrollen: E-Mail mit 6-stelligem Code bestätigen — nötig, damit „Mein Konto erstellen“ aktiv wird.',
+    signupCleanerInviteLinkHelp:
+      'Prüfen Sie den SPM-…-Code oder bitten Sie den Gastgeber, den Bereich «Reinigungsdienst» einmal in StayPilot zu öffnen (dann wird der Code gespeichert). Der Einladungslink bleibt am einfachsten.',
     signupEmailInvalidFormat: 'Bitte gültige E-Mail eingeben.', signupEmailAlreadyUsed: 'Diese E-Mail wird bereits verwendet.',
-    signupCardTitle: 'Kreditkarte (Aktivierung nach 14 Tagen Test)', signupCardSubtitle: 'Ihre Karte startet die automatische Abrechnung nach Ablauf des Tests.', signupCardHolder: 'Name auf der Karte', signupCardNumber: 'Kartennummer', signupCardExpiry: 'MM/JJ', signupCardCvc: 'CVC',
+    signupCardTitle: 'Kartenzahlung (sichere Stripe-Seite)', signupCardSubtitle: 'Nach dem Absenden werden Sie zu Stripe weitergeleitet, um eine echte Karte einzugeben; Ihre Bank kann 3-D Secure verlangen. Die Host-Registrierung gilt erst danach als abgeschlossen; wir erfassen keine Kartennummern mehr auf dieser Website.', signupCardHolder: 'Name auf der Karte', signupCardNumber: 'Kartennummer', signupCardExpiry: 'MM/JJ', signupCardCvc: 'CVC',
     signupSubmit: 'Mein Konto erstellen', signupDuplicateError: 'Es existiert bereits ein Konto mit dieser E-Mail oder diesem Benutzernamen.', signupAlready: 'Bereits ein Konto?', signupLoginLink: 'Anmelden',
     signupAdminTitle: 'Test-Admin — erstellte Konten', signupAdminReset: 'Seite / Daten zurücksetzen', signupAdminCount: 'Konto/Konten für Tests gelistet', signupAdminNone: 'Kein Testkonto gespeichert',
     signupTrustTitle: 'Warum Kunden bleiben', signupTrustSubtitle: 'Konkrete Ergebnisse, schnell sichtbar.', signupTrustRevenue: '+18% durchschnittlicher Umsatz in Spitzenzeiten', signupTrustCalendar: 'Weniger Kalenderfehler und Doppelbuchungen',
@@ -375,18 +383,21 @@ export const authDashboardTranslations: Record<Locale, AuthDashboardCopy> = {
     dashboardPremiumScale: 'Exklusiv Premium • Scale', dashboardBackToHub: 'Zurück zum Dashboard', dashboardConnectTitle: 'Unterkünfte verbinden', dashboardConnectSubtitle: 'Verbinden Sie Ihre Airbnb-, Booking- und Channel-Manager-Konten.', dashboardConnectAirbnb: 'Airbnb-Verbindung', dashboardConnectBooking: 'Booking-Verbindung', dashboardConnectChannelManager: 'Channel-Manager-Verbindung', dashboardConnectConnected: 'Verbunden', dashboardConnectPending: 'Nicht verbunden', dashboardConnectAction: 'Verbinden', dashboardConnectFailed: 'Verbindung fehlgeschlagen, bitte Felder prüfen.', dashboardChannelOptionalNote: 'ignorieren, falls nicht vorhanden', dashboardConnectEmailLabel: 'Konto-E-Mail', dashboardConnectTokenLabel: 'API-Token / App-Passwort', dashboardConnectPlaceholderEmail: 'email@beispiel.de', dashboardConnectPlaceholderToken: 'Token oder App-Passwort einfügen', dashboardConnectGlobalAction: 'Alles auf einmal verbinden', dashboardConnectHelper: 'Nur genutzte Plattformen ausfüllen und globale Verbindung starten.', dashboardConnectionsOverviewTitle: 'Alle Verbindungen', dashboardConnectionsOverviewSubtitle: 'Airbnb, Booking und Channel Manager auf einen Blick.', dashboardConnectionsColumnPlatform: 'Plattform', dashboardConnectionsColumnStatus: 'Status', dashboardConnectionsAllListings: 'Alle Inserate verbunden', dashboardConnectionsGlobalSync: 'Globale Synchronisierung', dashboardReservationAccessTitle: 'Airbnb und Booking verbinden', dashboardReservationAccessSubtitle: 'Zugangsdaten eingeben, um Reservierungen automatisch zu synchronisieren.', dashboardIcalLabel: 'iCal-Link', dashboardApiLabel: 'API-Token', dashboardAccountIdLabel: 'Konto-ID', dashboardPlaceholderIcal: 'https://.../calendar.ics', dashboardPlaceholderApi: 'api_xxx...', dashboardPlaceholderAccountId: 'account_id', dashboardRequiredLinksTitle: 'Erforderliche Links und Zugänge', dashboardRequiredLinksAirbnb: 'Airbnb: iCal-Links der Inserate + API-Token (falls verfügbar)', dashboardRequiredLinksBooking: 'Booking: API key + hotel ID / account ID', dashboardRequiredLinksChannelManager: 'Channel Manager: Webhook-URL + Sync-API-Schlüssel', dashboardSaveConnections: 'Verbindungen speichern', dashboardChannelHelpTitle: 'Wie funktioniert das?', dashboardChannelHelpBody: 'Wenn Sie einen Channel Manager haben, verbinden Sie neue Unterkünfte mit Ihren Channels. Die Unterkünfte erscheinen dann automatisch in Ihrem StayPilot-Konto.', dashboardChannelPlanLimit: 'Wenn Ihr Tarif niedriger ist als die Anzahl verbundener Unterkünfte im Channel Manager, werden die zuletzt hinzugefügten Apartments nicht berücksichtigt.', dashboardSummaryTitle: 'Zusammenfassung verbundener Unterkünfte', dashboardSummaryPlatform: 'Plattform', dashboardSummaryConnectedCount: 'Verbundene Unterkünfte', dashboardSummaryShowListings: 'Alle verbundenen Unterkünfte anzeigen', dashboardSummaryNoListings: 'Noch keine Unterkunft verbunden', dashboardReservationsTitle: 'Reservierungsinformationen', dashboardReservationsSubtitle: 'Alle erfassten Daten für jede verbundene Reservierung.', dashboardReservationId: 'Reservierungs-ID', dashboardReservationPlatform: 'Plattform', dashboardReservationGuest: 'Gast', dashboardReservationDates: 'Daten', dashboardReservationAmount: 'Betrag', dashboardReservationStatus: 'Status', dashboardReservationListing: 'Unterkunft', planFreeLabel: 'Kostenlos',
   },
   it: {
-    loginBack: '← Torna al menu principale', loginTitle: 'Accedi al tuo spazio StayPilot', loginAccountsDetectedNone: 'Nessun account rilevato. Crea prima un account dalla Registrazione.', loginAccountsDetectedSome: 'account rilevato/i',
+    loginBack: '← Torna al menu principale', loginTitle: 'Accedi al tuo spazio StayPilot',
     loginAutoConnected: 'Accesso automatico attivo. Sei già connesso.', loginConnected: 'Connesso. Puoi continuare verso la dashboard.', loginIdentifierLabel: 'Email / nome utente', loginIdentifierPlaceholder: 'Email / nome utente', loginPasswordLabel: 'Password', loginPasswordPlaceholder: 'La tua password',
     loginRemember: 'Resta connesso', loginForgot: 'Password dimenticata?', loginSubmit: 'Accedi alla mia dashboard', loginFreeAccess: 'Accedi gratis', loginError: 'Credenziali non valide o nessun account esistente.', loginTrust: 'Accesso sicuro • Nessun dato condiviso',
-    signupBack: '← Torna al menu principale', signupTitle: 'Inizia a ottimizzare i tuoi affitti', signupTrialPrefix: '14 giorni gratis poi', signupTrialSuffix: 'in base al piano scelto', signupAccountsNone: 'Nessun account creato', signupAccountsSome: 'account già creato/i in questa app',
+    signupBack: '← Torna al menu principale', signupTitle: 'Inizia a ottimizzare i tuoi affitti', signupTrialPrefix: '14 giorni gratis poi', signupTrialSuffix: 'in base al piano scelto',
     signupPlanStarter: 'Piano Starter', signupPlanPro: 'Piano Pro', signupPlanScale: 'Piano Scale', signupFirstName: 'Nome', signupLastName: 'Cognome', signupUsername: 'Nome utente', signupEmail: 'Email', signupPassword: 'Password', signupCompanyOptional: 'Azienda (facoltativo)', signupPhone: 'Numero di telefono',
     signupPromoCodeLabel: 'Codice promozionale (facoltativo)', signupPromoCodePlaceholder: 'Es.: BENVENUTO2026', signupPromoCodeHint: 'Codice partner o lancio — lascia vuoto se non ne hai.',
     signupEmailVerifyTitle: 'Conferma la tua email', signupEmailVerifyExplain: "Inviamo un codice a 6 cifre per verificare che l'indirizzo sia corretto.",
     signupEmailVerifySendCode: 'Invia codice', signupEmailVerifySending: 'Invio…', signupEmailVerifyPlaceholder: 'Codice a 6 cifre', signupEmailVerifyValidate: 'Verifica codice',
     signupEmailVerifyInvalid: 'Codice non valido o scaduto. Richiedine uno nuovo.', signupEmailVerifySent: 'Codice inviato. Controlla la posta (e lo spam).',
     signupEmailVerifySendError: 'Impossibile inviare il codice (SMTP non configurato o errore di rete).', signupEmailVerifyValidBadge: 'Email verificata.',
+    signupEmailVerifyScrollHint: 'Scorri verso il basso: conferma l’email (codice a 6 cifre) — necessario per attivare «Crea il mio account».',
+    signupCleanerInviteLinkHelp:
+      'Controlla il codice SPM-… o chiedi all’host di aprire una volta la sezione «Fornitore pulizie» su StayPilot (il codice viene registrato). Il link di invito resta il più semplice.',
     signupEmailInvalidFormat: 'Inserisci un indirizzo email valido.', signupEmailAlreadyUsed: 'Questa email è già in uso.',
-    signupCardTitle: 'Carta bancaria (attivazione dopo 14 giorni gratis)', signupCardSubtitle: "La tua carta avvia automaticamente l'abbonamento al termine della prova.", signupCardHolder: 'Nome sulla carta', signupCardNumber: 'Numero carta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
+    signupCardTitle: 'Pagamento con carta (pagina sicura Stripe)', signupCardSubtitle: "Dopo l'invio del modulo si apre Stripe per inserire una carta reale; la banca può richiedere 3-D Secure. L'iscrizione host si completa solo dopo questo passaggio; non raccogliamo più il numero di carta su questo sito.", signupCardHolder: 'Nome sulla carta', signupCardNumber: 'Numero carta', signupCardExpiry: 'MM/AA', signupCardCvc: 'CVC',
     signupSubmit: 'Crea il mio account', signupDuplicateError: 'Esiste già un account con questa email o nome utente.', signupAlready: 'Hai già un account?', signupLoginLink: 'Accedi',
     signupAdminTitle: 'Admin test — account creati', signupAdminReset: 'Reset pagina / dati', signupAdminCount: 'account elencato/i per test', signupAdminNone: 'Nessun account di test salvato',
     signupTrustTitle: 'Perché i clienti restano', signupTrustSubtitle: 'Risultati concreti e rapidi.', signupTrustRevenue: '+18% di ricavi medi nei periodi chiave', signupTrustCalendar: 'Meno errori di calendario e doppie prenotazioni',

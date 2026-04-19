@@ -9,7 +9,13 @@ import {
   safeAccountText,
   storedAccountMatchesNormalizedId,
 } from '../lib/accounts'
+import { isServerAccountsMandatory } from '../lib/serverAccountsPolicy'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
+import {
+  notifyCleaningProviderAssignmentsUpdated,
+  PROVIDER_ASSIGNMENTS_STORAGE_KEY,
+  readProviderAssignmentsMap,
+} from '../utils/cleaningProviderAssignments'
 import { getConnectedApartmentsFromStorage, type ConnectedApartment } from '../utils/connectedApartments'
 import { getOfficialCheckoutEventsForSuivi, type SuiviCheckoutEvent } from '../utils/suiviMenageCheckouts'
 
@@ -45,7 +51,7 @@ type CleaningChatMessage = {
 
 const VAT_RATE_BY_COUNTRY: Record<string, number> = {
   FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
-  SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
+  SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, EL: 24, HR: 25, HU: 27,
   SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
 }
 
@@ -75,7 +81,7 @@ const STORAGE_KEY = 'staypilot_cleaning_invoices_v1'
 const CHAT_STORAGE_KEY = 'staypilot_cleaning_chat_v1'
 const TASK_BOARDS_KEY = 'staypilot_cleaning_task_boards_v1'
 const CLEANER_INVITES_KEY = 'staypilot_cleaner_invites_v1'
-const PROVIDER_ASSIGNMENTS_KEY = 'staypilot_cleaning_provider_assignments_v1'
+const PROVIDER_ASSIGNMENTS_KEY = PROVIDER_ASSIGNMENTS_STORAGE_KEY
 const LS_CURRENT_USER = 'staypilot_current_user'
 const LS_CURRENT_ROLE = 'staypilot_current_role'
 const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
@@ -580,23 +586,12 @@ function saveTaskBoards(boards: CleaningTaskBoard[]) {
 }
 
 function readProviderAssignments(): Record<string, string> {
-  try {
-    const raw = readScopedStorage(PROVIDER_ASSIGNMENTS_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    const out: Record<string, string> = {}
-    Object.entries(parsed).forEach(([apartmentId, provider]) => {
-      if (typeof apartmentId === 'string' && typeof provider === 'string') out[apartmentId] = provider
-    })
-    return out
-  } catch {
-    return {}
-  }
+  return readProviderAssignmentsMap()
 }
 
 function saveProviderAssignments(map: Record<string, string>) {
   writeScopedStorage(PROVIDER_ASSIGNMENTS_KEY, JSON.stringify(map))
+  notifyCleaningProviderAssignmentsUpdated()
 }
 
 type SuiviMenageReport = {
@@ -789,6 +784,8 @@ export function DashboardCleaningPage() {
   const [pendingChatCount, setPendingChatCount] = useState(0)
   const lastSeenReceivedInvoiceAtRef = useRef(0)
   const lastSeenReceivedChatAtRef = useRef(0)
+  /** Recalcul des listes liées à `getStoredAccounts()` (autre onglet, inscription prestataire, etc.). */
+  const [accountsRevision, setAccountsRevision] = useState(0)
 
   const currentUser =
     (
@@ -802,7 +799,8 @@ export function DashboardCleaningPage() {
     const identifier = currentUser.trim().toLowerCase()
     if (!identifier) return undefined
     return getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, identifier))
-  }, [currentUser])
+  }, [currentUser, accountsRevision])
+  const currentUsername = (currentAccount?.username || currentUser || '').trim().toLowerCase()
   const currentVatRate = useMemo(
     () => VAT_RATE_BY_COUNTRY[String(currentAccount?.countryCode ?? 'FR').trim().toUpperCase()] ?? 20,
     [currentAccount?.countryCode],
@@ -830,9 +828,10 @@ export function DashboardCleaningPage() {
     const full = `${host.firstName || ''} ${host.lastName || ''}`.trim()
     return full ? `Votre hôte ${full}` : `Votre hôte ${host.username}`
   }, [currentAccount])
-  const cleanerInviteLink = cleanerInviteCode
-    ? `${window.location.origin}/inscription?role=cleaner&inviteCode=${encodeURIComponent(cleanerInviteCode)}`
-    : ''
+  const cleanerInviteLink =
+    cleanerInviteCode && currentUsername
+      ? `${window.location.origin}/inscription?role=cleaner&inviteCode=${encodeURIComponent(cleanerInviteCode)}&host=${encodeURIComponent(currentUsername)}`
+      : ''
   const inscriptionSignupBaseUrl = useMemo(() => {
     if (typeof window === 'undefined') return ''
     return `${window.location.origin}/inscription`
@@ -899,17 +898,31 @@ export function DashboardCleaningPage() {
       .filter(Boolean)
     const uniq = Array.from(new Set([...fromInvoices, ...fromAccounts]))
     return uniq.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
-  }, [invoices])
+  }, [invoices, accountsRevision])
   const hasRegisteredProviders = providerOptions.length > 0
   const cleanerInvoiceProviderName = cleanerDisplayName.trim() || safeAccountText(currentAccount?.username) || ''
   const effectiveInvoiceProvider = isHostSession ? provider.trim() : cleanerInvoiceProviderName
-  const currentUsername = (currentAccount?.username || currentUser || '').trim().toLowerCase()
   const hostCleanerAccounts = useMemo(() => {
-    if (!isHostSession || !currentUsername) return []
-    return getStoredAccounts().filter(
-      (a) => (a.role || 'host') === 'cleaner' && (a.hostUsername || '').trim().toLowerCase() === currentUsername,
-    )
-  }, [isHostSession, currentUsername])
+    if (!isHostSession) return []
+    const keys = new Set<string>()
+    const addKey = (raw: string | undefined) => {
+      const n = normalizeStoredLoginPiece(raw || '')
+      if (n) keys.add(n)
+    }
+    addKey(currentUsername)
+    addKey(currentUser)
+    if (currentAccount) {
+      addKey(currentAccount.username)
+      addKey(currentAccount.email)
+    }
+    if (!keys.size) return []
+    return getStoredAccounts().filter((a) => {
+      if ((a.role || 'host') !== 'cleaner') return false
+      const hostRef = normalizeStoredLoginPiece(a.hostUsername || '')
+      if (!hostRef) return false
+      return keys.has(hostRef)
+    })
+  }, [isHostSession, currentUser, currentUsername, currentAccount, accountsRevision])
   const hostCleanerOptions = useMemo(() => {
     return hostCleanerAccounts
       .map((a) => ({
@@ -923,7 +936,6 @@ export function DashboardCleaningPage() {
     [hostCleanerOptions],
   )
   const chatCleanerOptions = assignableCleanerOptions
-  const hasPendingCleanerInvite = Boolean(cleanerInviteCode) && assignableCleanerOptions.length === 0
   const currentHostUsername = isHostSession ? currentUsername : (currentAccount?.hostUsername || '').trim().toLowerCase()
   const currentCleanerUsername = isHostSession ? chatCleanerUsername : currentUsername
   const selectedChatProvider = useMemo(() => {
@@ -932,14 +944,14 @@ export function DashboardCleaningPage() {
     const account = getStoredAccounts().find((a) => normalizeStoredLoginPiece(a.username) === username)
     if (!account) return username
     return `${account.firstName || ''} ${account.lastName || ''}`.trim() || account.username
-  }, [isHostSession, currentCleanerUsername, currentHostUsername])
+  }, [isHostSession, currentCleanerUsername, currentHostUsername, accountsRevision])
   const hostDisplayName = useMemo(() => {
     const hostUsername = (currentAccount?.hostUsername || '').trim().toLowerCase()
     if (!hostUsername) return ''
     const host = getStoredAccounts().find((a) => normalizeStoredLoginPiece(a.username) === hostUsername)
     if (!host) return currentAccount?.hostUsername || ''
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
-  }, [currentAccount])
+  }, [currentAccount, accountsRevision])
   const usernameLabelMap = useMemo(() => {
     const map = new Map<string, string>()
     getStoredAccounts().forEach((a) => {
@@ -950,7 +962,7 @@ export function DashboardCleaningPage() {
       map.set(key, label)
     })
     return map
-  }, [])
+  }, [accountsRevision])
   function labelForUsername(raw: string) {
     const key = (raw || '').trim().toLowerCase()
     if (!key) return ''
@@ -1092,12 +1104,46 @@ export function DashboardCleaningPage() {
   }, [])
 
   useEffect(() => {
+    const bump = () => setAccountsRevision((n) => n + 1)
+    window.addEventListener('staypilot-session-changed', bump)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'staypilot_accounts' || e.key === null) bump()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('staypilot-session-changed', bump)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isHostSession) return
     const hostInviteOwner = (currentAccount?.username || currentUser || '').trim().toLowerCase()
     if (!hostInviteOwner) return
     ensureCleanerInvite(hostInviteOwner)
     refreshCleanerInviteState(hostInviteOwner)
-  }, [currentUser, currentAccount?.username, isHostSession])
+  }, [currentUser, currentAccount?.username, isHostSession, accountsRevision])
+
+  useEffect(() => {
+    if (!isHostSession || !cleanerInviteCode || !isServerAccountsMandatory()) return
+    const acc = getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, currentUser))
+    if (!acc?.id || !acc.password) return
+    if (String(acc.role || 'host').trim().toLowerCase() === 'cleaner') return
+    const codeUp = cleanerInviteCode.trim().toUpperCase()
+    const inv = readCleanerInvites().find((i) => String(i.code || '').trim().toUpperCase() === codeUp)
+    if (!inv) return
+    if (normalizeStoredLoginPiece(inv.hostUsername) !== normalizeStoredLoginPiece(acc.username)) return
+    void fetch('/api/cleaner-invite-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId: acc.id,
+        password: acc.password,
+        code: inv.code,
+        hostUsername: acc.username,
+      }),
+    }).catch(() => {})
+  }, [isHostSession, cleanerInviteCode, currentUser])
 
   useEffect(() => {
     const sync = () => {
@@ -1628,11 +1674,11 @@ export function DashboardCleaningPage() {
     if (!selectedProvider) {
       setProviderLinkMsg(
         l(
-          "Sélectionnez d'abord un prestataire ménage invité et inscrit.",
-          'Select an invited and registered cleaning provider first.',
-          'Primero selecciona un proveedor de limpieza invitado y registrado.',
-          'Wählen Sie zuerst einen eingeladenen und registrierten Reinigungsdienst aus.',
-          'Seleziona prima un fornitore pulizie invitato e registrato.',
+          "Sélectionnez d'abord une prestataire dans la liste (compte créé avec votre code d'invitation).",
+          'Select a provider from the list first (account created with your invitation code).',
+          'Primero elige una proveedora de la lista (cuenta creada con tu código de invitación).',
+          'Wählen Sie zuerst eine Dienstleisterin aus der Liste (Konto mit Ihrem Einladungscode erstellt).',
+          "Seleziona prima una fornitore dall'elenco (account creato con il tuo codice invito).",
         ),
       )
       return
@@ -1640,11 +1686,11 @@ export function DashboardCleaningPage() {
     if (!assignableCleanerOptions.some((opt) => opt.label === selectedProvider)) {
       setProviderLinkMsg(
         l(
-          "Cette prestataire n'a pas encore accepté l'invitation.",
-          'This provider has not accepted the invitation yet.',
-          'Este proveedor aún no ha aceptado la invitación.',
-          'Dieser Dienstleister hat die Einladung noch nicht akzeptiert.',
-          "Questo fornitore non ha ancora accettato l'invito.",
+          'Choisissez une prestataire qui apparaît dans la liste après inscription.',
+          'Choose a provider who appears in the list after they have signed up.',
+          'Elige una proveedora que aparezca en la lista tras registrarse.',
+          'Wählen Sie eine Dienstleisterin, die nach der Registrierung in der Liste erscheint.',
+          'Scegli una fornitore che compare in elenco dopo essersi registrata.',
         ),
       )
       return
@@ -1719,11 +1765,11 @@ export function DashboardCleaningPage() {
                     )
                 : activePanel === 'providers'
                   ? l(
-                      'Étape 1 : sélectionnez le prestataire ménage. Étape 2 : sélectionnez le logement à lui attribuer.',
-                      'Step 1: select the cleaning provider. Step 2: select the listing to assign.',
-                      'Paso 1: selecciona el proveedor de limpieza. Paso 2: selecciona el alojamiento a asignar.',
-                      'Schritt 1: Reinigungsdienst auswählen. Schritt 2: Unterkunft zur Zuweisung auswählen.',
-                      'Passo 1: seleziona il fornitore pulizie. Passo 2: seleziona l alloggio da assegnare.',
+                      "Seules les prestataires déjà inscrites avec votre code d'invitation apparaissent dans la liste. Choisissez-en une, puis le logement à attribuer.",
+                      'Only providers who have already signed up with your invitation code appear in the list. Pick one, then the listing to assign.',
+                      'Solo aparecen en la lista las proveedoras que ya se registraron con tu código. Elige una y luego el alojamiento.',
+                      'In der Liste erscheinen nur Dienstleisterinnen, die sich bereits mit Ihrem Code registriert haben. Wählen Sie eine aus, dann die Unterkunft.',
+                      "In elenco compaiono solo le fornitrici già registrate con il tuo codice. Scegli una dall'elenco, poi l'alloggio.",
                     )
                 : activePanel === 'invoices'
                   ? cc.invoicesSubtitle
@@ -1769,11 +1815,11 @@ export function DashboardCleaningPage() {
                       <p className="text-base font-semibold text-zinc-900">{ui.cleanerProviderTitle}</p>
                       <p className="mt-1 text-sm text-zinc-600">
                         {l(
-                          "D'abord choisir le prestataire, puis choisir le logement à lui attribuer.",
-                          'First choose the provider, then choose the listing to assign.',
-                          'Primero elige el proveedor y luego el alojamiento a asignar.',
-                          'Zuerst den Dienstleister wählen, dann die zuzuweisende Unterkunft.',
-                          'Prima scegli il fornitore, poi l alloggio da assegnare.',
+                          "Après inscription de la prestataire avec votre code, son nom apparaît dans la liste : choisissez-la puis le logement.",
+                          'After your provider signs up with your code, their name appears in the list: pick them, then the listing.',
+                          'Cuando la proveedora se registre con tu código, su nombre aparece en la lista: elígela y luego el alojamiento.',
+                          'Nach der Registrierung mit Ihrem Code erscheint der Name in der Liste: Person wählen, dann Unterkunft.',
+                          'Dopo la registrazione con il tuo codice il nome compare in elenco: scegli la fornitore e poi l alloggio.',
                         )}
                       </p>
                     </div>
@@ -1820,7 +1866,7 @@ export function DashboardCleaningPage() {
                     {hasNewInvoiceNotice ? (
                       <p className="mt-2 text-xs font-semibold text-rose-600">
                         {l(
-                          'Une nouvelle facture a etait edité.',
+                          'Une nouvelle facture a été enregistrée.',
                           'A new invoice has been edited.',
                           'Se ha editado una nueva factura.',
                           'Eine neue Rechnung wurde bearbeitet.',
@@ -2053,10 +2099,14 @@ export function DashboardCleaningPage() {
                   >
                     <option value="">
                       {assignableCleanerOptions.length > 0
-                        ? l('Choisir une prestataire invitée', 'Choose an invited provider', 'Elegir proveedor invitado', 'Eingeladenen Dienstleister wählen', 'Scegli fornitore invitato')
-                        : hasPendingCleanerInvite
-                          ? l('Invitation envoyée - pas encore acceptée', 'Invitation sent - not accepted yet', 'Invitación enviada - aún no aceptada', 'Einladung gesendet - noch nicht akzeptiert', 'Invito inviato - non ancora accettato')
-                          : ui.noProviderYet}
+                        ? l(
+                            'Choisir une prestataire ménage',
+                            'Choose a cleaning provider',
+                            'Elegir una proveedora de limpieza',
+                            'Reinigungsdienst wählen',
+                            'Scegli una fornitore pulizie',
+                          )
+                        : ui.noProviderYet}
                     </option>
                     {assignableCleanerOptions.map((opt) => (
                       <option key={opt.username} value={opt.label}>
@@ -2068,21 +2118,13 @@ export function DashboardCleaningPage() {
               </div>
               {assignableCleanerOptions.length === 0 ? (
                 <p className="mt-2 text-xs text-zinc-600">
-                  {hasPendingCleanerInvite
-                    ? l(
-                        "Aucune prestataire disponible pour l'assignation : invitation envoyée mais pas encore acceptée.",
-                        'No provider available for assignment: invitation sent but not accepted yet.',
-                        'Ningún proveedor disponible para asignación: invitación enviada pero aún no aceptada.',
-                        'Kein Dienstleister zur Zuweisung verfügbar: Einladung gesendet, aber noch nicht akzeptiert.',
-                        "Nessun fornitore disponibile per l'assegnazione: invito inviato ma non ancora accettato.",
-                      )
-                    : l(
-                        "Aucune prestataire invitée pour cet hôte.",
-                        'No invited provider for this host.',
-                        'Ningún proveedor invitado para este anfitrión.',
-                        'Kein eingeladener Dienstleister für diesen Gastgeber.',
-                        'Nessun fornitore invitato per questo host.',
-                      )}
+                  {l(
+                    "Aucune prestataire n'est encore liée à votre compte. Partagez le lien ou le code d'inscription : dès qu'elle aura créé son compte StayPilot, son nom apparaîtra ici et vous pourrez lui attribuer un logement. Si elle s'est inscrite sur un autre appareil, déconnectez-vous puis reconnectez-vous pour rafraîchir la liste.",
+                    'No provider is linked to your account yet. Share the signup link or invitation code: once they create their StayPilot account, their name appears here and you can assign a listing. If they signed up on another device, sign out and sign back in to refresh the list.',
+                    'Ninguna proveedora está vinculada a tu cuenta todavía. Comparte el enlace o el código: cuando cree su cuenta StayPilot, su nombre aparecerá aquí. Si se registró en otro dispositivo, cierra sesión y vuelve a entrar para actualizar la lista.',
+                    'Noch keine Dienstleisterin verknüpft. Teilen Sie Link oder Code: Nach der StayPilot-Registrierung erscheint der Name hier. Wenn die Registrierung auf einem anderen Gerät erfolgte, abmelden und wieder anmelden, um die Liste zu aktualisieren.',
+                    'Nessuna fornitore collegata. Condividi link o codice: dopo la registrazione StayPilot il nome compare qui. Se si è registrata su un altro dispositivo, esci e rientra per aggiornare l’elenco.',
+                  )}
                 </p>
               ) : null}
               {selectedApartmentLink && selectedProviderLink ? (

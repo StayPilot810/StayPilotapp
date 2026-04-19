@@ -101,3 +101,23 @@ export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
     return []
   }
 }
+
+/** Nombre de logements connectés sans appliquer la limite du forfait actuel (utile avant un downgrade). */
+export function getConnectedListingsCountRaw(): number {
+  try {
+    const official = readOfficialChannelSyncData()
+    if (official && official.properties.length > 0) {
+      return official.properties.length
+    }
+
+    const channelsRaw = readScopedStorage(CHANNEL_STORAGE_KEY)
+    const connected = channelsRaw ? (JSON.parse(channelsRaw) as Partial<Record<ChannelKey, boolean>>) : {}
+    let n = 0
+    ;(['airbnb', 'booking', 'channelManager'] as const).forEach((platform) => {
+      if (connected[platform]) n += 1
+    })
+    return n
+  } catch {
+    return 0
+  }
+}

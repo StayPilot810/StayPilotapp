@@ -22,6 +22,12 @@ async function readAccounts() {
   return Array.isArray(v) ? v : []
 }
 
+/** Lecture des comptes KV (pour finalisation inscription hôte / Stripe). */
+export async function readAccountsBlob() {
+  if (!isRemoteAccountsConfigured()) return []
+  return readAccounts()
+}
+
 async function writeAccounts(accounts) {
   await kv.set(ACCOUNTS_KEY, accounts)
 }
@@ -36,6 +42,31 @@ function createSixDigitCode() {
 
 export async function handleAuthStatus() {
   return { status: 200, json: { ok: true, remoteAuth: isRemoteAccountsConfigured() } }
+}
+
+/** Méta légère pour aligner le cache navigateur (sans exposer la liste des comptes). */
+export async function handleAuthAccountsMeta() {
+  if (!isRemoteAccountsConfigured()) {
+    return { status: 200, json: { ok: true, remoteAuth: false, serverHasAccounts: null } }
+  }
+  const accounts = await readAccounts()
+  return { status: 200, json: { ok: true, remoteAuth: true, serverHasAccounts: accounts.length > 0 } }
+}
+
+/** Purge la liste des comptes côté KV. Protégé par variable d’environnement (usage ponctuel). */
+export async function handleAuthPurgeAccounts(body) {
+  const expected = process.env.STAYPILOT_PURGE_ACCOUNTS_SECRET
+  if (!expected || String(expected).length < 16) {
+    return { status: 501, json: { error: 'purge_not_configured' } }
+  }
+  if (String(body?.secret ?? '') !== String(expected)) {
+    return { status: 403, json: { error: 'forbidden' } }
+  }
+  if (!isRemoteAccountsConfigured()) {
+    return { status: 503, json: { error: 'remote_auth_unavailable' } }
+  }
+  await kv.del(ACCOUNTS_KEY)
+  return { status: 200, json: { ok: true, purged: true } }
 }
 
 export async function handleAuthCheckDuplicate(body) {
@@ -64,19 +95,22 @@ export async function handleAuthLogin(body) {
   return { status: 200, json: { ok: true, accounts } }
 }
 
-export async function handleAuthRegister(body) {
-  if (!isRemoteAccountsConfigured()) return { status: 503, json: { error: 'remote_auth_unavailable' } }
-  const partial = body?.account
-  if (!partial || typeof partial !== 'object') return { status: 400, json: { error: 'missing_account' } }
+/**
+ * Crée un compte dans le blob KV (utilisé par l’API register et par la finalisation Stripe).
+ * @returns {{ ok: true, account: object, accounts: object[] } | { ok: false, status: number, error: string }}
+ */
+export async function appendNewAccountRecord(partial) {
+  if (!isRemoteAccountsConfigured()) return { ok: false, status: 503, error: 'remote_auth_unavailable' }
+  if (!partial || typeof partial !== 'object') return { ok: false, status: 400, error: 'missing_account' }
   const username = String(partial.username || '').trim()
   const email = String(partial.email || '').trim()
   const password = String(partial.password || '')
-  if (!username || !email || !password) return { status: 400, json: { error: 'missing_required_fields' } }
+  if (!username || !email || !password) return { ok: false, status: 400, error: 'missing_required_fields' }
   const accounts = await readAccounts()
   const emailNorm = normalize(email)
   const userNorm = normalize(username)
   if (accounts.some((a) => normalize(a.email) === emailNorm || normalize(a.username) === userNorm)) {
-    return { status: 409, json: { error: 'duplicate' } }
+    return { ok: false, status: 409, error: 'duplicate' }
   }
   const newAccount = {
     ...partial,
@@ -92,7 +126,17 @@ export async function handleAuthRegister(body) {
   }
   const next = [...accounts, newAccount]
   await writeAccounts(next)
-  return { status: 200, json: { ok: true, accounts: next } }
+  return { ok: true, status: 200, account: newAccount, accounts: next }
+}
+
+export async function handleAuthRegister(body) {
+  if (!isRemoteAccountsConfigured()) return { status: 503, json: { error: 'remote_auth_unavailable' } }
+  const partial = body?.account
+  const result = await appendNewAccountRecord(partial)
+  if (!result.ok) {
+    return { status: result.status, json: { error: result.error } }
+  }
+  return { status: 200, json: { ok: true, accounts: result.accounts } }
 }
 
 export async function handleAuthUpdatePassword(body) {
@@ -181,4 +225,55 @@ export async function handleAuthForgotReset(body) {
   await writeAccounts(next)
   await kv.del(otpKey)
   return { status: 200, json: { ok: true, accounts: next } }
+}
+
+/** Map Stripe Price id (env) → libellé stocké sur le compte (cohérent avec l’inscription). */
+export function planDisplayNameFromStripePriceId(priceId, env = process.env) {
+  const id = String(priceId || '').trim()
+  if (!id) return ''
+  const rows = [
+    { label: 'Starter', envKey: 'STRIPE_PRICE_STARTER' },
+    { label: 'Pro', envKey: 'STRIPE_PRICE_PRO' },
+    { label: 'Scale', envKey: 'STRIPE_PRICE_SCALE' },
+  ]
+  for (const { label, envKey } of rows) {
+    if (String(env[envKey] || '').trim() === id) return label
+  }
+  return ''
+}
+
+export function planDisplayNameFromPlanKey(planKey) {
+  const k = String(planKey || '').trim().toLowerCase()
+  if (k === 'starter') return 'Starter'
+  if (k === 'scale') return 'Scale'
+  if (k === 'pro') return 'Pro'
+  return ''
+}
+
+/**
+ * Met à jour le champ `plan` du compte KV selon l’abonnement Stripe (changement d’offre, portail client).
+ * @returns {Promise<{ ok: boolean, plan?: string, unchanged?: boolean, reason?: string }>}
+ */
+export async function updateAccountPlanFromStripeSubscription(accountId, subscription, env = process.env) {
+  const aid = String(accountId || '').trim()
+  if (!aid || !subscription || typeof subscription !== 'object') {
+    return { ok: false, reason: 'invalid_args' }
+  }
+  const item0 = subscription.items?.data?.[0]
+  const priceId =
+    typeof item0?.price === 'string' ? item0.price : String(item0?.price?.id || '').trim()
+  let planLabel = planDisplayNameFromStripePriceId(priceId, env)
+  if (!planLabel) planLabel = planDisplayNameFromPlanKey(subscription.metadata?.planKey)
+  if (!planLabel) return { ok: false, reason: 'no_plan_mapping' }
+
+  const accounts = await readAccounts()
+  const idx = accounts.findIndex((a) => String(a.id || '').trim() === aid)
+  if (idx === -1) return { ok: false, reason: 'account_not_found' }
+  if (String(accounts[idx].plan || '').trim() === planLabel) {
+    return { ok: true, plan: planLabel, unchanged: true }
+  }
+  const next = [...accounts]
+  next[idx] = { ...next[idx], plan: planLabel }
+  await writeAccounts(next)
+  return { ok: true, plan: planLabel }
 }

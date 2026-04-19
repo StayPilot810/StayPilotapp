@@ -13,6 +13,7 @@ import {
 } from '../lib/accounts'
 import { isServerAccountsMandatory, serverAccountsConfigErrorMessage } from '../lib/serverAccountsPolicy'
 import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur, type PlanKey } from '../utils/planPricing'
+import { readScopedStorage } from '../utils/sessionStorageScope'
 
 const CLEANER_INVITES_KEY = 'staypilot_cleaner_invites_v1'
 
@@ -24,13 +25,18 @@ type CleanerInvite = {
 
 function readCleanerInvites(): CleanerInvite[] {
   try {
-    const raw = localStorage.getItem(CLEANER_INVITES_KEY)
+    const raw = localStorage.getItem(CLEANER_INVITES_KEY) || readScopedStorage(CLEANER_INVITES_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? (parsed as CleanerInvite[]) : []
   } catch {
     return []
   }
+}
+
+function inviteCodeFormatLooksValid(code: string) {
+  const c = String(code || '').trim().toUpperCase()
+  return /^SPM-[A-Z0-9]{5,12}$/.test(c)
 }
 
 function extractInviteCode(value: string) {
@@ -83,6 +89,12 @@ function clearSignupEmailOtp(targetEmail: string) {
   localStorage.removeItem(signupOtpStorageKey(targetEmail))
 }
 
+function formatStripeCheckoutClientError(data: { message?: string }, fallback: string) {
+  const detail = (data?.message || '').trim()
+  if (!detail) return fallback
+  return `${fallback} — ${detail}`
+}
+
 function emailAlreadyRegisteredForSignup(emailNorm: string) {
   const want = normalizeStoredLoginPiece(emailNorm)
   return getStoredAccounts().some((a) => normalizeStoredLoginPiece(a.email) === want)
@@ -95,6 +107,47 @@ function planToPlanKey(plan: string): PlanKey {
   return 'pro'
 }
 
+/** Pays proposés à l'inscription hôte (UE + Royaume-Uni), codes ISO 3166-1 alpha-2. */
+const SIGNUP_CLIENT_COUNTRY_CODES = [
+  'AT',
+  'BE',
+  'BG',
+  'HR',
+  'CY',
+  'CZ',
+  'DK',
+  'EE',
+  'FI',
+  'FR',
+  'DE',
+  'GR',
+  'HU',
+  'IE',
+  'IT',
+  'LV',
+  'LT',
+  'LU',
+  'MT',
+  'NL',
+  'PL',
+  'PT',
+  'RO',
+  'SK',
+  'SI',
+  'ES',
+  'SE',
+  'GB',
+] as const
+
+const SIGNUP_CLIENT_COUNTRY_SET = new Set<string>(SIGNUP_CLIENT_COUNTRY_CODES)
+
+function sortSignupCountryOptions(locale: string): { code: string; label: string }[] {
+  const regionNames = new Intl.DisplayNames([locale, 'en'], { type: 'region' })
+  return [...SIGNUP_CLIENT_COUNTRY_CODES]
+    .map((code) => ({ code, label: regionNames.of(code) || code }))
+    .sort((a, b) => a.label.localeCompare(b.label, locale, { sensitivity: 'base' }))
+}
+
 export function SignupPage() {
   const { t, locale } = useLanguage()
   // OTP email verification is always required for signup.
@@ -102,8 +155,12 @@ export function SignupPage() {
   const [plan, setPlan] = useState('Pro')
   const [role, setRole] = useState<'host' | 'cleaner'>('host')
   const [invitationCode, setInvitationCode] = useState('')
+  /** Identifiant hôte passé dans le lien d’invitation (prestataire sans entrée locale dans staypilot_cleaner_invites_v1). */
+  const [cleanerInviteHostFromUrl, setCleanerInviteHostFromUrl] = useState('')
+  /** Résolution SPM-… via KV (code seul suffit si l’hôte a synchronisé depuis le dashboard). */
+  const [serverResolvedInvite, setServerResolvedInvite] = useState<{ code: string; hostUsername: string } | null>(null)
   const [clientType, setClientType] = useState<'b2b' | 'b2c'>('b2b')
-  const [countryCode, setCountryCode] = useState('FR')
+  const [countryCode, setCountryCode] = useState('')
   const [vatNumber, setVatNumber] = useState('')
   const [vatVerified, setVatVerified] = useState(false)
   const [vatChecking, setVatChecking] = useState(false)
@@ -137,11 +194,20 @@ export function SignupPage() {
   const scaleHt = computeHtFromTtc(scaleTtc, 20)
   const vatRateByCountry: Record<string, number> = {
     FR: 20, DE: 19, ES: 21, IT: 22, BE: 21, NL: 21, PT: 23, IE: 23, LU: 17, AT: 20,
-    SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, HR: 25, HU: 27,
-    SK: 20, SI: 22, LT: 21, LV: 21, EE: 22,
+    SE: 25, DK: 25, FI: 24, PL: 23, CZ: 21, RO: 19, BG: 20, GR: 24, EL: 24, HR: 25, HU: 27,
+    SK: 20, SI: 22, LT: 21, LV: 21, EE: 22, CY: 19, MT: 18,
   }
-  const normalizedCountry = countryCode.trim().toUpperCase() || 'FR'
-  const vatRate = clientType === 'b2b' && vatVerified ? 0 : vatRateByCountry[normalizedCountry] ?? 20
+  const normalizedCountryRaw = countryCode.trim().toUpperCase()
+  const normalizedCountry =
+    normalizedCountryRaw.length === 2 && SIGNUP_CLIENT_COUNTRY_SET.has(normalizedCountryRaw)
+      ? normalizedCountryRaw
+      : ''
+  const vatRate =
+    clientType === 'b2b' && vatVerified
+      ? 0
+      : normalizedCountry
+        ? (vatRateByCountry[normalizedCountry] ?? 20)
+        : 20
   const selectedPlanKey = planToPlanKey(plan)
   const priceTtc = getPlanMonthlyTtcEur(selectedPlanKey)
   const priceHt = vatRate > 0 ? priceTtc / (1 + vatRate / 100) : priceTtc
@@ -175,8 +241,10 @@ export function SignupPage() {
     const params = new URLSearchParams(window.location.search)
     const roleParam = (params.get('role') || '').toLowerCase()
     const inviteCodeParam = params.get('inviteCode') || params.get('invite')
+    const hostParam = (params.get('host') || params.get('hostUsername') || '').trim()
     if (roleParam === 'cleaner') setRole('cleaner')
     if (inviteCodeParam) setInvitationCode(inviteCodeParam.toUpperCase())
+    if (hostParam) setCleanerInviteHostFromUrl(hostParam)
   }, [])
 
   useEffect(() => {
@@ -186,17 +254,78 @@ export function SignupPage() {
     setEmailVerifyMsg('')
   }, [email])
 
+  useEffect(() => {
+    if (role !== 'cleaner' || !isServerAccountsMandatory() || remoteKvOk !== true) {
+      setServerResolvedInvite(null)
+      return
+    }
+    const code = extractInviteCode(invitationCode)
+    if (!code || !inviteCodeFormatLooksValid(code)) {
+      setServerResolvedInvite(null)
+      return
+    }
+    if (readCleanerInvites().some((i) => String(i.code || '').trim().toUpperCase() === code)) {
+      setServerResolvedInvite(null)
+      return
+    }
+    if (cleanerInviteHostFromUrl.trim()) {
+      setServerResolvedInvite(null)
+      return
+    }
+    let cancelled = false
+    const tid = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const r = await fetch(`/api/cleaner-invite-lookup?code=${encodeURIComponent(code)}`)
+          const j = (await r.json().catch(() => ({}))) as { hostUsername?: string }
+          if (cancelled) return
+          if (r.ok && typeof j.hostUsername === 'string' && j.hostUsername.trim()) {
+            setServerResolvedInvite({ code, hostUsername: j.hostUsername.trim() })
+          } else {
+            setServerResolvedInvite(null)
+          }
+        } catch {
+          if (!cancelled) setServerResolvedInvite(null)
+        }
+      })()
+    }, 400)
+    return () => {
+      cancelled = true
+      window.clearTimeout(tid)
+    }
+  }, [role, invitationCode, cleanerInviteHostFromUrl, remoteKvOk])
+
   function getValidCleanerInvite(): CleanerInvite | null {
     if (role !== 'cleaner') return null
     const code = extractInviteCode(invitationCode)
-    if (!code) return null
-    const invite = readCleanerInvites().find((i) => i.code === code)
-    if (!invite) return null
-    const hostNorm = normalizeStoredLoginPiece(invite.hostUsername)
+    if (!code || !inviteCodeFormatLooksValid(code)) return null
+    const stored = readCleanerInvites().find((i) => String(i.code || '').trim().toUpperCase() === code)
+    if (stored) {
+      if (isServerAccountsMandatory()) return stored
+      const hostNorm = normalizeStoredLoginPiece(stored.hostUsername)
+      const hostExists = getStoredAccounts().some(
+        (a) => (a.role || 'host') === 'host' && normalizeStoredLoginPiece(a.username) === hostNorm,
+      )
+      return hostExists ? stored : null
+    }
+    if (serverResolvedInvite && serverResolvedInvite.code === code) {
+      const hu =
+        normalizeStoredLoginPiece(serverResolvedInvite.hostUsername) || serverResolvedInvite.hostUsername.trim()
+      return { code, hostUsername: hu, createdAt: new Date().toISOString() }
+    }
+    const hostHint = cleanerInviteHostFromUrl.trim()
+    if (!hostHint) return null
+    const synthetic: CleanerInvite = {
+      code,
+      hostUsername: normalizeStoredLoginPiece(hostHint) || hostHint.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    if (isServerAccountsMandatory()) return synthetic
+    const hostNorm = normalizeStoredLoginPiece(hostHint)
     const hostExists = getStoredAccounts().some(
       (a) => (a.role || 'host') === 'host' && normalizeStoredLoginPiece(a.username) === hostNorm,
     )
-    return hostExists ? invite : null
+    return hostExists ? synthetic : null
   }
 
   const canSubmit = useMemo(
@@ -210,7 +339,10 @@ export function SignupPage() {
       password.trim().length > 0 &&
       confirmPassword.trim().length > 0 &&
       password === confirmPassword &&
-      (role === 'cleaner' ? Boolean(getValidCleanerInvite()) : clientType === 'b2c' || (vatNumber.trim().length > 0 && vatVerified)),
+      (role === 'cleaner'
+        ? Boolean(getValidCleanerInvite())
+        : Boolean(normalizedCountry) &&
+            (clientType === 'b2c' || (vatNumber.trim().length > 0 && vatVerified))),
     [
       plan,
       role,
@@ -222,12 +354,48 @@ export function SignupPage() {
       confirmPassword,
       invitationCode,
       clientType,
+      countryCode,
       vatNumber,
       vatVerified,
       emailVerifyValidated,
       requireEmailOtp,
+      normalizedCountry,
+      cleanerInviteHostFromUrl,
+      serverResolvedInvite,
     ],
   )
+
+  const signupCountryOptions = useMemo(() => sortSignupCountryOptions(locale), [locale])
+
+  const signupCountryPlaceholder = useMemo(() => {
+    switch (locale) {
+      case 'en':
+        return 'Select client country…'
+      case 'es':
+        return 'Seleccione el país del cliente…'
+      case 'de':
+        return 'Kundenland wählen…'
+      case 'it':
+        return 'Seleziona il paese del cliente…'
+      default:
+        return 'Choisissez le pays du client…'
+    }
+  }, [locale])
+
+  const vatNoPrefixHint = useMemo(() => {
+    switch (locale) {
+      case 'en':
+        return 'Enter the VAT number without the country prefix (FR, ES…); country is selected above.'
+      case 'es':
+        return 'Introduzca el NIF-IVA sin el prefijo del país (FR, ES…); el país figura arriba.'
+      case 'de':
+        return 'USt-IdNr. ohne Länderpräfix (FR, ES…); das Land steht oben.'
+      case 'it':
+        return 'Inserisci la P. IVA senza prefisso paese (FR, ES…); il paese è sopra.'
+      default:
+        return 'Sans le préfixe pays (FR, ES…) : le pays est celui indiqué ci-dessus.'
+    }
+  }, [locale])
 
   async function verifyVat() {
     if (clientType !== 'b2b') {
@@ -237,7 +405,7 @@ export function SignupPage() {
     const cc = countryCode.trim().toUpperCase()
     const vat = vatNumber.trim().toUpperCase().replace(/\s+/g, '')
     if (cc.length !== 2 || vat.length < 4) {
-      setVatStatusMsg('Renseignez un pays (2 lettres) et un numéro de TVA valide.')
+      setVatStatusMsg('Sélectionnez le pays du client, puis un numéro de TVA valide.')
       setVatVerified(false)
       return
     }
@@ -258,6 +426,17 @@ export function SignupPage() {
         )
       } else if (data.verified) {
         setVatVerified(true)
+        const resolvedCc = String((data as { countryCode?: string }).countryCode || '')
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z]/g, '')
+          .slice(0, 2)
+        if (resolvedCc.length === 2) {
+          const forSelect = resolvedCc === 'EL' ? 'GR' : resolvedCc
+          if (SIGNUP_CLIENT_COUNTRY_SET.has(forSelect)) {
+            setCountryCode(forSelect)
+          }
+        }
         setVatStatusMsg(
           data?.verificationSource === 'uk_hmrc'
             ? 'Numéro de TVA UK vérifié officiellement (HMRC).'
@@ -376,6 +555,10 @@ export function SignupPage() {
         setSubmitError('Inscription impossible : forfait non sélectionné.')
         return
       }
+      if (role === 'host' && !normalizedCountry) {
+        setSubmitError('Inscription impossible : pays du client manquant ou invalide.')
+        return
+      }
       if (requireEmailOtp && !emailVerifyValidated) {
         setSubmitError('Inscription impossible : adresse e-mail non vérifiée.')
         return
@@ -402,6 +585,10 @@ export function SignupPage() {
     }
     if (password !== confirmPassword) {
       setSubmitError('Inscription impossible : les deux mots de passe ne sont pas identiques.')
+      return
+    }
+    if (role === 'host' && !normalizedCountry) {
+      setSubmitError('Inscription impossible : pays du client manquant ou invalide.')
       return
     }
     if (role === 'host' && clientType === 'b2b' && (!vatNumber.trim() || !vatVerified)) {
@@ -435,39 +622,123 @@ export function SignupPage() {
       emailVerified: emailVerifyValidated,
     }
 
-    let createdAccount: StoredAccount
-    if (remoteStatus.remoteAuth) {
-      const res = await fetch('/api/auth-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: accountPayload }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.status === 409) {
-        setSubmitError(t.signupDuplicateError)
-        return
+    if (role === 'cleaner') {
+      if (remoteStatus.remoteAuth) {
+        const res = await fetch('/api/auth-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account: accountPayload }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 409) {
+          setSubmitError(t.signupDuplicateError)
+          return
+        }
+        if (!res.ok || !Array.isArray(data.accounts)) {
+          setSubmitError("Inscription impossible : le serveur de comptes est indisponible. Réessayez plus tard.")
+          return
+        }
+        saveStoredAccounts(data.accounts)
+        const uNorm = username.trim().toLowerCase()
+        const found = data.accounts.find(
+          (a: { username?: unknown }) => normalizeStoredLoginPiece(a.username) === uNorm,
+        )
+        if (!found) {
+          setSubmitError("Inscription impossible : compte non retrouvé après création.")
+          return
+        }
+      } else {
+        if (isServerAccountsMandatory()) {
+          setSubmitError(serverAccountsConfigErrorMessage())
+          return
+        }
+        createAccount(accountPayload)
       }
-      if (!res.ok || !Array.isArray(data.accounts)) {
-        setSubmitError("Inscription impossible : le serveur de comptes est indisponible. Réessayez plus tard.")
-        return
+      try {
+        await fetch('/api/cancel-subscription-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'welcome_onboarding',
+            to: email.trim(),
+            firstName: firstName.trim(),
+            locale,
+            role,
+          }),
+        })
+      } catch {
+        // Non-blocking
       }
-      saveStoredAccounts(data.accounts)
-      const uNorm = username.trim().toLowerCase()
-      const found = data.accounts.find(
-        (a: { username?: unknown }) => normalizeStoredLoginPiece(a.username) === uNorm,
-      )
-      if (!found) {
-        setSubmitError("Inscription impossible : compte non retrouvé après création.")
-        return
-      }
-      createdAccount = found
-    } else {
-      if (isServerAccountsMandatory()) {
-        setSubmitError(serverAccountsConfigErrorMessage())
-        return
-      }
-      createdAccount = createAccount(accountPayload)
+      clearSignupEmailOtp(email.trim())
+      setSubmitError('')
+      localStorage.setItem('staypilot_current_user', username.trim())
+      localStorage.setItem('staypilot_login_identifier', username.trim())
+      localStorage.setItem('staypilot_session_active', 'true')
+      localStorage.setItem('staypilot_current_plan', 'Gratuit')
+      localStorage.setItem('staypilot_current_role', role)
+      window.dispatchEvent(new Event('staypilot-session-changed'))
+      window.location.href = '/dashboard'
+      return
     }
+
+    if (remoteStatus.remoteAuth && role === 'host') {
+      try {
+        const res = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planKey: planToPlanKey(plan),
+            clientType,
+            email: email.trim(),
+            locale,
+            pendingHostAccount: accountPayload,
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; message?: string }
+        if (res.status === 409 || data?.error === 'duplicate_account') {
+          setSubmitError(t.signupDuplicateError)
+          return
+        }
+        if (data?.error === 'pending_host_requires_kv') {
+          setSubmitError(serverAccountsConfigErrorMessage())
+          return
+        }
+        if (res.ok && data?.url) {
+          clearSignupEmailOtp(email.trim())
+          setSubmitError('')
+          window.location.href = data.url
+          return
+        }
+        if (data?.error === 'missing_plan_price_id') {
+          setSubmitError(
+            'Configuration Stripe incomplète (identifiant de prix manquant pour ce forfait). Contactez le support.',
+          )
+          return
+        }
+        if (data?.error === 'invalid_plan') {
+          setSubmitError('Forfait invalide. Sélectionnez Starter, Pro ou Scale puis réessayez.')
+          return
+        }
+        setSubmitError(
+          formatStripeCheckoutClientError(
+            data,
+            "Impossible d'ouvrir la page de paiement sécurisée Stripe. Réessayez dans un instant. Votre compte ne sera créé qu'après validation du paiement sur Stripe.",
+          ),
+        )
+      } catch {
+        setSubmitError(
+          "Impossible d'ouvrir la page de paiement Stripe (réseau). Réessayez. Votre compte ne sera créé qu'après validation du paiement sur Stripe.",
+        )
+      }
+      return
+    }
+
+    let createdAccount: StoredAccount
+    if (isServerAccountsMandatory()) {
+      setSubmitError(serverAccountsConfigErrorMessage())
+      return
+    }
+    createdAccount = createAccount(accountPayload)
     try {
       await fetch('/api/cancel-subscription-email', {
         method: 'POST',
@@ -486,17 +757,6 @@ export function SignupPage() {
     clearSignupEmailOtp(email.trim())
     setSubmitError('')
 
-    if (role === 'cleaner') {
-      localStorage.setItem('staypilot_current_user', username.trim())
-      localStorage.setItem('staypilot_login_identifier', username.trim())
-      localStorage.setItem('staypilot_session_active', 'true')
-      localStorage.setItem('staypilot_current_plan', 'Gratuit')
-      localStorage.setItem('staypilot_current_role', role)
-      window.dispatchEvent(new Event('staypilot-session-changed'))
-      window.location.href = '/dashboard'
-      return
-    }
-
     try {
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -509,7 +769,7 @@ export function SignupPage() {
           locale,
         }),
       })
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string }
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; message?: string }
       if (res.ok && data?.url) {
         localStorage.setItem('staypilot_current_user', username.trim())
         localStorage.setItem('staypilot_login_identifier', username.trim())
@@ -531,7 +791,10 @@ export function SignupPage() {
         return
       }
       setSubmitError(
-        "Impossible d'ouvrir la page de paiement sécurisée Stripe. Réessayez dans un instant. Si le compte a été créé, vous pouvez vous connecter puis compléter le paiement depuis votre espace.",
+        formatStripeCheckoutClientError(
+          data,
+          "Impossible d'ouvrir la page de paiement sécurisée Stripe. Réessayez dans un instant. Si le compte a été créé, vous pouvez vous connecter puis compléter le paiement depuis votre espace.",
+        ),
       )
     } catch {
       setSubmitError(
@@ -640,13 +903,24 @@ export function SignupPage() {
                 </label>
                 <label className="text-xs text-zinc-700">
                   Pays du client (ISO)
-                  <input
-                    type="text"
+                  <select
                     value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value.toUpperCase().slice(0, 2))}
-                    placeholder="FR"
-                    className="mt-1 w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
-                  />
+                    required
+                    onChange={(e) => {
+                      setCountryCode(e.target.value.toUpperCase())
+                      setVatVerified(false)
+                      setVatStatusMsg('')
+                    }}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
+                  >
+                    <option value="">{signupCountryPlaceholder}</option>
+                    {signupCountryOptions.map(({ code, label }) => (
+                      <option key={code} value={code}>
+                        {label} ({code})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
                 </label>
                 {clientType === 'b2b' ? (
                   <label className="sm:col-span-2 text-xs text-zinc-700">
@@ -659,7 +933,7 @@ export function SignupPage() {
                           setVatNumber(e.target.value.toUpperCase())
                           setVatVerified(false)
                         }}
-                        placeholder="FR12345678901"
+                        placeholder="12345678901"
                         className="w-full rounded-xl border border-zinc-200 px-3.5 py-3 text-sm text-zinc-900 outline-none transition focus:border-[#4a86f7] focus:ring-2 focus:ring-[#4a86f7]/20"
                       />
                       <button
@@ -671,6 +945,7 @@ export function SignupPage() {
                         {vatChecking ? 'Vérification...' : 'Vérifier TVA'}
                       </button>
                     </div>
+                    <p className="mt-1 text-[11px] text-zinc-500">{vatNoPrefixHint}</p>
                     {vatStatusMsg ? (
                       <p className={`mt-1 ${vatVerified ? 'text-emerald-700' : 'text-amber-700'}`}>{vatStatusMsg}</p>
                     ) : null}
@@ -697,6 +972,11 @@ export function SignupPage() {
                 <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
               </label>
             )}
+            {role === 'cleaner' && extractInviteCode(invitationCode) && !getValidCleanerInvite() ? (
+              <p className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs font-medium text-amber-950">
+                {t.signupCleanerInviteLinkHelp}
+              </p>
+            ) : null}
             <div>
               <input
                 type="text"
@@ -777,8 +1057,16 @@ export function SignupPage() {
               </div>
               <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>
             </div>
+            {requireEmailOtp && !emailVerifyValidated ? (
+              <p className="sm:col-span-2 rounded-lg border border-sky-200 bg-sky-50/90 px-3 py-2 text-xs font-medium text-sky-950">
+                {t.signupEmailVerifyScrollHint}
+              </p>
+            ) : null}
             {requireEmailOtp ? (
-              <div className="sm:col-span-2 rounded-xl border border-sky-200/80 bg-sky-50/50 p-3.5">
+              <div
+                id="signup-email-verify"
+                className="sm:col-span-2 scroll-mt-24 rounded-xl border border-sky-200/80 bg-sky-50/50 p-3.5"
+              >
                 <p className="text-sm font-semibold text-zinc-900">{t.signupEmailVerifyTitle}</p>
                 <p className="mt-1 text-xs text-zinc-600">{t.signupEmailVerifyExplain}</p>
                 <p className="mt-1 text-xs text-zinc-700">(obligatoire)</p>

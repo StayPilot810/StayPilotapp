@@ -23,17 +23,28 @@ export function getListingLimitForPlan(plan: PlanTier): number | null {
   return null
 }
 
+/** Accès cumulatif : Starter ⊂ Pro ⊂ Scale (Starter inclut ménage + consommables ; Scale = Pro + WhatsApp + accès anticipé). */
 export function canAccessDashboardPath(plan: PlanTier, pathname: string): boolean {
-  if (plan === 'scale') return true
   const normalizedPath = pathname.trim().toLowerCase()
+
+  /** Réservé Scale : WhatsApp prioritaire, accès anticipé aux nouveautés. */
+  const scaleOnlyPath =
+    normalizedPath === '/dashboard/whatsapp' || normalizedPath === '/dashboard/acces-anticipe'
+
+  if (plan === 'scale') return true
+  if (scaleOnlyPath) return false
+
   if (plan === 'starter') {
     return (
       normalizedPath === '/dashboard' ||
       normalizedPath === '/dashboard/connecter-logements' ||
       normalizedPath === '/dashboard/calendrier' ||
-      normalizedPath === '/dashboard/veille-informationnelle'
+      normalizedPath === '/dashboard/statistiques' ||
+      normalizedPath === '/dashboard/prestataire-menage' ||
+      normalizedPath === '/dashboard/consommables'
     )
   }
-  // Pro
-  return normalizedPath !== '/dashboard/whatsapp' && normalizedPath !== '/dashboard/acces-anticipe'
+
+  // Pro : tout sauf les chemins réservés Scale (inclut veille info, tableau des charges, etc.)
+  return true
 }

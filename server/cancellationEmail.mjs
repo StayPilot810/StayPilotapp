@@ -133,38 +133,103 @@ export async function sendFailedPaymentAlertEmail(payload, env = process.env) {
   const suspensionDate = fmtLongDate(suspendAtIso, locale)
   const isFinalAttempt = attempt >= 3
   const subject = isFinalAttempt
-    ? 'Action requise : compte StayPilot suspendu (paiement non valide)'
-    : `Action requise : tentative de prélèvement ${attempt}/3 échouée`
+    ? L(locale, {
+        fr: 'Action requise : compte StayPilot suspendu (paiement non valide)',
+        en: 'Action required: StayPilot account suspended (invalid payment)',
+        es: 'Acción requerida: cuenta StayPilot suspendida (pago no válido)',
+        de: 'Aktion erforderlich: StayPilot-Konto gesperrt (ungültige Zahlung)',
+        it: 'Azione richiesta: account StayPilot sospeso (pagamento non valido)',
+      })
+    : L(locale, {
+        fr: `Action requise : tentative de prélèvement ${attempt}/3 échouée`,
+        en: `Action required: payment attempt ${attempt}/3 failed`,
+        es: `Acción requerida: intento de cobro ${attempt}/3 fallido`,
+        de: `Aktion erforderlich: Abbuchungsversuch ${attempt}/3 fehlgeschlagen`,
+        it: `Azione richiesta: tentativo di addebito ${attempt}/3 non riuscito`,
+      })
+  const hello = L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Salve,' })
+  const team = L(locale, {
+    fr: "— L'équipe StayPilot",
+    en: '— The StayPilot team',
+    es: '— El equipo StayPilot',
+    de: '— Das StayPilot-Team',
+    it: '— Il team StayPilot',
+  })
+  const cta = L(locale, {
+    fr: 'Mettre à jour mes coordonnées',
+    en: 'Update my payment details',
+    es: 'Actualizar mis datos de pago',
+    de: 'Zahlungsdaten aktualisieren',
+    it: 'Aggiorna i miei dati di pagamento',
+  })
+  const title = L(locale, {
+    fr: 'Alerte paiement StayPilot',
+    en: 'StayPilot payment alert',
+    es: 'Alerta de pago StayPilot',
+    de: 'StayPilot-Zahlungshinweis',
+    it: 'Avviso di pagamento StayPilot',
+  })
   const text = isFinalAttempt
-    ? `Bonjour,\n\nVotre 3e tentative de prélèvement a échoué. Votre compte StayPilot est maintenant suspendu.\n\nPour réactiver l'accès, mettez vos coordonnées bancaires à jour depuis votre profil.\n\nSans mise à jour, le compte reste suspendu.\n\nSupport : support@staypilot.fr\n\n- L'équipe StayPilot`
-    : `Bonjour,\n\nLa tentative de prélèvement ${attempt}/3 a échoué.\n\nMerci de mettre à jour vos coordonnées bancaires pour éviter une suspension automatique de votre compte le ${suspensionDate}.\n\nSupport : support@staypilot.fr\n\n- L'équipe StayPilot`
+    ? `${hello}\n\n${L(locale, {
+        fr: `Votre 3e tentative de prélèvement a échoué. Votre compte StayPilot est suspendu.\n\nMettez à jour vos coordonnées bancaires depuis votre profil pour réactiver l'accès.\n\nSupport : support@staypilot.fr`,
+        en: `Your 3rd payment attempt failed. Your StayPilot account is suspended.\n\nUpdate your payment details in your profile to restore access.\n\nSupport: support@staypilot.fr`,
+        es: `Su 3.er intento de cobro ha fallado. Su cuenta StayPilot está suspendida.\n\nActualice sus datos de pago en su perfil para reactivar el acceso.\n\nSoporte: support@staypilot.fr`,
+        de: `Ihr 3. Abbuchungsversuch ist fehlgeschlagen. Ihr StayPilot-Konto ist gesperrt.\n\nAktualisieren Sie Ihre Zahlungsdaten im Profil, um den Zugang wiederherzustellen.\n\nSupport: support@staypilot.fr`,
+        it: `Il 3° tentativo di addebito non è riuscito. Il suo account StayPilot è sospeso.\n\nAggiorni i dati di pagamento nel profilo per riattivare l'accesso.\n\nSupporto: support@staypilot.fr`,
+      })}\n\n${team}`
+    : `${hello}\n\n${L(locale, {
+        fr: `La tentative de prélèvement ${attempt}/3 a échoué.\n\nMettez à jour vos coordonnées bancaires pour éviter une suspension automatique le ${suspensionDate}.\n\nSupport : support@staypilot.fr`,
+        en: `Payment attempt ${attempt}/3 failed.\n\nUpdate your payment details to avoid automatic suspension on ${suspensionDate}.\n\nSupport: support@staypilot.fr`,
+        es: `El intento de cobro ${attempt}/3 ha fallado.\n\nActualice sus datos de pago para evitar la suspensión automática el ${suspensionDate}.\n\nSoporte: support@staypilot.fr`,
+        de: `Abbuchungsversuch ${attempt}/3 fehlgeschlagen.\n\nAktualisieren Sie Ihre Zahlungsdaten, um eine automatische Sperre am ${suspensionDate} zu vermeiden.\n\nSupport: support@staypilot.fr`,
+        it: `Tentativo di addebito ${attempt}/3 non riuscito.\n\nAggiorni i dati di pagamento per evitare la sospensione automatica il ${suspensionDate}.\n\nSupporto: support@staypilot.fr`,
+      })}\n\n${team}`
+
+  const p1 = isFinalAttempt
+    ? L(locale, {
+        fr: 'Votre 3e tentative de prélèvement a échoué. Votre compte est suspendu.',
+        en: 'Your 3rd payment attempt failed. Your account is suspended.',
+        es: 'Su 3.er intento de cobro ha fallado. Su cuenta está suspendida.',
+        de: 'Ihr 3. Abbuchungsversuch ist fehlgeschlagen. Ihr Konto ist gesperrt.',
+        it: 'Il 3° tentativo di addebito non è riuscito. Il suo account è sospeso.',
+      })
+    : L(locale, {
+        fr: `La tentative de prélèvement ${attempt}/3 a échoué.`,
+        en: `Payment attempt ${attempt}/3 failed.`,
+        es: `El intento de cobro ${attempt}/3 ha fallado.`,
+        de: `Abbuchungsversuch ${attempt}/3 fehlgeschlagen.`,
+        it: `Tentativo di addebito ${attempt}/3 non riuscito.`,
+      })
+  const p2 = isFinalAttempt
+    ? L(locale, {
+        fr: 'Mettez vos coordonnées bancaires à jour pour réactiver votre accès immédiatement.',
+        en: 'Update your payment details to restore access immediately.',
+        es: 'Actualice sus datos de pago para reactivar el acceso de inmediato.',
+        de: 'Aktualisieren Sie Ihre Zahlungsdaten, um den Zugang sofort wiederherzustellen.',
+        it: 'Aggiorni i dati di pagamento per riattivare subito l’accesso.',
+      })
+    : L(locale, {
+        fr: `Sans mise à jour, suspension automatique le ${suspensionDate}.`,
+        en: `Without an update, automatic suspension on ${suspensionDate}.`,
+        es: `Sin actualización, suspensión automática el ${suspensionDate}.`,
+        de: `Ohne Aktualisierung automatische Sperre am ${suspensionDate}.`,
+        it: `Senza aggiornamento, sospensione automatica il ${suspensionDate}.`,
+      })
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#fff7ed;padding:24px;color:#0f172a">
       <div style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #fed7aa;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#ea580c,#f97316);padding:16px 24px;color:#fff;font-weight:700;font-size:19px">
-          Alerte paiement StayPilot
+          ${title}
         </div>
         <div style="padding:24px">
-          <p style="margin:0 0 12px;font-size:15px">Bonjour,</p>
-          <p style="margin:0 0 12px;font-size:15px">
-            ${
-              isFinalAttempt
-                ? "Votre 3e tentative de prélèvement a échoué. Votre compte est suspendu."
-                : `La tentative de prélèvement ${attempt}/3 a échoué.`
-            }
-          </p>
+          <p style="margin:0 0 12px;font-size:15px">${hello}</p>
+          <p style="margin:0 0 12px;font-size:15px">${p1}</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74">
-            <p style="margin:0;font-size:14px;color:#9a3412">
-              ${
-                isFinalAttempt
-                  ? 'Mettez vos coordonnées bancaires à jour pour réactiver votre accès immédiatement.'
-                  : `Sans mise à jour, suspension automatique le ${suspensionDate}.`
-              }
-            </p>
+            <p style="margin:0;font-size:14px;color:#9a3412">${p2}</p>
           </div>
-          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#9a3412;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Mettre à jour mes coordonnées</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#7c2d12">- L'équipe StayPilot</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#9a3412;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">${cta}</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#7c2d12">${team}</p>
         </div>
       </div>
     </div>
@@ -203,36 +268,112 @@ export async function sendPlanChangeConfirmationEmail(payload, env = process.env
   })
 
   const nextBillingLabel = fmtLongDate(nextBillingIso, locale)
-  const hello = firstName ? `Bonjour ${firstName},` : 'Bonjour,'
-  const subject = `Merci - votre changement de forfait StayPilot est confirmé (${newPlan})`
+  const hello = firstName
+    ? L(locale, {
+        fr: `Bonjour ${firstName},`,
+        en: `Hello ${firstName},`,
+        es: `Hola ${firstName},`,
+        de: `Hallo ${firstName},`,
+        it: `Salve ${firstName},`,
+      })
+    : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Salve,' })
+  const team = L(locale, {
+    fr: "— L'équipe StayPilot",
+    en: '— The StayPilot team',
+    es: '— El equipo StayPilot',
+    de: '— Das StayPilot-Team',
+    it: '— Il team StayPilot',
+  })
+  const supportCta = L(locale, {
+    fr: 'Contacter le support',
+    en: 'Contact support',
+    es: 'Contactar soporte',
+    de: 'Support kontaktieren',
+    it: 'Contatta il supporto',
+  })
+  const subject = L(locale, {
+    fr: `Merci — votre changement de forfait StayPilot est confirmé (${newPlan})`,
+    en: `Thank you — your StayPilot plan change is confirmed (${newPlan})`,
+    es: `Gracias — su cambio de plan StayPilot está confirmado (${newPlan})`,
+    de: `Vielen Dank — Ihr StayPilot-Tarifwechsel ist bestätigt (${newPlan})`,
+    it: `Grazie — la modifica del piano StayPilot è confermata (${newPlan})`,
+  })
+  const headTitle = L(locale, {
+    fr: 'StayPilot — Changement de forfait confirmé',
+    en: 'StayPilot — Plan change confirmed',
+    es: 'StayPilot — Cambio de plan confirmado',
+    de: 'StayPilot — Tarifwechsel bestätigt',
+    it: 'StayPilot — Modifica del piano confermata',
+  })
+  const intro = L(locale, {
+    fr: 'Merci pour votre confiance. Votre changement de forfait est bien confirmé.',
+    en: 'Thank you for your trust. Your plan change is confirmed.',
+    es: 'Gracias por su confianza. Su cambio de plan está confirmado.',
+    de: 'Vielen Dank für Ihr Vertrauen. Ihr Tarifwechsel ist bestätigt.',
+    it: 'Grazie per la fiducia. La modifica del piano è confermata.',
+  })
+  const oldLbl = L(locale, {
+    fr: 'Ancien forfait',
+    en: 'Previous plan',
+    es: 'Plan anterior',
+    de: 'Bisheriger Tarif',
+    it: 'Piano precedente',
+  })
+  const newLbl = L(locale, {
+    fr: 'Nouveau forfait',
+    en: 'New plan',
+    es: 'Nuevo plan',
+    de: 'Neuer Tarif',
+    it: 'Nuovo piano',
+  })
+  const billingNote = L(locale, {
+    fr: `Important : vous ne serez pas débité immédiatement du nouveau montant. Le nouveau tarif s’appliquera à partir de votre prochaine échéance, le ${nextBillingLabel}.`,
+    en: `Important: you will not be charged the new amount immediately. The new price applies from your next billing date, ${nextBillingLabel}.`,
+    es: `Importante: no se le cobrará de inmediato el nuevo importe. El nuevo precio se aplicará a partir de su próxima fecha de facturación, el ${nextBillingLabel}.`,
+    de: `Wichtig: Der neue Betrag wird nicht sofort abgebucht. Der neue Preis gilt ab Ihrem nächsten Abrechnungsdatum, dem ${nextBillingLabel}.`,
+    it: `Importante: non verrà addebitato subito il nuovo importo. Il nuovo prezzo si applica dalla prossima data di fatturazione, il ${nextBillingLabel}.`,
+  })
+  const billingNoteHtml = L(locale, {
+    fr: `Important : vous ne serez pas débité immédiatement du nouveau montant. Le nouveau tarif s’appliquera à partir du <strong>${nextBillingLabel}</strong>.`,
+    en: `Important: you will not be charged the new amount immediately. The new price applies from <strong>${nextBillingLabel}</strong>.`,
+    es: `Importante: no se le cobrará de inmediato el nuevo importe. El nuevo precio se aplicará a partir del <strong>${nextBillingLabel}</strong>.`,
+    de: `Wichtig: Der neue Betrag wird nicht sofort abgebucht. Der neue Preis gilt ab dem <strong>${nextBillingLabel}</strong>.`,
+    it: `Importante: non verrà addebitato subito il nuovo importo. Il nuovo prezzo si applica dal <strong>${nextBillingLabel}</strong>.`,
+  })
+  const helpLine = L(locale, {
+    fr: "Besoin d’aide ? Répondez à cet e-mail ou contactez support@staypilot.fr.",
+    en: 'Need help? Reply to this email or contact support@staypilot.fr.',
+    es: '¿Necesita ayuda? Responda a este correo o contacte a support@staypilot.fr.',
+    de: 'Brauchen Sie Hilfe? Antworten Sie auf diese E-Mail oder kontaktieren Sie support@staypilot.fr.',
+    it: 'Serve aiuto? Rispondete a questa e-mail o contattate support@staypilot.fr.',
+  })
   const text =
     `${hello}\n\n` +
-    `Merci pour votre confiance. Votre demande de changement de forfait est bien confirmée.\n` +
-    `Ancien forfait: ${oldPlan}\n` +
-    `Nouveau forfait: ${newPlan}\n\n` +
-    `Important : vous ne serez pas débité immédiatement du nouveau montant.\n` +
-    `Le nouveau tarif s'appliquera uniquement à partir de votre prochaine échéance, le ${nextBillingLabel}.\n\n` +
-    `Besoin d'aide ? Répondez à cet e-mail ou contactez support@staypilot.fr.\n\n` +
-    `- L'équipe StayPilot`
+    `${intro}\n` +
+    `${oldLbl}: ${oldPlan}\n` +
+    `${newLbl}: ${newPlan}\n\n` +
+    `${billingNote}\n\n` +
+    `${helpLine}\n\n` +
+    `${team}`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#2563eb,#3b82f6);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Changement de forfait confirmé
+          ${headTitle}
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Merci pour votre confiance. Votre changement de forfait est validé.</p>
+          <p style="margin:0 0 12px;font-size:15px">${intro}</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe">
-            <p style="margin:0;font-size:14px;color:#1e3a8a">Ancien forfait : <strong>${oldPlan}</strong></p>
-            <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">Nouveau forfait : <strong>${newPlan}</strong></p>
+            <p style="margin:0;font-size:14px;color:#1e3a8a">${oldLbl} : <strong>${oldPlan}</strong></p>
+            <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a">${newLbl} : <strong>${newPlan}</strong></p>
           </div>
           <p style="margin:0 0 12px;font-size:14px;color:#334155">
-            Important : vous ne serez pas débité tout de suite du nouveau montant. Le nouveau tarif sera appliqué à partir du <strong>${nextBillingLabel}</strong>.
+            ${billingNoteHtml}
           </p>
-          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">${supportCta}</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">${team}</p>
         </div>
       </div>
     </div>
@@ -267,28 +408,80 @@ export async function sendPasswordChangedConfirmationEmail(payload, env = proces
   })
 
   const changedLabel = fmtLongDate(changedAtIso, locale)
-  const hello = firstName ? `Bonjour ${firstName},` : 'Bonjour,'
-  const subject = 'Confirmation de changement de mot de passe StayPilot'
-  const text =
-    `${hello}\n\n` +
-    `Votre mot de passe StayPilot a bien été modifié le ${changedLabel}.\n` +
-    `Si vous n'êtes pas à l'origine de ce changement, contactez immédiatement support@staypilot.fr.\n\n` +
-    `- L'équipe StayPilot`
+  const hello = firstName
+    ? L(locale, {
+        fr: `Bonjour ${firstName},`,
+        en: `Hello ${firstName},`,
+        es: `Hola ${firstName},`,
+        de: `Hallo ${firstName},`,
+        it: `Salve ${firstName},`,
+      })
+    : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Salve,' })
+  const team = L(locale, {
+    fr: "— L'équipe StayPilot",
+    en: '— The StayPilot team',
+    es: '— El equipo StayPilot',
+    de: '— Das StayPilot-Team',
+    it: '— Il team StayPilot',
+  })
+  const supportCta = L(locale, {
+    fr: 'Contacter le support',
+    en: 'Contact support',
+    es: 'Contactar soporte',
+    de: 'Support kontaktieren',
+    it: 'Contatta il supporto',
+  })
+  const subject = L(locale, {
+    fr: 'Confirmation de changement de mot de passe StayPilot',
+    en: 'StayPilot password change confirmation',
+    es: 'Confirmación de cambio de contraseña StayPilot',
+    de: 'Bestätigung: StayPilot-Passwort geändert',
+    it: 'Conferma modifica password StayPilot',
+  })
+  const headTitle = L(locale, {
+    fr: 'StayPilot — Sécurité du compte',
+    en: 'StayPilot — Account security',
+    es: 'StayPilot — Seguridad de la cuenta',
+    de: 'StayPilot — Kontosicherheit',
+    it: 'StayPilot — Sicurezza dell\u2019account',
+  })
+  const mainP = L(locale, {
+    fr: `Votre mot de passe a été modifié avec succès le ${changedLabel}.`,
+    en: `Your password was successfully changed on ${changedLabel}.`,
+    es: `Su contraseña se modificó correctamente el ${changedLabel}.`,
+    de: `Ihr Passwort wurde am ${changedLabel} erfolgreich geändert.`,
+    it: `La password è stata modificata con successo il ${changedLabel}.`,
+  })
+  const mainPHtml = L(locale, {
+    fr: `Votre mot de passe a été modifié avec succès le <strong>${changedLabel}</strong>.`,
+    en: `Your password was successfully changed on <strong>${changedLabel}</strong>.`,
+    es: `Su contraseña se modificó correctamente el <strong>${changedLabel}</strong>.`,
+    de: `Ihr Passwort wurde am <strong>${changedLabel}</strong> erfolgreich geändert.`,
+    it: `La password è stata modificata con successo il <strong>${changedLabel}</strong>.`,
+  })
+  const warnP = L(locale, {
+    fr: 'Si ce changement ne vient pas de vous, contactez immédiatement support@staypilot.fr.',
+    en: 'If you did not make this change, contact support@staypilot.fr immediately.',
+    es: 'Si usted no realizó este cambio, contacte de inmediato a support@staypilot.fr.',
+    de: 'Wenn Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie umgehend support@staypilot.fr.',
+    it: 'Se non avete effettuato questa modifica, contattate subito support@staypilot.fr.',
+  })
+  const text = `${hello}\n\n${mainP}\n${warnP}\n\n${team}`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Sécurité du compte
+          ${headTitle}
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a été modifié avec succès le <strong>${changedLabel}</strong>.</p>
+          <p style="margin:0 0 12px;font-size:15px">${mainPHtml}</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #cbd5e1">
-            <p style="margin:0;font-size:13px;color:#334155">Si ce changement ne vient pas de vous, contactez immédiatement support@staypilot.fr.</p>
+            <p style="margin:0;font-size:13px;color:#334155">${warnP}</p>
           </div>
-          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">${supportCta}</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">${team}</p>
         </div>
       </div>
     </div>
@@ -323,28 +516,80 @@ export async function sendPasswordResetConfirmationEmail(payload, env = process.
   })
 
   const resetLabel = fmtLongDate(resetAtIso, locale)
-  const hello = firstName ? `Bonjour ${firstName},` : 'Bonjour,'
-  const subject = 'Confirmation de réinitialisation du mot de passe StayPilot'
-  const text =
-    `${hello}\n\n` +
-    `Votre mot de passe StayPilot a bien été réinitialisé le ${resetLabel}.\n` +
-    `Si vous n'êtes pas à l'origine de cette action, contactez immédiatement support@staypilot.fr.\n\n` +
-    `- L'équipe StayPilot`
+  const hello = firstName
+    ? L(locale, {
+        fr: `Bonjour ${firstName},`,
+        en: `Hello ${firstName},`,
+        es: `Hola ${firstName},`,
+        de: `Hallo ${firstName},`,
+        it: `Salve ${firstName},`,
+      })
+    : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Salve,' })
+  const team = L(locale, {
+    fr: "— L'équipe StayPilot",
+    en: '— The StayPilot team',
+    es: '— El equipo StayPilot',
+    de: '— Das StayPilot-Team',
+    it: '— Il team StayPilot',
+  })
+  const supportCta = L(locale, {
+    fr: 'Contacter le support',
+    en: 'Contact support',
+    es: 'Contactar soporte',
+    de: 'Support kontaktieren',
+    it: 'Contatta il supporto',
+  })
+  const subject = L(locale, {
+    fr: 'Confirmation de réinitialisation du mot de passe StayPilot',
+    en: 'StayPilot password reset confirmation',
+    es: 'Confirmación de restablecimiento de contraseña StayPilot',
+    de: 'Bestätigung: StayPilot-Passwort zurückgesetzt',
+    it: 'Conferma reimpostazione password StayPilot',
+  })
+  const headTitle = L(locale, {
+    fr: 'StayPilot — Réinitialisation du mot de passe',
+    en: 'StayPilot — Password reset',
+    es: 'StayPilot — Restablecimiento de contraseña',
+    de: 'StayPilot — Passwort zurückgesetzt',
+    it: 'StayPilot — Reimpostazione password',
+  })
+  const mainP = L(locale, {
+    fr: `Votre mot de passe a été réinitialisé avec succès le ${resetLabel}.`,
+    en: `Your password was successfully reset on ${resetLabel}.`,
+    es: `Su contraseña se restableció correctamente el ${resetLabel}.`,
+    de: `Ihr Passwort wurde am ${resetLabel} erfolgreich zurückgesetzt.`,
+    it: `La password è stata reimpostata con successo il ${resetLabel}.`,
+  })
+  const mainPHtml = L(locale, {
+    fr: `Votre mot de passe a été réinitialisé avec succès le <strong>${resetLabel}</strong>.`,
+    en: `Your password was successfully reset on <strong>${resetLabel}</strong>.`,
+    es: `Su contraseña se restableció correctamente el <strong>${resetLabel}</strong>.`,
+    de: `Ihr Passwort wurde am <strong>${resetLabel}</strong> erfolgreich zurückgesetzt.`,
+    it: `La password è stata reimpostata con successo il <strong>${resetLabel}</strong>.`,
+  })
+  const warnP = L(locale, {
+    fr: 'Si cette action ne vient pas de vous, contactez immédiatement support@staypilot.fr.',
+    en: 'If you did not perform this action, contact support@staypilot.fr immediately.',
+    es: 'Si usted no realizó esta acción, contacte de inmediato a support@staypilot.fr.',
+    de: 'Wenn Sie diese Aktion nicht ausgeführt haben, kontaktieren Sie umgehend support@staypilot.fr.',
+    it: 'Se non avete effettuato questa operazione, contattate subito support@staypilot.fr.',
+  })
+  const text = `${hello}\n\n${mainP}\n${warnP}\n\n${team}`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Réinitialisation mot de passe
+          ${headTitle}
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 12px;font-size:15px">Votre mot de passe a été réinitialisé avec succès le <strong>${resetLabel}</strong>.</p>
+          <p style="margin:0 0 12px;font-size:15px">${mainPHtml}</p>
           <div style="margin:14px 0;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #cbd5e1">
-            <p style="margin:0;font-size:13px;color:#334155">Si cette action ne vient pas de vous, contactez immédiatement support@staypilot.fr.</p>
+            <p style="margin:0;font-size:13px;color:#334155">${warnP}</p>
           </div>
-          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">Contacter le support</a>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
+          <a href="mailto:support@staypilot.fr" style="display:inline-block;padding:10px 14px;background:#0f172a;color:#fff;text-decoration:none;border-radius:9px;font-size:13px;font-weight:600">${supportCta}</a>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">${team}</p>
         </div>
       </div>
     </div>
@@ -378,7 +623,15 @@ export async function sendPasswordVerificationCodeEmail(payload, env = process.e
     auth: { user: smtp.user, pass: smtp.pass },
   })
 
-  const hello = firstName ? `${L(locale, { fr: 'Bonjour', en: 'Hello', es: 'Hola', de: 'Hallo', it: 'Ciao' })} ${firstName},` : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Ciao,' })
+  const hello = firstName
+    ? L(locale, {
+        fr: `Bonjour ${firstName},`,
+        en: `Hello ${firstName},`,
+        es: `Hola ${firstName},`,
+        de: `Hallo ${firstName},`,
+        it: `Salve ${firstName},`,
+      })
+    : L(locale, { fr: 'Bonjour,', en: 'Hello,', es: 'Hola,', de: 'Hallo,', it: 'Salve,' })
   const subject = L(locale, {
     fr: 'Code de vérification StayPilot (mot de passe)',
     en: 'StayPilot verification code (password)',
@@ -386,28 +639,65 @@ export async function sendPasswordVerificationCodeEmail(payload, env = process.e
     de: 'StayPilot-Bestätigungscode (Passwort)',
     it: 'Codice di verifica StayPilot (password)',
   })
-  const text =
-    `${hello}\n\n` +
-    `Voici votre code de vérification à 6 chiffres : ${code}\n` +
-    `Ce code est valable 10 minutes.\n` +
-    `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et contactez support@staypilot.fr.\n\n` +
-    `- L'équipe StayPilot`
+  const team = L(locale, {
+    fr: "— L'équipe StayPilot",
+    en: '— The StayPilot team',
+    es: '— El equipo StayPilot',
+    de: '— Das StayPilot-Team',
+    it: '— Il team StayPilot',
+  })
+  const headTitle = L(locale, {
+    fr: 'StayPilot — Vérification de sécurité',
+    en: 'StayPilot — Security verification',
+    es: 'StayPilot — Verificación de seguridad',
+    de: 'StayPilot — Sicherheitsprüfung',
+    it: 'StayPilot — Verifica di sicurezza',
+  })
+  const instruct = L(locale, {
+    fr: 'Utilisez ce code pour confirmer la modification du mot de passe :',
+    en: 'Use this code to confirm your password change:',
+    es: 'Use este código para confirmar el cambio de contraseña:',
+    de: 'Verwenden Sie diesen Code, um die Passwortänderung zu bestätigen:',
+    it: 'Usi questo codice per confermare la modifica della password:',
+  })
+  const codeLine = L(locale, {
+    fr: `Voici votre code de vérification à 6 chiffres : ${code}`,
+    en: `Your 6-digit verification code is: ${code}`,
+    es: `Su código de verificación de 6 dígitos es: ${code}`,
+    de: `Ihr 6-stelliger Bestätigungscode lautet: ${code}`,
+    it: `Il codice di verifica a 6 cifre è: ${code}`,
+  })
+  const valid10 = L(locale, {
+    fr: 'Ce code est valable 10 minutes.',
+    en: 'This code is valid for 10 minutes.',
+    es: 'Este código es válido durante 10 minutos.',
+    de: 'Dieser Code ist 10 Minuten gültig.',
+    it: 'Questo codice è valido per 10 minuti.',
+  })
+  const ignoreLine = L(locale, {
+    fr: 'Si cette demande ne vient pas de vous, ignorez cet e-mail et contactez support@staypilot.fr.',
+    en: 'If you did not request this, ignore this email and contact support@staypilot.fr.',
+    es: 'Si no realizó esta solicitud, ignore este correo y contacte a support@staypilot.fr.',
+    de: 'Wenn Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail und kontaktieren Sie support@staypilot.fr.',
+    it: 'Se non avete richiesto questa operazione, ignorate questa e-mail e contattate support@staypilot.fr.',
+  })
+  const text = `${hello}\n\n${codeLine}\n${valid10}\n${ignoreLine}\n\n${team}`
 
   const html = `
     <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
       <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:16px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#0f172a,#334155);padding:18px 24px;color:#fff;font-weight:700;font-size:20px">
-          StayPilot - Vérification sécurité
+          ${headTitle}
         </div>
         <div style="padding:24px">
           <p style="margin:0 0 12px;font-size:15px">${hello}</p>
-          <p style="margin:0 0 8px;font-size:14px;color:#334155">Utilisez ce code pour confirmer la modification du mot de passe :</p>
+          <p style="margin:0 0 8px;font-size:14px;color:#334155">${instruct}</p>
           <div style="margin:10px 0 14px;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center">
             <p style="margin:0;font-size:30px;letter-spacing:4px;font-weight:700;color:#1d4ed8">${code}</p>
           </div>
-          <p style="margin:0 0 12px;font-size:13px;color:#475569">Ce code est valable 10 minutes.</p>
-          <p style="margin:0;font-size:13px;color:#475569">Si cette demande ne vient pas de vous, ignorez cet e-mail et contactez support@staypilot.fr.</p>
-          <p style="margin:18px 0 0;font-size:13px;color:#475569">- L'équipe StayPilot</p>
+          <p style="margin:0 0 12px;font-size:13px;color:#475569">${valid10}</p>
+          <p style="margin:0;font-size:13px;color:#475569">${ignoreLine}</p>
+          <p style="margin:18px 0 0;font-size:13px;color:#475569">${team}</p>
         </div>
       </div>
     </div>

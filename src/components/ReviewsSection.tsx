@@ -52,7 +52,8 @@ function Stars({ rating, size = 'md' }: { rating: 1 | 2 | 3 | 4 | 5; size?: Star
 }
 
 function FeaturedReviewCard({ review }: { review: FeaturedSlot }) {
-  const { cardKey: _cardKey, ...data } = review
+  const { cardKey, ...data } = review
+  void cardKey
   const reduceMotion = useReducedMotion()
   return (
     <motion.article
@@ -86,7 +87,8 @@ function FeaturedReviewCard({ review }: { review: FeaturedSlot }) {
 }
 
 function CompactReviewCard({ review }: { review: FeaturedSlot }) {
-  const { cardKey: _cardKey, ...data } = review
+  const { cardKey, ...data } = review
+  void cardKey
   const reduceMotion = useReducedMotion()
   return (
     <motion.article

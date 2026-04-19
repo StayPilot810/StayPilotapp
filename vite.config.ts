@@ -245,6 +245,71 @@ export default defineConfig(() => {
           }
         })
 
+        server.middlewares.use('/api/complete-host-signup', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const chunks = []
+            for await (const chunk of req) chunks.push(chunk)
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let body: any = {}
+            try {
+              body = raw ? JSON.parse(raw) : {}
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'invalid_json' }))
+              return
+            }
+            const liveEnv = loadEnv(server.config.mode, server.config.envDir ?? envDir, '')
+            const { handleCompleteHostSignupRequest } = await import('./server/hostCheckoutFinalize.mjs')
+            const { status, json } = await handleCompleteHostSignupRequest(body, liveEnv)
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(json))
+          } catch {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'complete_host_signup_failed' }))
+          }
+        })
+
+        server.middlewares.use('/api/stripe-billing-status', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'method_not_allowed' }))
+            return
+          }
+          try {
+            const chunks = []
+            for await (const chunk of req) chunks.push(chunk)
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let body: any = {}
+            try {
+              body = raw ? JSON.parse(raw) : {}
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'invalid_json' }))
+              return
+            }
+            const { handleStripeBillingStatusRequest } = await import('./server/stripeBillingKv.mjs')
+            const { status, json } = await handleStripeBillingStatusRequest(body)
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(json))
+          } catch {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'stripe_billing_status_failed' }))
+          }
+        })
+
         server.middlewares.use('/api/verify-card', async (req, res) => {
           if (req.method !== 'POST') {
             res.statusCode = 405
@@ -481,7 +546,7 @@ export default defineConfig(() => {
             res.end(
               JSON.stringify({
                 error: 'email_send_failed',
-                message: e instanceof Error ? e.message : 'Erreur envoi e-mail',
+                message: e instanceof Error ? e.message : "Erreur d'envoi d'e-mail",
               }),
             )
           }

@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react'
+import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react'
 import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
@@ -40,6 +40,12 @@ import { ProfilePage } from './components/ProfilePage'
 import { FeaturesVideoPage } from './components/FeaturesVideoPage'
 import { useAppPathname } from './hooks/useAppPathname'
 import { canAccessDashboardPath, getPlanTierFromValue } from './utils/subscriptionAccess'
+import {
+  clearStaypilotClientSessionAndCaches,
+  getStoredAccounts,
+  saveStoredAccounts,
+  storedAccountMatchesNormalizedId,
+} from './lib/accounts'
 
 function DashboardSocieteRedirect() {
   useEffect(() => {
@@ -95,8 +101,24 @@ class AppErrorBoundary extends Component<
   }
 }
 
+declare global {
+  interface Window {
+    /** Console : `window.__staypilotClearLocal?.()` puis recharger, pour tout vider côté navigateur après une purge serveur. */
+    __staypilotClearLocal?: () => void
+  }
+}
+
 export default function App() {
   const pathname = useAppPathname()
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.__staypilotClearLocal = clearStaypilotClientSessionAndCaches
+    return () => {
+      delete window.__staypilotClearLocal
+    }
+  }, [])
+
   const currentRoleRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_role') : null
   const isCleanerSession = (currentRoleRaw || '').trim().toLowerCase() === 'cleaner'
   const cleanerAllowedDashboardPaths = new Set([
@@ -114,6 +136,80 @@ export default function App() {
   } catch {
     billingSuspended = false
   }
+
+  const [stripeDashboardBlocked, setStripeDashboardBlocked] = useState(false)
+  const [, setPlanSyncTick] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    async function syncStripeBillingGate() {
+      if (typeof window === 'undefined') return
+      if (isCleanerSession) {
+        if (!cancelled) setStripeDashboardBlocked(false)
+        return
+      }
+      const user = localStorage.getItem('staypilot_current_user')
+      const idNorm = (user || '').trim().toLowerCase()
+      if (!idNorm) {
+        if (!cancelled) setStripeDashboardBlocked(false)
+        return
+      }
+      const acc = getStoredAccounts().find((a) => storedAccountMatchesNormalizedId(a, idNorm))
+      const aid = acc?.id
+      if (!aid) {
+        if (!cancelled) setStripeDashboardBlocked(false)
+        return
+      }
+      try {
+        const r = await fetch('/api/stripe-billing-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId: aid }),
+        })
+        const j = (await r.json().catch(() => ({}))) as {
+          blocked?: boolean
+          plan?: string | null
+        }
+        if (!cancelled) setStripeDashboardBlocked(Boolean(j?.blocked))
+        const remotePlan = typeof j?.plan === 'string' ? j.plan.trim() : ''
+        if (remotePlan && !cancelled) {
+          const prevLs = (localStorage.getItem('staypilot_current_plan') || '').trim()
+          const accounts = getStoredAccounts()
+          const idx = accounts.findIndex((a) => a.id === aid)
+          let updatedCache = false
+          if (idx >= 0 && (accounts[idx].plan || '').trim() !== remotePlan) {
+            const next = accounts.map((a, i) => (i === idx ? { ...a, plan: remotePlan } : a))
+            saveStoredAccounts(next)
+            updatedCache = true
+          }
+          if (prevLs !== remotePlan) {
+            localStorage.setItem('staypilot_current_plan', remotePlan)
+            window.dispatchEvent(new Event('staypilot-session-changed'))
+          }
+          if (updatedCache || prevLs !== remotePlan) {
+            setPlanSyncTick((n) => n + 1)
+          }
+        }
+      } catch {
+        if (!cancelled) setStripeDashboardBlocked(false)
+      }
+    }
+    void syncStripeBillingGate()
+    const t = window.setInterval(() => void syncStripeBillingGate(), 120_000)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void syncStripeBillingGate()
+    }
+    const onSession = () => void syncStripeBillingGate()
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('staypilot-session-changed', onSession)
+    return () => {
+      cancelled = true
+      window.clearInterval(t)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('staypilot-session-changed', onSession)
+    }
+  }, [isCleanerSession, pathname])
+
+  const hostBillingBlocked = billingSuspended || stripeDashboardBlocked
   const isLoginPage = pathname === '/connexion'
   const isSignupPage = pathname === '/inscription'
   const isAboutPage = pathname === '/a-propos'
@@ -224,73 +320,73 @@ export default function App() {
           ) : (isDashboardPage || isDashboardSubPage) && !isCleanerSession && !hostPlanAllowsPath ? (
             <DashboardBlankPage />
           ) : isDashboardPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardPage />
             )
           ) : isDashboardConnectPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardConnectPage />
             )
           ) : isDashboardIntelPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardIntelPage />
             )
           ) : isDashboardCalendarPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardCalendarPage />
             )
           ) : isDashboardSuppliesPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardSuppliesPage />
             )
           ) : isDashboardStatsPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardStatsPage />
             )
           ) : isDashboardCleaningPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardCleaningPage />
             )
           ) : isDashboardWhatsAppPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardWhatsAppPage />
             )
           ) : isDashboardEarlyAccessPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardEarlyAccessPage />
             )
           ) : isDashboardExpensesPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardExpensesPage />
             )
           ) : isDashboardCompanyPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardSocieteRedirect />
             )
           ) : isDashboardSubPage ? (
-            billingSuspended ? (
+            hostBillingBlocked ? (
               <ProfilePage />
             ) : (
             <DashboardBlankPage />

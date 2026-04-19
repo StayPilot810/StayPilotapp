@@ -463,7 +463,6 @@ export function DashboardStatsPage() {
   const activeFilterLabel = `${activeDateFilterLabel} | ${
     selectedApartment ? `${statsUi.listingPrefix}: ${selectedApartment}` : `${statsUi.listingPrefix}: ${statsUi.allListings}`
   }`
-  const hasRevenueData = filteredRevenueEntries.length > 0
   const hasConnectedMetrics = reservationEvents.length > 0 || revenueEntries.length > 0
 
   const chartData = useMemo(() => {

@@ -78,16 +78,6 @@ function getStatusSelectClass(status: ExpenseStatus) {
   return 'border-sky-200 bg-sky-50 text-sky-700'
 }
 
-type RevenueRow = {
-  apartment: string
-  year: number
-  month: number
-  reservationAmount: number
-  cleaningFees: number
-  extraFees: number
-  platformCommission: number
-}
-
 export function DashboardExpensesPage() {
   const { t, locale } = useLanguage()
   const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
@@ -409,12 +399,9 @@ export function DashboardExpensesPage() {
     },
   }[ll]
   const monthLabels = MONTHS[ll]
-  const statusLabel = (status: ExpenseStatus) =>
-    status === 'A payer' ? c.statusToPay : status === 'Paye' ? c.statusPaid : c.statusAuto
   const now = new Date()
   const [connectedApartments] = useState<string[]>(() => getConnectedApartmentOptions())
   const hasConnectedApartments = connectedApartments.length > 0
-  const apartmentOptions = [c.allApartments, ...connectedApartments]
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
   const [scopeMode, setScopeMode] = useState<ScopeMode>('global')

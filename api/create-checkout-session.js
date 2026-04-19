@@ -17,7 +17,10 @@ export default async function handler(req, res) {
   try {
     const result = await createStripeCheckoutSession(body)
     if (!result.ok) {
-      res.status(result.status || 500).json({ error: result.error || 'checkout_session_failed' })
+      res.status(result.status || 500).json({
+        error: result.error || 'checkout_session_failed',
+        ...(result.message ? { message: result.message } : {}),
+      })
       return
     }
     res.status(200).json({ ok: true, url: result.url, id: result.id })

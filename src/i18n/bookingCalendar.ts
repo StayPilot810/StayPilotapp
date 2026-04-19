@@ -2,6 +2,8 @@ import type { Locale } from './navbar'
 
 export type BookingCalendarCopy = {
   calendarTitle: string
+  /** Prestataire ménage : pas de mention prix / tarif. */
+  calendarTitleCleaner: string
   legendAirbnb: string
   legendBooking: string
   tabThisMonth: string
@@ -9,6 +11,8 @@ export type BookingCalendarCopy = {
   tabNextMonth: string
   customDates: string
   allApartments: string
+  /** Libellé du filtre « tous » pour un prestataire (logements attribués uniquement). */
+  allAssignedListings: string
   filterPropertiesAria: string
   apartmentLabel: string
   nightsLabel: string
@@ -37,6 +41,7 @@ export type BookingCalendarCopy = {
 export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = {
   fr: {
     calendarTitle: 'Vos résas & votre cash : la vue qui décide du prochain tarif',
+    calendarTitleCleaner: 'Calendrier des séjours sur vos logements attribués',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Ce mois',
@@ -44,6 +49,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     tabNextMonth: 'Mois prochain',
     customDates: 'Dates personnalisées',
     allApartments: 'Tous les appartements',
+    allAssignedListings: 'Tous les logements attribués',
     filterPropertiesAria: 'Filtrer les biens',
     apartmentLabel: 'Appartement {n}',
     nightsLabel: '{n} nuits',
@@ -70,6 +76,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
   },
   es: {
     calendarTitle: 'Sus reservas y su cash: la vista para fijar el próximo precio',
+    calendarTitleCleaner: 'Calendario de estancias en los alojamientos asignados',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Este mes',
@@ -77,6 +84,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     tabNextMonth: 'Próximo mes',
     customDates: 'Fechas personalizadas',
     allApartments: 'Todos los apartamentos',
+    allAssignedListings: 'Todos los alojamientos asignados',
     filterPropertiesAria: 'Filtrar propiedades',
     apartmentLabel: 'Apartamento {n}',
     nightsLabel: '{n} noches',
@@ -103,6 +111,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
   },
   en: {
     calendarTitle: 'Your bookings & cash—the view that sets your next rate',
+    calendarTitleCleaner: 'Stay calendar for your assigned listings',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'This month',
@@ -110,6 +119,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     tabNextMonth: 'Next month',
     customDates: 'Custom dates',
     allApartments: 'All apartments',
+    allAssignedListings: 'All assigned listings',
     filterPropertiesAria: 'Filter properties',
     apartmentLabel: 'Apartment {n}',
     nightsLabel: '{n} nights',
@@ -136,6 +146,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
   },
   de: {
     calendarTitle: 'Eine Wahrheit: Buchungen, Cash, Auslastung — live',
+    calendarTitleCleaner: 'Aufenthaltskalender für Ihre zugewiesenen Unterkünfte',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Dieser Monat',
@@ -143,6 +154,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     tabNextMonth: 'Nächster Monat',
     customDates: 'Eigene Daten',
     allApartments: 'Alle Apartments',
+    allAssignedListings: 'Alle zugewiesenen Unterkünfte',
     filterPropertiesAria: 'Unterkünfte filtern',
     apartmentLabel: 'Apartment {n}',
     nightsLabel: '{n} Nächte',
@@ -169,6 +181,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
   },
   it: {
     calendarTitle: 'Prenotazioni e cash: la vista per il prossimo prezzo',
+    calendarTitleCleaner: 'Calendario soggiorni per gli alloggi assegnati a te',
     legendAirbnb: 'Airbnb',
     legendBooking: 'Booking.com',
     tabThisMonth: 'Questo mese',
@@ -176,6 +189,7 @@ export const bookingCalendarTranslations: Record<Locale, BookingCalendarCopy> = 
     tabNextMonth: 'Mese prossimo',
     customDates: 'Date personalizzate',
     allApartments: 'Tutti gli appartamenti',
+    allAssignedListings: 'Tutti gli alloggi assegnati',
     filterPropertiesAria: 'Filtra le strutture',
     apartmentLabel: 'Appartamento {n}',
     nightsLabel: '{n} notti',
