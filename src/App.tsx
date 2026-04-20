@@ -1,9 +1,18 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react'
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { LanguageProvider } from './context/LanguageProvider'
 import { FeatureCards } from './components/FeatureCards'
 import { Hero } from './components/Hero'
 import { Navbar } from './components/Navbar'
+import { GuestDemoStrip } from './components/GuestDemoStrip'
 import { FaqSection } from './components/FaqSection'
 import { SiteFooter } from './components/SiteFooter'
 import { PricingSection } from './components/PricingSection'
@@ -59,6 +68,11 @@ import {
   pushOfficialChannelSyncToServer,
 } from './utils/officialChannelSyncRemote'
 import { readScopedStorage } from './utils/sessionStorageScope'
+import {
+  deactivateGuestDemoSession,
+  isGuestDemoSession,
+  tryActivateGuestDemoFromHeroCtaIntent,
+} from './utils/guestDemo'
 
 function DashboardSocieteRedirect() {
   useEffect(() => {
@@ -312,7 +326,30 @@ export default function App() {
   const isDashboardSubPage = pathname.startsWith('/dashboard/')
   const currentPlanRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_plan') || 'Pro' : 'Pro'
   const planTier = getPlanTierFromValue(currentPlanRaw)
-  const hostPlanAllowsPath = !isCleanerSession && canAccessDashboardPath(planTier, pathname)
+  const [guestDemoHost, setGuestDemoHost] = useState(
+    () => typeof window !== 'undefined' && isGuestDemoSession() && !isCleanerSession,
+  )
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!pathname.startsWith('/dashboard')) {
+      if (isGuestDemoSession()) {
+        deactivateGuestDemoSession()
+        window.dispatchEvent(new Event('staypilot-session-changed'))
+      }
+      setGuestDemoHost(false)
+      return
+    }
+    if (tryActivateGuestDemoFromHeroCtaIntent()) {
+      setGuestDemoHost(true)
+      window.dispatchEvent(new Event('staypilot-session-changed'))
+      return
+    }
+    setGuestDemoHost(isGuestDemoSession() && !isCleanerSession)
+  }, [pathname, isCleanerSession])
+
+  const hostPlanAllowsPath =
+    guestDemoHost || (!isCleanerSession && canAccessDashboardPath(planTier, pathname))
 
   return (
     <AppErrorBoundary>
@@ -321,6 +358,7 @@ export default function App() {
         <LanguageProvider>
         <div className="flex min-h-screen min-w-0 flex-col bg-pm-app text-zinc-900 antialiased">
         <Navbar />
+        {guestDemoHost && pathname.startsWith('/dashboard') ? <GuestDemoStrip /> : null}
         <main className="flex min-w-0 flex-1 flex-col">
           {isLoginPage ? (
             <LoginPage />

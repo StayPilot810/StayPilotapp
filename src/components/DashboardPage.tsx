@@ -10,6 +10,7 @@ import {
 import { useLanguage } from '../hooks/useLanguage'
 import { useCleanerAssignedListingReactive } from '../hooks/useCleanerAssignedListingReactive'
 import { canAccessDashboardPath, getPlanTierFromValue } from '../utils/subscriptionAccess'
+import { isGuestDemoSession } from '../utils/guestDemo'
 
 export function DashboardPage() {
   const { t, locale } = useLanguage()
@@ -21,6 +22,9 @@ export function DashboardPage() {
       testOff: 'Activer mode test (accès complet)',
       upgradeRequired: 'Upgrade requis',
       upgradeAlert: "Cette fonctionnalité n'est pas incluse dans votre forfait actuel. Augmentez votre forfait pour y accéder.",
+      guestDemoBanner:
+        'Visite démo : vous parcourez toutes les sections comme après inscription. Les connexions réelles de logements sont désactivées — créez un compte pour les activer.',
+      guestCtaAccount: "Créer un compte / s'inscrire",
     },
     en: {
       profileSettings: 'Profile & settings',
@@ -28,6 +32,9 @@ export function DashboardPage() {
       testOff: 'Enable test mode (full access)',
       upgradeRequired: 'Upgrade required',
       upgradeAlert: 'This feature is not included in your current plan. Upgrade your plan to access it.',
+      guestDemoBanner:
+        'Demo tour: you can open every section as after signup. Real listing connections are disabled — create an account to enable them.',
+      guestCtaAccount: 'Create account / sign up',
     },
     es: {
       profileSettings: 'Perfil y ajustes',
@@ -35,6 +42,9 @@ export function DashboardPage() {
       testOff: 'Activar modo prueba (acceso completo)',
       upgradeRequired: 'Mejora requerida',
       upgradeAlert: 'Esta función no está incluida en su plan actual. Mejore su plan para acceder.',
+      guestDemoBanner:
+        'Recorrido demo: puede abrir todas las secciones como tras el registro. Las conexiones reales de alojamientos están desactivadas — cree una cuenta para activarlas.',
+      guestCtaAccount: 'Crear cuenta / registrarse',
     },
     de: {
       profileSettings: 'Profil & Einstellungen',
@@ -42,6 +52,9 @@ export function DashboardPage() {
       testOff: 'Testmodus aktivieren (voller Zugriff)',
       upgradeRequired: 'Upgrade erforderlich',
       upgradeAlert: 'Diese Funktion ist in Ihrem aktuellen Tarif nicht enthalten. Bitte upgraden Sie Ihren Tarif.',
+      guestDemoBanner:
+        'Demo-Rundgang: Sie können alle Bereiche wie nach der Registrierung öffnen. Echte Unterkunftsverbindungen sind deaktiviert — legen Sie ein Konto an, um sie zu aktivieren.',
+      guestCtaAccount: 'Konto erstellen / registrieren',
     },
     it: {
       profileSettings: 'Profilo e impostazioni',
@@ -49,6 +62,9 @@ export function DashboardPage() {
       testOff: 'Attiva modalità test (accesso completo)',
       upgradeRequired: 'Upgrade richiesto',
       upgradeAlert: 'Questa funzione non è inclusa nel tuo piano attuale. Esegui l upgrade del piano per accedere.',
+      guestDemoBanner:
+        'Tour demo: puoi aprire tutte le sezioni come dopo l’iscrizione. Le connessioni reali degli alloggi sono disattivate — crea un account per attivarle.',
+      guestCtaAccount: 'Crea account / iscriviti',
     },
   }[ll]
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
@@ -204,9 +220,11 @@ export function DashboardPage() {
     if (tab === t.dashboardTabEarlyAccess) return '/dashboard/acces-anticipe'
     return '/dashboard'
   }
+  const guestDemo = isGuestDemoSession()
+
   const onTabClick = (tab: string) => {
     const href = getTabHref(tab)
-    if (isCleanerSession || canAccessDashboardPath(planTier, href)) {
+    if (isCleanerSession || guestDemo || canAccessDashboardPath(planTier, href)) {
       window.location.href = href
       return
     }
@@ -216,10 +234,10 @@ export function DashboardPage() {
   return (
     <section className="relative flex min-h-screen flex-1 items-center justify-center border-t border-zinc-200/60 bg-[radial-gradient(ellipse_70%_60%_at_20%_0%,rgba(79,134,247,0.14),transparent_60%),linear-gradient(180deg,#f8fbff_0%,#f4f7fc_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <a
-        href="/profil"
+        href={guestDemo ? '/inscription' : '/profil'}
         className="absolute right-4 top-4 z-20 inline-flex items-center rounded-full border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow sm:right-6 sm:top-6 lg:right-8 lg:top-7"
       >
-        {c.profileSettings}
+        {guestDemo ? c.guestCtaAccount : c.profileSettings}
       </a>
       <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <div className="mb-2 flex justify-center">
@@ -238,12 +256,17 @@ export function DashboardPage() {
         </div>
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
+        {guestDemo ? (
+          <p className="mx-auto mt-3 max-w-2xl rounded-xl border border-amber-200/90 bg-amber-50/90 px-3 py-2 text-center text-xs font-medium leading-relaxed text-amber-950 sm:text-sm">
+            {c.guestDemoBanner}
+          </p>
+        ) : null}
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">
           <div className="flex items-stretch justify-center gap-4">
             {rowOneTabs.map((tab) => {
               const isPrimary = tab === primaryTab
               const isScaleOnly = scaleOnlyTabs.has(tab)
-              const isLocked = !isCleanerSession && !canAccessDashboardPath(planTier, getTabHref(tab))
+              const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
               return (
                 <button
                   key={tab}
@@ -279,7 +302,7 @@ export function DashboardPage() {
           {rowTwoTabs.length > 0 ? <div className="flex items-stretch justify-center gap-4">
             {rowTwoTabs.map((tab) => {
               const isScaleOnly = scaleOnlyTabs.has(tab)
-              const isLocked = !isCleanerSession && !canAccessDashboardPath(planTier, getTabHref(tab))
+              const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
               return (
                 <button
                   key={tab}
@@ -314,7 +337,7 @@ export function DashboardPage() {
         <div className="mx-auto mt-6 grid w-full max-w-[980px] grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden">
           {tabs.map((tab) => {
             const isScaleOnly = scaleOnlyTabs.has(tab)
-            const isLocked = !isCleanerSession && !canAccessDashboardPath(planTier, getTabHref(tab))
+            const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
             return (
               <button
                 key={tab}

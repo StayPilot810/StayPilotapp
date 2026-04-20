@@ -1,5 +1,5 @@
 import { motion, useInView, useReducedMotion } from 'framer-motion'
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Clock, Home, LineChart, TrendingUp, Zap } from 'lucide-react'
 import { useCountUp } from '../hooks/useCountUp'
 import { useLanguage } from '../hooks/useLanguage'
@@ -99,6 +99,18 @@ function AnimatedStatValue({
 export function StatsRow() {
   const { t } = useLanguage()
   const reduceMotion = useReducedMotion()
+  const demoAnchorRef = useRef<HTMLElement>(null)
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.location.hash !== '#demo') return
+    const el = demoAnchorRef.current
+    if (!el) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+    })
+  }, [])
 
   const items = [
     {
@@ -144,7 +156,11 @@ export function StatsRow() {
   ] as const
 
   return (
-    <section className="border-b border-zinc-200/40 bg-pm-band py-6 sm:py-8 lg:py-9">
+    <section
+      ref={demoAnchorRef}
+      id="demo"
+      className="scroll-mt-[5.5rem] border-b border-zinc-200/40 bg-pm-band py-6 sm:py-8 sm:scroll-mt-24 lg:py-9"
+    >
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
         <StaggerReveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5 xl:gap-4">
           {items.map(({ icon: Icon, target, format, fallback, label, tone }) => {

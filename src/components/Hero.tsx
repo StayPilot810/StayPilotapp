@@ -14,6 +14,7 @@ import { HERO_PRIMARY_CTA_FR } from '../i18n/frHeroCta'
 import { heroTranslations } from '../i18n/hero'
 import { useLanguage } from '../hooks/useLanguage'
 import { MotionAnchor, Reveal, StaggerReveal, staggerItem } from './motion'
+import { markGuestDemoOpenedFromHeroCta } from '../utils/guestDemo'
 
 const primary = '#4f86f7'
 const green = '#22c55e'
@@ -190,7 +191,10 @@ export function Hero() {
               </p>
             </div>
             <MotionAnchor
-              href="/fonctionnalites"
+              href="/dashboard"
+              onClick={() => {
+                markGuestDemoOpenedFromHeroCta()
+              }}
               variant="subtle"
               className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-zinc-200/90 bg-white px-6 py-3.5 text-[15px] font-semibold text-zinc-900 shadow-pm-xs transition-colors duration-200 hover:border-zinc-300 hover:bg-zinc-50/80 sm:w-auto sm:min-h-0 sm:self-start sm:px-8 sm:py-[14px] sm:text-[16px]"
             >

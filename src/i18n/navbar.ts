@@ -37,6 +37,9 @@ export type NavbarCopy = {
   navMobileLabel: string
   /** Libellé du bloc langue (onglet) dans la navbar */
   languagesTab: string
+  guestDemoBadge: string
+  guestDemoExit: string
+  guestDemoStripHint: string
 }
 
 export const translations: Record<Locale, NavbarCopy> = {
@@ -56,6 +59,9 @@ export const translations: Record<Locale, NavbarCopy> = {
     navMainLabel: 'Navigation principale',
     navMobileLabel: 'Navigation mobile',
     languagesTab: 'Langues',
+    guestDemoBadge: 'Démo',
+    guestDemoExit: 'Quitter la démo',
+    guestDemoStripHint: 'Parcours sans compte : les connexions réelles de logements sont désactivées.',
   },
   es: {
     brand: 'StayPilot',
@@ -73,6 +79,9 @@ export const translations: Record<Locale, NavbarCopy> = {
     navMainLabel: 'Navegación principal',
     navMobileLabel: 'Navegación móvil',
     languagesTab: 'Idiomas',
+    guestDemoBadge: 'Demo',
+    guestDemoExit: 'Salir de la demo',
+    guestDemoStripHint: 'Recorrido sin cuenta: las conexiones reales de alojamientos están desactivadas.',
   },
   en: {
     brand: 'StayPilot',
@@ -90,6 +99,9 @@ export const translations: Record<Locale, NavbarCopy> = {
     navMainLabel: 'Main navigation',
     navMobileLabel: 'Mobile navigation',
     languagesTab: 'Languages',
+    guestDemoBadge: 'Demo',
+    guestDemoExit: 'Exit demo',
+    guestDemoStripHint: 'No-account tour: real listing connections are disabled.',
   },
   de: {
     brand: 'StayPilot',
@@ -107,6 +119,9 @@ export const translations: Record<Locale, NavbarCopy> = {
     navMainLabel: 'Hauptnavigation',
     navMobileLabel: 'Mobile Navigation',
     languagesTab: 'Sprachen',
+    guestDemoBadge: 'Demo',
+    guestDemoExit: 'Demo beenden',
+    guestDemoStripHint: 'Rundgang ohne Konto: echte Unterkunftsverbindungen sind deaktiviert.',
   },
   it: {
     brand: 'StayPilot',
@@ -124,5 +139,8 @@ export const translations: Record<Locale, NavbarCopy> = {
     navMainLabel: 'Navigazione principale',
     navMobileLabel: 'Navigazione mobile',
     languagesTab: 'Lingue',
+    guestDemoBadge: 'Demo',
+    guestDemoExit: 'Esci dalla demo',
+    guestDemoStripHint: 'Tour senza account: le connessioni reali degli alloggi sono disattivate.',
   },
 }

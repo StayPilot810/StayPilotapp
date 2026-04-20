@@ -14,6 +14,7 @@ import {
 import { isServerAccountsMandatory, serverAccountsConfigErrorMessage } from '../lib/serverAccountsPolicy'
 import { computeHtFromTtc, formatEuroForLocale, getPlanMonthlyTtcEur, type PlanKey } from '../utils/planPricing'
 import { readScopedStorage } from '../utils/sessionStorageScope'
+import { deactivateGuestDemoSession } from '../utils/guestDemo'
 
 const CLEANER_INVITES_KEY = 'staypilot_cleaner_invites_v1'
 
@@ -677,6 +678,7 @@ export function SignupPage() {
       localStorage.setItem('staypilot_current_plan', 'Gratuit')
       localStorage.setItem('staypilot_current_role', role)
       window.dispatchEvent(new Event('staypilot-session-changed'))
+      deactivateGuestDemoSession()
       window.location.href = '/dashboard'
       return
     }
@@ -706,6 +708,7 @@ export function SignupPage() {
         if (res.ok && data?.url) {
           clearSignupEmailOtp(email.trim())
           setSubmitError('')
+          deactivateGuestDemoSession()
           window.location.href = data.url
           return
         }
@@ -777,6 +780,7 @@ export function SignupPage() {
         localStorage.setItem('staypilot_current_plan', plan)
         localStorage.setItem('staypilot_current_role', role)
         window.dispatchEvent(new Event('staypilot-session-changed'))
+        deactivateGuestDemoSession()
         window.location.href = data.url
         return
       }

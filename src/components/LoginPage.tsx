@@ -16,6 +16,7 @@ import {
   serverAccountsNetworkErrorMessage,
 } from '../lib/serverAccountsPolicy'
 import { useLanguage } from '../hooks/useLanguage'
+import { deactivateGuestDemoSession } from '../utils/guestDemo'
 
 const LS_REMEMBER = 'staypilot_remember_me'
 const LS_IDENTIFIER = 'staypilot_login_identifier'
@@ -117,6 +118,7 @@ export function LoginPage() {
     window.dispatchEvent(new Event('staypilot-session-changed'))
     setConnected(true)
     setAutoConnected(false)
+    deactivateGuestDemoSession()
     window.location.href = '/dashboard'
   }
 

@@ -9,6 +9,7 @@ import {
   fetchIcalBody,
 } from '../utils/icalAddress'
 import { pushOfficialChannelSyncToServer } from '../utils/officialChannelSyncRemote'
+import { isGuestDemoSession } from '../utils/guestDemo'
 
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 
@@ -106,6 +107,10 @@ export function DashboardConnectPage() {
       listing: 'Logement',
       cancel: 'Annuler',
       deleteConnection: 'Supprimer la connexion',
+      guestDemoBanner:
+        'Mode démonstration : vous voyez les écrans et tutoriels, mais aucune connexion réelle (iCal, API, synchronisation) n’est possible. Inscrivez-vous pour connecter vos logements.',
+      guestDemoNoConnect:
+        'Connexion désactivée en démo. Créez un compte pour enregistrer vos clés API et synchroniser vos logements.',
     },
     en: {
       tutorialTitle: 'Channel manager tutorial video (voice, multiple languages)',
@@ -120,6 +125,10 @@ export function DashboardConnectPage() {
       listing: 'Listing',
       cancel: 'Cancel',
       deleteConnection: 'Delete connection',
+      guestDemoBanner:
+        'Demo mode: you can browse screens and tutorials, but no real connection (iCal, API, sync) is allowed. Sign up to connect your listings.',
+      guestDemoNoConnect:
+        'Connections are disabled in demo. Create an account to save API keys and sync your listings.',
     },
     es: {
       tutorialTitle: 'Video tutorial de channel manager (voz, varios idiomas)',
@@ -134,6 +143,10 @@ export function DashboardConnectPage() {
       listing: 'Alojamiento',
       cancel: 'Cancelar',
       deleteConnection: 'Eliminar conexión',
+      guestDemoBanner:
+        'Modo demo: puede ver pantallas y tutoriales, pero no hay conexión real (iCal, API, sincronización). Regístrese para conectar sus alojamientos.',
+      guestDemoNoConnect:
+        'Conexión desactivada en demo. Cree una cuenta para guardar claves API y sincronizar.',
     },
     de: {
       tutorialTitle: 'Channel-Manager-Tutorialvideo (Voice-over, mehrere Sprachen)',
@@ -148,6 +161,10 @@ export function DashboardConnectPage() {
       listing: 'Unterkunft',
       cancel: 'Abbrechen',
       deleteConnection: 'Verbindung löschen',
+      guestDemoBanner:
+        'Demo-Modus: Sie sehen Oberflächen und Tutorials, aber keine echte Verbindung (iCal, API, Sync). Registrieren Sie sich, um Unterkünfte zu verbinden.',
+      guestDemoNoConnect:
+        'Verbindung in der Demo deaktiviert. Konto erstellen, um API-Schlüssel zu speichern und zu synchronisieren.',
     },
     it: {
       tutorialTitle: 'Video tutorial channel manager (voce, più lingue)',
@@ -162,6 +179,10 @@ export function DashboardConnectPage() {
       listing: 'Alloggio',
       cancel: 'Annulla',
       deleteConnection: 'Elimina connessione',
+      guestDemoBanner:
+        'Modalità demo: puoi vedere schermate e tutorial, ma nessuna connessione reale (iCal, API, sync). Iscriviti per collegare gli alloggi.',
+      guestDemoNoConnect:
+        'Connessione disattivata in demo. Crea un account per salvare le API key e sincronizzare.',
     },
   }[ll]
   const [selectedProvider, setSelectedProvider] = useState(() => {
@@ -323,6 +344,11 @@ export function DashboardConnectPage() {
   }, [accessInputs, connectedChannels])
 
   const onConnectOne = async (platform: ChannelKey) => {
+    if (isGuestDemoSession()) {
+      setConnectionErrorMessage(c.guestDemoNoConnect)
+      setConnectionFeedback((prev) => ({ ...prev, [platform]: 'error' }))
+      return
+    }
     const isValid = hasValidConnection(platform)
     if (!isValid) {
       setConnectionErrorMessage(
@@ -480,6 +506,7 @@ export function DashboardConnectPage() {
   }
 
   const onDisconnectOne = (platform: ChannelKey) => {
+    if (isGuestDemoSession()) return
     const nextConnected = {
       ...connectedChannels,
       [platform]: false,
@@ -551,6 +578,12 @@ export function DashboardConnectPage() {
       >
         {t.dashboardBackToHub}
       </a>
+
+      {isGuestDemoSession() ? (
+        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-relaxed text-amber-950">
+          {c.guestDemoBanner}
+        </div>
+      ) : null}
 
       <div className="mx-auto mt-6 max-w-4xl">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardConnectTitle}</h1>
