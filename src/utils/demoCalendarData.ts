@@ -55,9 +55,9 @@ export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: num
       } else {
         channel = (apt + bookingIdx + monthIndex) % 2 === 0 ? 'airbnb' : 'booking'
       }
-      const cancellationRate = channel === 'booking' ? 0.18 : 0.09
+      const cancellationRate = channel === 'booking' ? 0.32 : 0.2
       const cancellationSeed = (monthIndex * 11 + apt * 7 + bookingIdx * 5) % 100
-      const forcedCancellation = bookingIdx === 1 && (monthIndex + apt) % 4 === 0
+      const forcedCancellation = bookingIdx <= 1 && (monthIndex + apt) % 3 === 0
       const status: DemoBookingStatus =
         forcedCancellation || cancellationSeed < Math.round(cancellationRate * 100) ? 'cancelled' : 'reserved'
       const commissionRate =
