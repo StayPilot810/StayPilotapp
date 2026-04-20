@@ -5,14 +5,52 @@ import { useAppPathname } from '../hooks/useAppPathname'
 import { useStaypilotSessionLoggedIn } from '../hooks/useStaypilotSessionLoggedIn'
 import { CONTACT_EMAIL } from '../i18n/contactPage'
 import { getStoredAccounts, safeAccountText, storedAccountMatchesNormalizedId } from '../lib/accounts'
+import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { readOfficialChannelSyncData } from '../utils/officialChannelData'
+import { isGuestDemoSession } from '../utils/guestDemo'
+import { buildGuestDemoMonthBookings } from '../utils/demoCalendarData'
 
 type ChatTurn =
   | { role: 'assistant'; content: string }
   | { role: 'user'; content: string; imageDataUrl?: string }
 
 const CHAT_PATH = '/api/chat'
+const CHAT_HISTORY_PATH = '/api/chat-history'
 const LS_CURRENT_USER = 'staypilot_current_user'
 const LS_LOGIN_IDENTIFIER = 'staypilot_login_identifier'
+
+type LiveChatContext = {
+  mode: 'demo' | 'connected'
+  listingsCount: number
+  listingNames: string[]
+  provider?: string
+  syncedAt?: string
+  upcomingCheckIns14d: number
+  upcomingCheckOuts14d: number
+  reservationsNext30d: number
+  cancellationsLast30d: number
+  netRevenueLast30d: number
+  averageStayNights: number
+  occupancyProjection30dPct: number
+  topChannelNext30d: 'airbnb' | 'booking' | 'mixed' | 'unknown'
+  anomalies: string[]
+  actionPlanToday: string[]
+  actionPlan7d: string[]
+  listingLocations: Array<{ name: string; address: string; city: string }>
+  topCity: string
+  multiCityPortfolio: boolean
+  ownerProfile?: {
+    listingsCount?: number
+    primaryGoal?: string
+    notes?: string
+  }
+}
+
+type OwnerProfile = {
+  listingsCount?: number
+  primaryGoal?: string
+  notes?: string
+}
 
 async function compressImageToJpegDataUrl(file: File): Promise<string> {
   const url = URL.createObjectURL(file)
@@ -60,6 +98,308 @@ function mapTurnsToApiPayload(messages: ChatTurn[]) {
   })
 }
 
+function ymdToLocalDate(iso: string) {
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2]) - 1
+  const d = Number(m[3])
+  const dt = new Date(y, mo, d)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function inferOwnerProfilePatchFromText(text: string): Partial<OwnerProfile> {
+  const t = text.toLowerCase()
+  const patch: Partial<OwnerProfile> = {}
+  const listingMatch = t.match(/(\d{1,3})\s*(logements?|appartements?|listings?)/)
+  if (listingMatch?.[1]) {
+    const n = Number(listingMatch[1])
+    if (Number.isFinite(n) && n > 0) patch.listingsCount = n
+  }
+  if (/(occupation|taux d'occupation|occupancy|jours vides|remplissage|pricing|prix)/.test(t)) {
+    patch.primaryGoal = 'optimize_occupancy_and_pricing'
+  } else if (/(menage|m[eé]nage|turnover|check-?in|check-?out|operations|ops)/.test(t)) {
+    patch.primaryGoal = 'optimize_operations'
+  } else if (/(marge|rentabilit[eé]|revenu|revpar|adr|profit)/.test(t)) {
+    patch.primaryGoal = 'improve_margin_and_revenue'
+  }
+  return patch
+}
+
+function inferCityFromAddress(address: string) {
+  const raw = String(address || '').trim()
+  if (!raw) return 'unknown'
+  const segments = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const maybeCity = segments.length >= 2 ? segments[segments.length - 1] : segments[0]
+  const cleaned = maybeCity
+    .replace(/\d{4,6}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned || 'unknown'
+}
+
+function buildLocationSummary(connectedApartments: ReturnType<typeof getConnectedApartmentsFromStorage>) {
+  const listingLocations = connectedApartments.slice(0, 12).map((apt) => ({
+    name: apt.name,
+    address: String(apt.address || '').trim() || 'n/a',
+    city: inferCityFromAddress(String(apt.address || '')),
+  }))
+  const cityCounts = listingLocations.reduce<Record<string, number>>((acc, row) => {
+    const city = row.city || 'unknown'
+    acc[city] = (acc[city] || 0) + 1
+    return acc
+  }, {})
+  const ranked = Object.entries(cityCounts).sort((a, b) => b[1] - a[1])
+  const topCity = ranked[0]?.[0] || 'unknown'
+  const knownCities = new Set(listingLocations.map((x) => x.city).filter((x) => x !== 'unknown'))
+  return {
+    listingLocations,
+    topCity,
+    multiCityPortfolio: knownCities.size > 1,
+  }
+}
+
+function buildAnomaliesAndActions(input: {
+  listingsCount: number
+  reservationsNext30d: number
+  cancellationsLast30d: number
+  occupancyProjection30dPct: number
+  upcomingCheckIns14d: number
+  upcomingCheckOuts14d: number
+  topChannelNext30d: 'airbnb' | 'booking' | 'mixed' | 'unknown'
+}) {
+  const anomalies: string[] = []
+  const actionPlanToday: string[] = []
+  const actionPlan7d: string[] = []
+  const expectedReservations = Math.max(6, input.listingsCount * 4)
+  if (input.reservationsNext30d < expectedReservations) {
+    anomalies.push('pickup_30d_below_expected')
+    actionPlanToday.push('Baisser de 5-8% les dates avec trous sous 10 jours et activer promo last-minute.')
+  }
+  if (input.cancellationsLast30d >= Math.max(2, input.listingsCount)) {
+    anomalies.push('cancellations_spike_30d')
+    actionPlanToday.push('Vérifier politiques d annulation et renforcer les règles de séjour minimum sur périodes sensibles.')
+  }
+  if (input.occupancyProjection30dPct < 55) {
+    anomalies.push('low_occupancy_projection_30d')
+    actionPlan7d.push('Ajuster min-stay et fenêtres de check-in pour réduire les jours orphelins.')
+  }
+  if (input.upcomingCheckIns14d + input.upcomingCheckOuts14d > Math.max(8, input.listingsCount * 5)) {
+    anomalies.push('operational_load_peak_14d')
+    actionPlanToday.push('Sécuriser le planning ménage/turnover sur 14 jours avec équipe backup.')
+  }
+  if (input.topChannelNext30d === 'unknown') {
+    anomalies.push('channel_visibility_low')
+    actionPlan7d.push('Contrôler connectivité OTA et parité tarifaire Airbnb/Booking.')
+  }
+  if (actionPlanToday.length === 0) actionPlanToday.push('Valider les check-ins 72h et fermer les tâches ménage critiques.')
+  if (actionPlan7d.length === 0) actionPlan7d.push('Revue hebdo pricing par logement (ADR, occupation, annulations).')
+  return {
+    anomalies: anomalies.slice(0, 5),
+    actionPlanToday: actionPlanToday.slice(0, 4),
+    actionPlan7d: actionPlan7d.slice(0, 4),
+  }
+}
+
+function buildLiveChatContext(ownerProfile?: OwnerProfile): LiveChatContext {
+  const connectedApartments = getConnectedApartmentsFromStorage()
+  const listingNames = connectedApartments.map((apt) => apt.name).filter(Boolean)
+  const listingCount = connectedApartments.length
+  const locationSummary = buildLocationSummary(connectedApartments)
+  const today = new Date()
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const in14d = new Date(startToday)
+  in14d.setDate(in14d.getDate() + 14)
+  const in30d = new Date(startToday)
+  in30d.setDate(in30d.getDate() + 30)
+  const minus30d = new Date(startToday)
+  minus30d.setDate(minus30d.getDate() - 30)
+
+  if (isGuestDemoSession()) {
+    const monthIndex = today.getMonth()
+    const daysInMonth = new Date(today.getFullYear(), monthIndex + 1, 0).getDate()
+    const demoBookings = buildGuestDemoMonthBookings(daysInMonth, monthIndex)
+    const upcomingCheckIns14d = demoBookings.filter((b) => b.start <= 14).length
+    const upcomingCheckOuts14d = demoBookings.filter((b) => b.end <= 14).length
+    const reservationsNext30d = demoBookings.filter((b) => b.status === 'reserved').length
+    const cancellationsLast30d = demoBookings.filter((b) => b.status === 'cancelled').length
+    const netRevenueLast30d = demoBookings
+      .filter((b) => b.status === 'reserved')
+      .reduce((sum, b) => sum + b.netPayoutEur, 0)
+    const reservedBookings = demoBookings.filter((b) => b.status === 'reserved')
+    const averageStayNights =
+      reservedBookings.length > 0
+        ? Number((reservedBookings.reduce((sum, b) => sum + b.nights, 0) / reservedBookings.length).toFixed(1))
+        : 0
+    const totalReservedNights = reservedBookings.reduce((sum, b) => sum + b.nights, 0)
+    const occupancyProjection30dPct =
+      listingCount > 0 ? Number(((totalReservedNights / Math.max(1, listingCount * 30)) * 100).toFixed(1)) : 0
+    const airbnbCount = reservedBookings.filter((b) => b.channel === 'airbnb').length
+    const bookingCount = reservedBookings.filter((b) => b.channel === 'booking').length
+    const topChannelNext30d: LiveChatContext['topChannelNext30d'] =
+      airbnbCount > bookingCount ? 'airbnb' : bookingCount > airbnbCount ? 'booking' : airbnbCount > 0 ? 'mixed' : 'unknown'
+    const generated = buildAnomaliesAndActions({
+      listingsCount: listingCount,
+      reservationsNext30d,
+      cancellationsLast30d,
+      occupancyProjection30dPct,
+      upcomingCheckIns14d,
+      upcomingCheckOuts14d,
+      topChannelNext30d,
+    })
+    return {
+      mode: 'demo',
+      listingsCount: listingCount,
+      listingNames,
+      provider: 'demo',
+      upcomingCheckIns14d,
+      upcomingCheckOuts14d,
+      reservationsNext30d,
+      cancellationsLast30d,
+      netRevenueLast30d,
+      averageStayNights,
+      occupancyProjection30dPct,
+      topChannelNext30d,
+      anomalies: generated.anomalies,
+      actionPlanToday: generated.actionPlanToday,
+      actionPlan7d: generated.actionPlan7d,
+      listingLocations: locationSummary.listingLocations,
+      topCity: locationSummary.topCity,
+      multiCityPortfolio: locationSummary.multiCityPortfolio,
+      ownerProfile,
+    }
+  }
+
+  const official = readOfficialChannelSyncData()
+  const bookings = official?.bookings ?? []
+  const upcomingCheckIns14d = bookings.filter((b) => {
+    const d = ymdToLocalDate(b.checkIn)
+    return d != null && d >= startToday && d <= in14d
+  }).length
+  const upcomingCheckOuts14d = bookings.filter((b) => {
+    const d = ymdToLocalDate(b.checkOut)
+    return d != null && d >= startToday && d <= in14d
+  }).length
+  const reservationsNext30d = bookings.filter((b) => {
+    const d = ymdToLocalDate(b.checkIn)
+    return d != null && d >= startToday && d <= in30d && String(b.status || '').toLowerCase() !== 'cancelled'
+  }).length
+  const cancellationsLast30d = bookings.filter((b) => {
+    const checkIn = ymdToLocalDate(b.checkIn)
+    return (
+      checkIn != null &&
+      checkIn >= minus30d &&
+      checkIn <= startToday &&
+      String(b.status || '').toLowerCase() === 'cancelled'
+    )
+  }).length
+  const reservedLast30d = bookings.filter((b) => {
+    const checkIn = ymdToLocalDate(b.checkIn)
+    return (
+      checkIn != null &&
+      checkIn >= minus30d &&
+      checkIn <= startToday &&
+      String(b.status || '').toLowerCase() !== 'cancelled'
+    )
+  })
+  const netRevenueLast30d = reservedLast30d.reduce((sum, b) => {
+    const net = Number(b.revenuNetDetaille?.amount ?? b.prixTotalVoyageur?.amount ?? 0)
+    return sum + (Number.isFinite(net) ? net : 0)
+  }, 0)
+  const averageStayNights =
+    reservedLast30d.length > 0
+      ? Number(
+          (
+            reservedLast30d.reduce((sum, b) => {
+              const checkIn = ymdToLocalDate(b.checkIn)
+              const checkOut = ymdToLocalDate(b.checkOut)
+              if (!checkIn || !checkOut) return sum
+              const nights = Math.max(0, Math.round((checkOut.getTime() - checkIn.getTime()) / 86400000))
+              return sum + nights
+            }, 0) / reservedLast30d.length
+          ).toFixed(1),
+        )
+      : 0
+  const reservationsByChannelNext30 = bookings
+    .filter((b) => {
+      const d = ymdToLocalDate(b.checkIn)
+      return d != null && d >= startToday && d <= in30d && String(b.status || '').toLowerCase() !== 'cancelled'
+    })
+    .reduce(
+      (acc, b) => {
+        const c = String(b.channel || '').toLowerCase()
+        if (c.includes('airbnb')) acc.airbnb += 1
+        else if (c.includes('booking')) acc.booking += 1
+        return acc
+      },
+      { airbnb: 0, booking: 0 },
+    )
+  const topChannelNext30d: LiveChatContext['topChannelNext30d'] =
+    reservationsByChannelNext30.airbnb > reservationsByChannelNext30.booking
+      ? 'airbnb'
+      : reservationsByChannelNext30.booking > reservationsByChannelNext30.airbnb
+        ? 'booking'
+        : reservationsByChannelNext30.airbnb > 0
+          ? 'mixed'
+          : 'unknown'
+  const occupancyProjection30dPct =
+    listingCount > 0
+      ? Number(
+          (
+            (bookings
+              .filter((b) => {
+                const d = ymdToLocalDate(b.checkIn)
+                return d != null && d >= startToday && d <= in30d && String(b.status || '').toLowerCase() !== 'cancelled'
+              })
+              .reduce((sum, b) => {
+                const checkIn = ymdToLocalDate(b.checkIn)
+                const checkOut = ymdToLocalDate(b.checkOut)
+                if (!checkIn || !checkOut) return sum
+                const nights = Math.max(0, Math.round((checkOut.getTime() - checkIn.getTime()) / 86400000))
+                return sum + nights
+              }, 0) /
+              Math.max(1, listingCount * 30)) *
+            100
+          ).toFixed(1),
+        )
+      : 0
+  const generated = buildAnomaliesAndActions({
+    listingsCount: listingCount,
+    reservationsNext30d,
+    cancellationsLast30d,
+    occupancyProjection30dPct,
+    upcomingCheckIns14d,
+    upcomingCheckOuts14d,
+    topChannelNext30d,
+  })
+
+  return {
+    mode: 'connected',
+    listingsCount: listingCount,
+    listingNames,
+    provider: official?.provider || undefined,
+    syncedAt: official?.syncedAt || undefined,
+    upcomingCheckIns14d,
+    upcomingCheckOuts14d,
+    reservationsNext30d,
+    cancellationsLast30d,
+    netRevenueLast30d: Number(netRevenueLast30d.toFixed(2)),
+    averageStayNights,
+    occupancyProjection30dPct,
+    topChannelNext30d,
+    anomalies: generated.anomalies,
+    actionPlanToday: generated.actionPlanToday,
+    actionPlan7d: generated.actionPlan7d,
+    listingLocations: locationSummary.listingLocations,
+    topCity: locationSummary.topCity,
+    multiCityPortfolio: locationSummary.multiCityPortfolio,
+    ownerProfile,
+  }
+}
+
 export function AiChatWidget() {
   const { t, locale } = useLanguage()
   const pathname = useAppPathname()
@@ -69,6 +409,7 @@ export function AiChatWidget() {
   const [pendingImage, setPendingImage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [messages, setMessages] = useState<ChatTurn[]>([])
+  const [ownerProfile, setOwnerProfile] = useState<OwnerProfile>({})
   const listRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const initialized = useRef(false)
@@ -112,31 +453,66 @@ export function AiChatWidget() {
     if (!open || initialized.current) return
     initialized.current = true
     sessionKeyRef.current = storageKey
-    if (isIdentifiedSession && storageKey) {
-      try {
-        const raw = localStorage.getItem(storageKey)
-        if (raw) {
-          const parsed = JSON.parse(raw) as ChatTurn[]
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setMessages(parsed.slice(-24))
-            return
+    const load = async () => {
+      if (isIdentifiedSession && storageKey) {
+        try {
+          const userKeyEncoded = encodeURIComponent(currentUserKey)
+          const remoteRes = await fetch(`${CHAT_HISTORY_PATH}?userKey=${userKeyEncoded}`)
+          if (remoteRes.ok) {
+            const remote = (await remoteRes.json().catch(() => ({}))) as {
+              messages?: ChatTurn[]
+              remote?: boolean
+              profile?: OwnerProfile
+            }
+            if (remote.profile && typeof remote.profile === 'object') setOwnerProfile(remote.profile)
+            if (Array.isArray(remote.messages) && remote.messages.length > 0) {
+              setMessages(remote.messages.slice(-24))
+              return
+            }
           }
+        } catch {
+          // fallback to local storage
         }
-      } catch {
-        // ignore corrupted storage
+        try {
+          const raw = localStorage.getItem(storageKey)
+          if (raw) {
+            const parsed = JSON.parse(raw) as ChatTurn[]
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMessages(parsed.slice(-24))
+              return
+            }
+          }
+        } catch {
+          // ignore corrupted storage
+        }
       }
+      const welcome =
+        isIdentifiedSession && customerFirstName.length > 0
+          ? `${t.aiChatWelcome}\n\nRavi de vous retrouver ${customerFirstName}.`
+          : t.aiChatWelcome
+      setMessages([{ role: 'assistant', content: welcome }])
     }
-    const welcome =
-      isIdentifiedSession && customerFirstName.length > 0
-        ? `${t.aiChatWelcome}\n\nRavi de vous retrouver ${customerFirstName}.`
-        : t.aiChatWelcome
-    setMessages([{ role: 'assistant', content: welcome }])
-  }, [open, storageKey, t.aiChatWelcome, customerFirstName, isIdentifiedSession])
+    void load()
+  }, [open, storageKey, t.aiChatWelcome, customerFirstName, isIdentifiedSession, currentUserKey])
 
   useEffect(() => {
     if (!open || !isIdentifiedSession || !sessionKeyRef.current) return
     localStorage.setItem(sessionKeyRef.current, JSON.stringify(messages.slice(-24)))
   }, [messages, open, isIdentifiedSession])
+
+  useEffect(() => {
+    if (!open || !isIdentifiedSession || !currentUserKey || messages.length === 0) return
+    const payload = {
+      userKey: currentUserKey,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      profilePatch: ownerProfile,
+    }
+    void fetch(CHAT_HISTORY_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => undefined)
+  }, [messages, open, isIdentifiedSession, currentUserKey, ownerProfile])
 
   useEffect(() => {
     if (!listRef.current) return
@@ -155,6 +531,10 @@ export function AiChatWidget() {
       ...(imageToSend ? { imageDataUrl: imageToSend } : {}),
     }
     const history = [...messages, nextUser]
+    const ownerProfilePatch = inferOwnerProfilePatchFromText(userText)
+    if (Object.keys(ownerProfilePatch).length > 0) {
+      setOwnerProfile((prev) => ({ ...prev, ...ownerProfilePatch }))
+    }
     setMessages(history)
     setInput('')
     setPendingImage(null)
@@ -164,6 +544,7 @@ export function AiChatWidget() {
         locale,
         customerFirstName: isIdentifiedSession ? customerFirstName : '',
         messages: mapTurnsToApiPayload(history),
+        liveContext: isIdentifiedSession ? buildLiveChatContext({ ...ownerProfile, ...ownerProfilePatch }) : undefined,
       }
       const res = await fetch(CHAT_PATH, {
         method: 'POST',
@@ -207,6 +588,7 @@ export function AiChatWidget() {
     t.aiChatErrorUnavailable,
     t.aiChatImageOnlyPrompt,
     customerFirstName,
+    ownerProfile,
     isIdentifiedSession,
   ])
 
