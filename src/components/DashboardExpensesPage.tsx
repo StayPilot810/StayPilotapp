@@ -751,8 +751,8 @@ export function DashboardExpensesPage() {
   }, [isFutureSelectedMonth, channelExpenseRows])
 
   const displayedRows = useMemo(
-    () => [...channelExpenseRowsForMonth, ...autoVariableRows, ...manualVariableRowsForMonth, ...fixedRowsForSelectedMonth],
-    [channelExpenseRowsForMonth, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
+    () => [...channelExpenseRowsForMonth, ...autoVariableRows, ...manualVariableRowsForMonth],
+    [channelExpenseRowsForMonth, autoVariableRows, manualVariableRowsForMonth],
   )
 
   // KPI : même périmètre que le mois affiché (variables + fixes du mois + channel), aligné sur le tableau et le camembert.
