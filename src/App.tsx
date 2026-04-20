@@ -75,11 +75,24 @@ import {
   tryActivateGuestDemoFromHeroCtaIntent,
 } from './utils/guestDemo'
 
+
 function DashboardSocieteRedirect() {
   useEffect(() => {
     window.location.replace('/dashboard')
   }, [])
   return null
+}
+
+function GuestDemoConnectRedirect() {
+  useLayoutEffect(() => {
+    try {
+      window.history.replaceState({}, '', '/dashboard')
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, [])
+  return <div className="min-h-[30vh] flex-1 bg-pm-app" aria-hidden />
 }
 
 class AppErrorBoundary extends Component<
@@ -443,6 +456,8 @@ export default function App() {
           ) : isDashboardConnectPage ? (
             hostDashboardBillingWall ? (
               <ProfilePage />
+            ) : isGuestDemoRoutingActive() ? (
+              <GuestDemoConnectRedirect />
             ) : (
             <DashboardConnectPage />
             )

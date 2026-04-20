@@ -10,7 +10,7 @@ import {
 import { useLanguage } from '../hooks/useLanguage'
 import { useCleanerAssignedListingReactive } from '../hooks/useCleanerAssignedListingReactive'
 import { canAccessDashboardPath, getPlanTierFromValue } from '../utils/subscriptionAccess'
-import { isGuestDemoSession } from '../utils/guestDemo'
+import { isGuestDemoRoutingActive, isGuestDemoSession } from '../utils/guestDemo'
 
 export function DashboardPage() {
   const { t, locale } = useLanguage()
@@ -22,8 +22,8 @@ export function DashboardPage() {
       testOff: 'Activer mode test (accès complet)',
       upgradeRequired: 'Upgrade requis',
       upgradeAlert: "Cette fonctionnalité n'est pas incluse dans votre forfait actuel. Augmentez votre forfait pour y accéder.",
-      guestDemoBanner:
-        'Visite démo : vous parcourez toutes les sections comme après inscription. Les connexions réelles de logements sont désactivées — créez un compte pour les activer.',
+      guestDemoPillLabel:
+        "Démonstration de l'application — exploration sans compte. Aucun logement n'est connecté dans cette session.",
     },
     en: {
       profileSettings: 'Profile & settings',
@@ -31,8 +31,8 @@ export function DashboardPage() {
       testOff: 'Enable test mode (full access)',
       upgradeRequired: 'Upgrade required',
       upgradeAlert: 'This feature is not included in your current plan. Upgrade your plan to access it.',
-      guestDemoBanner:
-        'Demo tour: you can open every section as after signup. Real listing connections are disabled — create an account to enable them.',
+      guestDemoPillLabel:
+        'Application demo — browse without an account. No listings are connected in this session.',
     },
     es: {
       profileSettings: 'Perfil y ajustes',
@@ -40,8 +40,8 @@ export function DashboardPage() {
       testOff: 'Activar modo prueba (acceso completo)',
       upgradeRequired: 'Mejora requerida',
       upgradeAlert: 'Esta función no está incluida en su plan actual. Mejore su plan para acceder.',
-      guestDemoBanner:
-        'Recorrido demo: puede abrir todas las secciones como tras el registro. Las conexiones reales de alojamientos están desactivadas — cree una cuenta para activarlas.',
+      guestDemoPillLabel:
+        'Demostración de la aplicación — exploración sin cuenta. No hay alojamientos conectados en esta sesión.',
     },
     de: {
       profileSettings: 'Profil & Einstellungen',
@@ -49,8 +49,8 @@ export function DashboardPage() {
       testOff: 'Testmodus aktivieren (voller Zugriff)',
       upgradeRequired: 'Upgrade erforderlich',
       upgradeAlert: 'Diese Funktion ist in Ihrem aktuellen Tarif nicht enthalten. Bitte upgraden Sie Ihren Tarif.',
-      guestDemoBanner:
-        'Demo-Rundgang: Sie können alle Bereiche wie nach der Registrierung öffnen. Echte Unterkunftsverbindungen sind deaktiviert — legen Sie ein Konto an, um sie zu aktivieren.',
+      guestDemoPillLabel:
+        'Demonstration der App — Erkundung ohne Konto. In dieser Sitzung sind keine Unterkünfte verbunden.',
     },
     it: {
       profileSettings: 'Profilo e impostazioni',
@@ -58,8 +58,8 @@ export function DashboardPage() {
       testOff: 'Attiva modalità test (accesso completo)',
       upgradeRequired: 'Upgrade richiesto',
       upgradeAlert: 'Questa funzione non è inclusa nel tuo piano attuale. Esegui l upgrade del piano per accedere.',
-      guestDemoBanner:
-        'Tour demo: puoi aprire tutte le sezioni come dopo l’iscrizione. Le connessioni reali degli alloggi sono disattivate — crea un account per attivarle.',
+      guestDemoPillLabel:
+        'Dimostrazione dell’app — esplorazione senza account. Nessun alloggio è collegato in questa sessione.',
     },
   }[ll]
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
@@ -169,29 +169,45 @@ export function DashboardPage() {
     return `${host.firstName || ''} ${host.lastName || ''}`.trim() || host.username
   }, [isCleanerSession])
 
+  const guestDemo = isGuestDemoSession() || isGuestDemoRoutingActive()
+
+  const hostTabsWithConnect = [
+    t.dashboardTabConnect,
+    t.dashboardTabCalendar,
+    t.dashboardTabStats,
+    t.dashboardTabIntel,
+    t.dashboardTabCleaning,
+    t.dashboardTabExpenses,
+    t.dashboardTabSupplies,
+    t.dashboardTabWhatsApp,
+    t.dashboardTabEarlyAccess,
+  ]
+  const hostTabsGuestDemo = [
+    t.dashboardTabCalendar,
+    t.dashboardTabStats,
+    t.dashboardTabIntel,
+    t.dashboardTabCleaning,
+    t.dashboardTabExpenses,
+    t.dashboardTabSupplies,
+    t.dashboardTabWhatsApp,
+    t.dashboardTabEarlyAccess,
+  ]
+
   const tabs = isCleanerSession
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
       : [t.dashboardTabCleaning]
-    : [
-        t.dashboardTabConnect,
-        t.dashboardTabCalendar,
-        t.dashboardTabStats,
-        t.dashboardTabIntel,
-        t.dashboardTabCleaning,
-        t.dashboardTabExpenses,
-        t.dashboardTabSupplies,
-        t.dashboardTabWhatsApp,
-        t.dashboardTabEarlyAccess,
-      ]
+    : guestDemo
+      ? hostTabsGuestDemo
+      : hostTabsWithConnect
   const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
   const rowOneTabs = isCleanerSession
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
       : [primaryTab]
-    : [tabs[1], primaryTab, tabs[2], tabs[3]]
-  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
+    : [tabs[0], tabs[1], tabs[2], tabs[3]]
+  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
@@ -215,9 +231,9 @@ export function DashboardPage() {
     if (tab === t.dashboardTabEarlyAccess) return '/dashboard/acces-anticipe'
     return '/dashboard'
   }
-  const guestDemo = isGuestDemoSession()
 
   const onTabClick = (tab: string) => {
+    if (guestDemo && tab === t.dashboardTabConnect) return
     const href = getTabHref(tab)
     if (isCleanerSession || guestDemo || canAccessDashboardPath(planTier, href)) {
       window.location.href = href
@@ -244,6 +260,8 @@ export function DashboardPage() {
                 {t.dashboardCleanerInvitedPrefix}{' '}
                 {cleanerInviterDisplayName || t.dashboardCleanerInvitedUnknownHost}
               </>
+            ) : guestDemo ? (
+              <>{c.guestDemoPillLabel}</>
             ) : (
               <>
                 {t.dashboardActiveOffer} {activePlanLabel}
@@ -253,11 +271,6 @@ export function DashboardPage() {
         </div>
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
-        {guestDemo ? (
-          <p className="mx-auto mt-3 max-w-2xl rounded-xl border border-amber-200/90 bg-amber-50/90 px-3 py-2 text-center text-xs font-medium leading-relaxed text-amber-950 sm:text-sm">
-            {c.guestDemoBanner}
-          </p>
-        ) : null}
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">
           <div className="flex items-stretch justify-center gap-4">
             {rowOneTabs.map((tab) => {

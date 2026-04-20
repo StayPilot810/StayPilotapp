@@ -1,5 +1,6 @@
 import type { OfficialChannelOtaLinks } from './officialChannelData'
 import { readOfficialChannelSyncData } from './officialChannelData'
+import { isGuestDemoSession } from './guestDemo'
 import { readScopedStoragePreferHostForCleaner } from './cleanerHostScopedStorage'
 import { getCurrentPlanTier, getListingLimitForPlan } from './subscriptionAccess'
 
@@ -59,6 +60,7 @@ function guessNameFromIcal(ical: string, platform: ChannelKey) {
 
 export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
   try {
+    if (isGuestDemoSession()) return []
     const planTier = getCurrentPlanTier()
     const listingLimit = getListingLimitForPlan(planTier)
     const official = readOfficialChannelSyncData()

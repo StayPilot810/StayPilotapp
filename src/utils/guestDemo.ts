@@ -1,4 +1,36 @@
-import { setTestModeEnabled, isTestModeEnabled } from './testMode'
+import { setTestModeEnabled } from './testMode'
+import { scopedStorageKey } from './sessionStorageScope'
+import { OFFICIAL_CHANNEL_SYNC_KEY } from './officialChannelData'
+
+const CONNECTION_KEYS = [
+  'staypilot_connected_channels',
+  'staypilot_reservation_access',
+  'staypilot_connected_apartment_names',
+  OFFICIAL_CHANNEL_SYNC_KEY,
+  'staypilot_channel_manager_provider',
+] as const
+
+function removeLocalStorageKeyBothScopes(baseKey: string) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(baseKey)
+    window.localStorage.removeItem(scopedStorageKey(baseKey))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Vide les connexions logements / channel manager (clés locales) pour une démo sans données réelles. */
+export function clearHostListingConnectionsForGuestDemo() {
+  for (const k of CONNECTION_KEYS) {
+    removeLocalStorageKeyBothScopes(k)
+  }
+  try {
+    window.dispatchEvent(new Event('sm-connections-updated'))
+  } catch {
+    /* ignore */
+  }
+}
 
 const GUEST_KEY = 'staypilot_guest_demo_v1'
 const GUEST_FORCED_TEST_KEY = 'staypilot_guest_demo_forced_test_v1'
@@ -47,20 +79,13 @@ export function isGuestDemoRoutingActive(): boolean {
   }
 }
 
-/** Active la visite guidée (onglets dashboard) + données de démo si besoin. */
+/** Active la visite guidée : aucun logement connecté, pas de mode test (calendriers vides). */
 export function activateGuestDemoSession() {
+  clearHostListingConnectionsForGuestDemo()
   try {
     sessionStorage.setItem(GUEST_KEY, '1')
   } catch {
     /* ignore */
-  }
-  if (!isTestModeEnabled()) {
-    setTestModeEnabled(true)
-    try {
-      sessionStorage.setItem(GUEST_FORCED_TEST_KEY, '1')
-    } catch {
-      /* ignore */
-    }
   }
 }
 
