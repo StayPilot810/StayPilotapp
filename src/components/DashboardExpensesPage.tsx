@@ -584,6 +584,12 @@ export function DashboardExpensesPage() {
     return filteredRows
   }, [isFutureSelectedMonth, filteredRows])
 
+  const channelExpenseRowsForMonth = useMemo(() => {
+    // Same rule for synced variable expenses: unknown before month start.
+    if (isFutureSelectedMonth) return []
+    return channelExpenseRows
+  }, [isFutureSelectedMonth, channelExpenseRows])
+
   const fixedRowsForSelectedMonth = useMemo<ExpenseRow[]>(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate()
     const selectedYm = selectedYear * 100 + selectedMonth
@@ -745,14 +751,14 @@ export function DashboardExpensesPage() {
   ])
 
   const displayedRows = useMemo(
-    () => [...channelExpenseRows, ...autoVariableRows, ...manualVariableRowsForMonth, ...fixedRowsForSelectedMonth],
-    [channelExpenseRows, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
+    () => [...channelExpenseRowsForMonth, ...autoVariableRows, ...manualVariableRowsForMonth, ...fixedRowsForSelectedMonth],
+    [channelExpenseRowsForMonth, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
   )
 
   // KPI : même périmètre que le mois affiché (variables + fixes du mois + channel), aligné sur le tableau et le camembert.
   const statsRows = useMemo(
     () => [
-      ...channelExpenseRows,
+      ...channelExpenseRowsForMonth,
       ...autoVariableRows,
       ...manualVariableRowsForMonth,
       ...fixedRowsForSelectedMonth.map((row) => ({
@@ -760,7 +766,7 @@ export function DashboardExpensesPage() {
         status: row.status,
       })),
     ],
-    [channelExpenseRows, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
+    [channelExpenseRowsForMonth, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
   )
 
   const canAddCharges = scopeMode === 'by_apartment' && Boolean(selectedApartment)
