@@ -142,6 +142,7 @@ type IntelCalendarCell = {
   landingStep: 'hold' | 'soft_drop' | 'hard_drop'
 }
 const LS_WATCH_INTEL_SUMMARY = 'staypilot_watch_intel_summary_v1'
+const LS_WATCH_AUTOPILOT_LOG = 'staypilot_watch_autopilot_log_v1'
 
 const OLYMPIC_SUMMER_YEARS = [2024, 2028, 2032]
 const COASTAL_MARKERS = [
@@ -644,6 +645,17 @@ export function DashboardIntelPage() {
       phase1RecoAggressive: 'Strategie agressive: augmenter les dates premium restantes.',
       phase1RecoBalanced: 'Strategie equilibree: hausse selective + protection conversion.',
       phase1RecoDefensive: 'Strategie defensive: proteger le remplissage court terme.',
+      autopilotTitle: 'Autopilot pricing (semi-auto)',
+      autopilotEnabled: 'Autopilot active',
+      autopilotDisabled: 'Autopilot inactif',
+      autopilotReady: 'actions pretes a appliquer',
+      scenarioLabel: 'Scenario',
+      scenarioNormal: 'Normal',
+      scenarioAggressive: 'Agressif evenementiel',
+      backtestDailyTitle: 'Backtest quotidien',
+      backtestWinRate: 'Taux de succes',
+      backtestAvgLift: 'Lift moyen',
+      backtestSample: 'echantillon',
     },
     en: {
       matchOf: 'Match',
@@ -746,6 +758,17 @@ export function DashboardIntelPage() {
       phase1RecoAggressive: 'Aggressive strategy: push remaining premium dates.',
       phase1RecoBalanced: 'Balanced strategy: selective increases with conversion guardrails.',
       phase1RecoDefensive: 'Defensive strategy: protect near-term occupancy.',
+      autopilotTitle: 'Pricing autopilot (semi-auto)',
+      autopilotEnabled: 'Autopilot enabled',
+      autopilotDisabled: 'Autopilot disabled',
+      autopilotReady: 'actions ready to apply',
+      scenarioLabel: 'Scenario',
+      scenarioNormal: 'Normal',
+      scenarioAggressive: 'Event-aggressive',
+      backtestDailyTitle: 'Daily backtest',
+      backtestWinRate: 'Win rate',
+      backtestAvgLift: 'Average lift',
+      backtestSample: 'sample',
     },
   }[locale === 'fr' || locale === 'en' ? locale : 'en']
 
@@ -761,6 +784,8 @@ export function DashboardIntelPage() {
   const [targetPosition, setTargetPosition] = useState<[number, number] | null>(null)
   const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'custom'>('month')
   const [pricingMode] = useState<'standard' | 'ultra'>('ultra')
+  const [pricingScenario, setPricingScenario] = useState<'normal' | 'aggressive'>('normal')
+  const [autopilotEnabled, setAutopilotEnabled] = useState(false)
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
   const [rangeStart, setRangeStart] = useState(formatIsoDate(today))
   const [rangeEnd, setRangeEnd] = useState(formatIsoDate(plus30Days))
@@ -1745,6 +1770,14 @@ export function DashboardIntelPage() {
         // Guardrails: structural seasonality alone should not become ultra-red.
         if (pricingMode === 'ultra' && eventDrivenBump < 8) cappedBump = Math.min(cappedBump, 28)
         if (pricingMode === 'ultra' && eventDrivenBump < 5 && structuralBump >= 10) cappedBump = Math.min(cappedBump, 24)
+        if (pricingScenario === 'aggressive' && pricingMode === 'ultra') {
+          const strongEvent = eventDrivenBump >= 12
+          if (strongEvent) {
+            // Allow event-driven spikes up to +100%.
+            cappedBump = Math.min(100, Math.max(cappedBump, Math.round(cappedBump * 1.7 + 20)))
+          }
+          if (!strongEvent && cappedBump > 60) cappedBump = 60
+        }
         const level: 'low' | 'medium' | 'high' =
           cappedBump >= (pricingMode === 'ultra' ? 18 : 12)
             ? 'high'
@@ -1840,6 +1873,7 @@ export function DashboardIntelPage() {
     weatherByDate,
     selectedListing,
     bookedDateSetBySelectedListing,
+    pricingScenario,
   ])
   const displayedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
   const rangeFilteredMonths = monthlyCalendar
@@ -2068,6 +2102,34 @@ export function DashboardIntelPage() {
     runtimeText.phase1RecoDefensive,
   ])
 
+  const autopilotActions = useMemo(() => {
+    const cells = displayedMonth.cells.filter((cell): cell is IntelCalendarCell => Boolean(cell))
+    const candidates = cells
+      .filter((cell) => cell.isEmptyGap && cell.level !== 'low')
+      .sort((a, b) => b.expectedRevenueDeltaPct - a.expectedRevenueDeltaPct)
+      .slice(0, 8)
+      .map((cell) => ({
+        date: cell.isoDate,
+        action:
+          cell.landingStep === 'hard_drop'
+            ? -12
+            : cell.landingStep === 'soft_drop'
+              ? -6
+              : Math.min(100, Math.max(2, cell.recommendedPct)),
+      }))
+    return candidates
+  }, [displayedMonth])
+
+  const dailyBacktest = useMemo(() => {
+    const cells = displayedMonth.cells.filter((cell): cell is IntelCalendarCell => Boolean(cell))
+    const sample = cells.length
+    if (sample === 0) return { winRate: 0, avgLift: 0, sample: 0 }
+    const wins = cells.filter((cell) => cell.expectedRevenueDeltaPct > 0).length
+    const winRate = Number(((wins / sample) * 100).toFixed(1))
+    const avgLift = Number((cells.reduce((sum, cell) => sum + cell.expectedRevenueDeltaPct, 0) / sample).toFixed(1))
+    return { winRate, avgLift, sample }
+  }, [displayedMonth])
+
   useEffect(() => {
     const cells = displayedMonth.cells.filter((cell): cell is IntelCalendarCell => Boolean(cell))
     const highEvents = cells
@@ -2086,6 +2148,18 @@ export function DashboardIntelPage() {
     }
     writeScopedStorage(LS_WATCH_INTEL_SUMMARY, JSON.stringify(payload))
   }, [displayedAnalyzedAddress, displayedMonth, monthlyWatchSummary])
+
+  useEffect(() => {
+    if (!autopilotEnabled) return
+    const payload = {
+      updatedAtIso: new Date().toISOString(),
+      monthLabel: displayedMonth.monthName,
+      listingId: selectedListingId,
+      scenario: pricingScenario,
+      actions: autopilotActions,
+    }
+    writeScopedStorage(LS_WATCH_AUTOPILOT_LOG, JSON.stringify(payload))
+  }, [autopilotEnabled, displayedMonth.monthName, selectedListingId, pricingScenario, autopilotActions])
 
   const onSearch = async (e: FormEvent) => {
     e.preventDefault()
@@ -2448,6 +2522,36 @@ export function DashboardIntelPage() {
             </p>
             {analysisPrecisionMessage ? <p className="mt-1 text-[11px] text-zinc-600">{analysisPrecisionMessage}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-zinc-700">{runtimeText.scenarioLabel}:</span>
+              <button
+                type="button"
+                onClick={() => setPricingScenario('normal')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  pricingScenario === 'normal' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {runtimeText.scenarioNormal}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPricingScenario('aggressive')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  pricingScenario === 'aggressive' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {runtimeText.scenarioAggressive}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAutopilotEnabled((v) => !v)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  autopilotEnabled ? 'bg-emerald-600 text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {autopilotEnabled ? runtimeText.autopilotEnabled : runtimeText.autopilotDisabled}
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCalendarViewMode('month')}
@@ -2782,6 +2886,45 @@ export function DashboardIntelPage() {
               <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1Recommendation}</p>
                 <p className="mt-1 text-sm font-semibold text-zinc-900">{phase1MarketEdge.recommendation}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
+              <h4 className="text-sm font-bold text-zinc-900">{runtimeText.backtestDailyTitle}</h4>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestWinRate}</p>
+                  <p className="mt-1 text-sm font-bold text-zinc-900">{dailyBacktest.winRate}%</p>
+                </article>
+                <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestAvgLift}</p>
+                  <p className={`mt-1 text-sm font-bold ${dailyBacktest.avgLift >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {dailyBacktest.avgLift >= 0 ? '+' : ''}
+                    {dailyBacktest.avgLift}%
+                  </p>
+                </article>
+                <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestSample}</p>
+                  <p className="mt-1 text-sm font-bold text-zinc-900">{dailyBacktest.sample}</p>
+                </article>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
+              <h4 className="text-sm font-bold text-zinc-900">{runtimeText.autopilotTitle}</h4>
+              <p className="mt-1 text-xs text-zinc-600">
+                {autopilotActions.length} {runtimeText.autopilotReady}
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {autopilotActions.slice(0, 6).map((action) => (
+                  <article key={action.date} className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                    <p className="text-xs font-semibold text-zinc-900">{action.date}</p>
+                    <p className={`mt-1 text-sm font-bold ${action.action >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {action.action >= 0 ? '+' : ''}
+                      {action.action}%
+                    </p>
+                  </article>
+                ))}
               </div>
             </div>
           </div>
