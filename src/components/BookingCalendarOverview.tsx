@@ -359,78 +359,54 @@ function clampDemoMonthCursor(d: Date) {
 
 function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: number): CalendarReservationDetail[] {
   if (monthIndex < DEMO_MIN_MONTH_INDEX || monthIndex > DEMO_MAX_MONTH_INDEX) return []
-  const safeEnd = (start: number, nights: number) => Math.min(daysInMonth, start + nights - 1)
+  const occupancyTargets = [0.65, 0.69, 0.72, 0.76, 0.8]
   const bookings: CalendarReservationDetail[] = []
   for (let apt = 0; apt < 5; apt += 1) {
-    const s1 = 1 + ((monthIndex * 2 + apt * 3) % 9)
-    const n1 = 3 + ((monthIndex + apt) % 4)
-    const e1 = safeEnd(s1, n1)
-    if (e1 >= s1) {
-      const gross = 390 + monthIndex * 18 + apt * 35
-      const cleaning = 42 + (apt % 3) * 6
-      const fee = Math.round((gross + cleaning) * (apt % 2 === 0 ? 0.145 : 0.18))
-      bookings.push({
-        apt,
-        channel: (monthIndex + apt) % 2 === 0 ? 'airbnb' : 'booking',
-        start: s1,
-        end: e1,
-        guest: `Guest ${apt + 1}A`,
-        nights: e1 - s1 + 1,
-        reservationId: `D26${monthIndex + 1}${apt}A`,
-        totalGuestEur: gross,
-        cleaningEur: cleaning,
-        platformFeePercent: 0,
-        platformFeeEur: fee,
-        netPayoutEur: gross + cleaning - fee,
-        bookingGenius: (monthIndex + apt) % 3 === 0,
-      })
-    }
+    const targetNights = Math.max(1, Math.round(daysInMonth * occupancyTargets[apt]))
+    let bookedNights = 0
+    let bookingIdx = 0
+    let cursor = 1 + ((monthIndex + apt) % 2)
 
-    const s2 = 13 + ((monthIndex + apt * 4) % 8)
-    const n2 = 2 + ((monthIndex * 2 + apt) % 5)
-    const e2 = safeEnd(s2, n2)
-    if (e2 >= s2) {
-      const gross = 430 + monthIndex * 16 + apt * 32
-      const cleaning = 45 + (monthIndex % 3) * 4
-      const fee = Math.round((gross + cleaning) * ((monthIndex + apt) % 2 === 0 ? 0.15 : 0.19))
-      bookings.push({
-        apt,
-        channel: (monthIndex + apt) % 2 === 0 ? 'booking' : 'airbnb',
-        start: s2,
-        end: e2,
-        guest: `Guest ${apt + 1}B`,
-        nights: e2 - s2 + 1,
-        reservationId: `D26${monthIndex + 1}${apt}B`,
-        totalGuestEur: gross,
-        cleaningEur: cleaning,
-        platformFeePercent: 0,
-        platformFeeEur: fee,
-        netPayoutEur: gross + cleaning - fee,
-        bookingGenius: (monthIndex + apt) % 2 === 1,
-      })
-    }
+    while (bookedNights < targetNights && cursor <= daysInMonth) {
+      const remaining = targetNights - bookedNights
+      const maxLen = Math.min(7, remaining, daysInMonth - cursor + 1)
+      if (maxLen <= 0) break
+      const minLen = Math.min(3, maxLen)
+      const tentativeLen = 3 + ((monthIndex + apt + bookingIdx) % 5) // 3..7
+      const nights = Math.min(maxLen, Math.max(minLen, tentativeLen))
+      const start = cursor
+      const end = start + nights - 1
 
-    const s3 = 22 + ((monthIndex * 3 + apt) % 6)
-    const n3 = 2 + ((monthIndex + apt) % 4)
-    const e3 = safeEnd(s3, n3)
-    if (e3 >= s3) {
-      const gross = 360 + monthIndex * 14 + apt * 28
-      const cleaning = 40 + (apt % 2) * 5
-      const fee = Math.round((gross + cleaning) * 0.146)
+      const channel: 'airbnb' | 'booking' = (apt + bookingIdx + monthIndex) % 2 === 0 ? 'airbnb' : 'booking'
+      const commissionRate =
+        channel === 'booking'
+          ? 0.17 + ((monthIndex + bookingIdx) % 4) * 0.005
+          : 0.142 + ((monthIndex + apt + bookingIdx) % 3) * 0.004
+      const totalGuestEur = Math.round(nights * (104 + apt * 8 + monthIndex * 2) + 55)
+      const cleaningEur = 44 + (apt % 3) * 6 + (nights >= 6 ? 8 : 0)
+      const platformFeeEur = Math.round((totalGuestEur + cleaningEur) * commissionRate)
+      const netPayoutEur = totalGuestEur + cleaningEur - platformFeeEur
+
       bookings.push({
         apt,
-        channel: apt % 2 === 0 ? 'airbnb' : 'booking',
-        start: s3,
-        end: e3,
-        guest: `Guest ${apt + 1}C`,
-        nights: e3 - s3 + 1,
-        reservationId: `D26${monthIndex + 1}${apt}C`,
-        totalGuestEur: gross,
-        cleaningEur: cleaning,
-        platformFeePercent: 0,
-        platformFeeEur: fee,
-        netPayoutEur: gross + cleaning - fee,
+        channel,
+        start,
+        end,
+        guest: `Guest ${apt + 1}${String.fromCharCode(65 + (bookingIdx % 26))}`,
+        nights,
+        reservationId: `D26-${monthIndex + 1}-${apt + 1}-${bookingIdx + 1}`,
+        totalGuestEur,
+        cleaningEur,
+        platformFeePercent: commissionRate * 100,
+        platformFeeEur,
+        netPayoutEur,
+        bookingGenius: channel === 'booking' && (monthIndex + bookingIdx) % 2 === 0,
       })
+
+      bookedNights += nights
+      const gap = 1 + ((monthIndex + apt + bookingIdx) % 2) // 1..2 jours libres
+      cursor = end + gap + 1
+      bookingIdx += 1
     }
   }
   return bookings
