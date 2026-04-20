@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { getStoredAccounts, storedAccountMatchesNormalizedId } from '../lib/accounts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { isGuestDemoSession } from '../utils/guestDemo'
 import {
   readScopedStoragePreferHostForCleaner,
   writeScopedStoragePreferHostForCleaner,
@@ -83,9 +84,9 @@ const SUPPLIES_V1: SupplyRow[] = [
     apartment: 'Logement',
     item: 'Sacs poubelle',
     category: 'Entretien',
-    stock: 1,
+    stock: 0,
     minStock: 3,
-    status: 'À réapprovisionner',
+    status: 'Rupture',
     updatedAt: '12/04/2026',
   },
   {
@@ -129,6 +130,11 @@ function syncRowsToConnectedListings(prev: SupplyRow[], listingNames: string[]):
 
 function initialSuppliesState(): { rows: SupplyRow[]; snapshot: string } {
   try {
+    if (isGuestDemoSession()) {
+      const opts = getApartmentOptionsFromConnections()
+      const rows = opts.length ? syncRowsToConnectedListings(SUPPLIES_V1, opts) : SUPPLIES_V1
+      return { rows, snapshot: JSON.stringify({ rows }) }
+    }
     const raw = readScopedStoragePreferHostForCleaner(STORAGE_ROWS_KEY)
     const base = raw ? (JSON.parse(raw) as SupplyRow[]) : SUPPLIES_V1
     const opts = getApartmentOptionsFromConnections()
@@ -165,6 +171,7 @@ export function DashboardSuppliesPage() {
       noRowsForListing:
         'Aucune ligne pour ce logement. Utilise « Ajouter un consommable » ou choisis un autre logement.',
       saveBeforeLeave: "Enregistre d'abord les modifications avant de quitter la page.",
+      saveDisabledInDemo: "Impossible d'enregistrer en mode démo. Créez un compte ou connectez votre session pour sauvegarder.",
       colStock: 'Stock',
       colMin: 'Seuil min.',
       colStatus: 'Statut',
@@ -195,6 +202,7 @@ export function DashboardSuppliesPage() {
       noRowsForListing:
         'No rows for this listing. Use "Add supply" or choose another listing.',
       saveBeforeLeave: 'Save your changes before leaving this page.',
+      saveDisabledInDemo: 'Saving is unavailable in demo mode. Create an account or connect your session to persist changes.',
       colStock: 'Stock',
       colMin: 'Min. threshold',
       colStatus: 'Status',
@@ -225,6 +233,7 @@ export function DashboardSuppliesPage() {
       noRowsForListing:
         'No hay filas para este alojamiento. Usa «Añadir consumible» o elige otro alojamiento.',
       saveBeforeLeave: 'Guarda los cambios antes de salir de esta página.',
+      saveDisabledInDemo: 'No se puede guardar en modo demo. Crea una cuenta o inicia sesión para conservar cambios.',
       colStock: 'Stock',
       colMin: 'Umbral mín.',
       colStatus: 'Estado',
@@ -255,6 +264,7 @@ export function DashboardSuppliesPage() {
       noRowsForListing:
         'Keine Zeilen für diese Unterkunft. Nutzen Sie „Verbrauchsmaterial hinzufügen“ oder wählen Sie eine andere Unterkunft.',
       saveBeforeLeave: 'Speichern Sie Ihre Änderungen, bevor Sie diese Seite verlassen.',
+      saveDisabledInDemo: 'Speichern ist im Demo-Modus nicht möglich. Konto erstellen oder anmelden, um Änderungen zu sichern.',
       colStock: 'Bestand',
       colMin: 'Mindestbest.',
       colStatus: 'Status',
@@ -285,6 +295,7 @@ export function DashboardSuppliesPage() {
       noRowsForListing:
         'Nessuna riga per questo alloggio. Usa «Aggiungi consumabile» o scegli un altro alloggio.',
       saveBeforeLeave: 'Salva le modifiche prima di uscire da questa pagina.',
+      saveDisabledInDemo: 'Salvataggio non disponibile in modalità demo. Crea un account o accedi per mantenere le modifiche.',
       colStock: 'Stock',
       colMin: 'Soglia min.',
       colStatus: 'Stato',
@@ -331,6 +342,7 @@ export function DashboardSuppliesPage() {
   const [rows, setRows] = useState(() => init.rows)
   const [savedSnapshot, setSavedSnapshot] = useState(() => init.snapshot)
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
+  const guestDemoActive = isGuestDemoSession()
 
   useEffect(() => {
     const bump = () => setListingOptions(getApartmentOptionsFromConnections())
@@ -431,6 +443,10 @@ export function DashboardSuppliesPage() {
   )
 
   const saveAll = () => {
+    if (guestDemoActive) {
+      window.alert(c.saveDisabledInDemo)
+      return
+    }
     writeScopedStoragePreferHostForCleaner(STORAGE_ROWS_KEY, JSON.stringify(rows))
     setSavedSnapshot(JSON.stringify({ rows }))
     setHasPendingChanges(false)
