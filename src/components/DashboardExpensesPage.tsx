@@ -90,7 +90,7 @@ function getNextCalendarMonth(from: Date): { year: number; month: number } {
 
 function getStatusSelectClass(status: ExpenseStatus) {
   if (status === 'Paye') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  if (status === 'A payer') return 'border-amber-200 bg-amber-50 text-amber-700'
+  if (status === 'A payer') return 'border-rose-200 bg-rose-50 text-rose-700'
   return 'border-sky-200 bg-sky-50 text-sky-700'
 }
 
@@ -441,6 +441,7 @@ export function DashboardExpensesPage() {
   const [selectedYear, setSelectedYear] = useState<number>(guestDemoActive ? DEMO_BASE_YEAR : now.getFullYear())
   const [scopeMode, setScopeMode] = useState<ScopeMode>('global')
   const [selectedApartment, setSelectedApartment] = useState<string>(() => connectedApartments[0] ?? '')
+  const expensesReadOnly = true
 
   const [rows, setRows] = useState<ExpenseRow[]>(() => {
     try {
@@ -568,6 +569,20 @@ export function DashboardExpensesPage() {
       }),
     )
   }, [effectiveToday, selectedYear, selectedMonth, scopeMode, selectedApartment, connectedApartments])
+
+  const isFutureSelectedMonth = useMemo(() => {
+    const currentYear = effectiveToday.getFullYear()
+    const currentMonth = effectiveToday.getMonth() + 1
+    const selectedYm = selectedYear * 100 + selectedMonth
+    const currentYm = currentYear * 100 + currentMonth
+    return selectedYm > currentYm
+  }, [effectiveToday, selectedYear, selectedMonth])
+
+  const manualVariableRowsForMonth = useMemo(() => {
+    // Future months must not expose variable expenses before month start.
+    if (isFutureSelectedMonth) return []
+    return filteredRows
+  }, [isFutureSelectedMonth, filteredRows])
 
   const fixedRowsForSelectedMonth = useMemo<ExpenseRow[]>(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate()
@@ -697,7 +712,9 @@ export function DashboardExpensesPage() {
           })
         }
       })
-      return out
+      return scopeMode === 'by_apartment'
+        ? out.filter((row) => row.apartment === selectedApartment)
+        : out
     }
     const data = readOfficialChannelSyncData()
     if (!data?.bookings?.length) return []
@@ -708,12 +725,28 @@ export function DashboardExpensesPage() {
       labelTaxes: c.channelLabelTaxes,
       categoryChannel: c.channelCategory,
     })
-    return built.map((r) => ({ ...r, status: r.status as ExpenseStatus }))
-  }, [channelDataTick, selectedYear, selectedMonth, c.channelCategory, c.channelLabelAutres, c.channelLabelMenage, c.channelLabelPlatform, c.channelLabelTaxes, guestDemoActive, connectedApartments])
+    const rows = built.map((r) => ({ ...r, status: r.status as ExpenseStatus }))
+    return scopeMode === 'by_apartment'
+      ? rows.filter((row) => row.apartment === selectedApartment)
+      : rows
+  }, [
+    channelDataTick,
+    selectedYear,
+    selectedMonth,
+    c.channelCategory,
+    c.channelLabelAutres,
+    c.channelLabelMenage,
+    c.channelLabelPlatform,
+    c.channelLabelTaxes,
+    guestDemoActive,
+    connectedApartments,
+    scopeMode,
+    selectedApartment,
+  ])
 
   const displayedRows = useMemo(
-    () => [...channelExpenseRows, ...autoVariableRows, ...filteredRows, ...fixedRowsForSelectedMonth],
-    [channelExpenseRows, autoVariableRows, filteredRows, fixedRowsForSelectedMonth],
+    () => [...channelExpenseRows, ...autoVariableRows, ...manualVariableRowsForMonth, ...fixedRowsForSelectedMonth],
+    [channelExpenseRows, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
   )
 
   // KPI : même périmètre que le mois affiché (variables + fixes du mois + channel), aligné sur le tableau et le camembert.
@@ -721,13 +754,13 @@ export function DashboardExpensesPage() {
     () => [
       ...channelExpenseRows,
       ...autoVariableRows,
-      ...filteredRows,
+      ...manualVariableRowsForMonth,
       ...fixedRowsForSelectedMonth.map((row) => ({
         amount: Number.isFinite(row.amount) ? row.amount : 0,
         status: row.status,
       })),
     ],
-    [channelExpenseRows, autoVariableRows, filteredRows, fixedRowsForSelectedMonth],
+    [channelExpenseRows, autoVariableRows, manualVariableRowsForMonth, fixedRowsForSelectedMonth],
   )
 
   const canAddCharges = scopeMode === 'by_apartment' && Boolean(selectedApartment)
@@ -1018,13 +1051,18 @@ export function DashboardExpensesPage() {
           <button
             type="button"
             onClick={addRow}
-            disabled={!canAddCharges}
-            title={!canAddCharges ? c.selectApartmentToAdd : undefined}
+            disabled={!canAddCharges || expensesReadOnly}
+            title={!canAddCharges || expensesReadOnly ? c.selectApartmentToAdd : undefined}
             className="rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {c.addVariableCharge}
           </button>
-          <button type="button" onClick={saveAll} className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+          <button
+            type="button"
+            onClick={saveAll}
+            disabled={expensesReadOnly}
+            className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {c.saveAll}
           </button>
           <div className="ml-auto flex items-center gap-2">
@@ -1081,23 +1119,24 @@ export function DashboardExpensesPage() {
                 {visibleFixedCharges.map((charge) => (
                   <tr key={charge.id}>
                     <td className="px-3 py-2">
-                      <input value={charge.label} onChange={(e) => updateFixedCharge(charge.id, { label: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7]" />
+                      <input value={charge.label} onChange={(e) => updateFixedCharge(charge.id, { label: e.target.value })} disabled={expensesReadOnly} className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500" />
                     </td>
                     <td className="px-3 py-2">
-                      <input value={charge.category} onChange={(e) => updateFixedCharge(charge.id, { category: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7]" />
+                      <input value={charge.category} onChange={(e) => updateFixedCharge(charge.id, { category: e.target.value })} disabled={expensesReadOnly} className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500" />
                     </td>
                     <td className="px-3 py-2">
-                      <input type="number" value={charge.amount} onChange={(e) => updateFixedCharge(charge.id, { amount: Number(e.target.value) })} className="w-32 rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7]" />
+                      <input type="number" value={charge.amount} onChange={(e) => updateFixedCharge(charge.id, { amount: Number(e.target.value) })} disabled={expensesReadOnly} className="w-32 rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500" />
                     </td>
                     <td className="px-3 py-2">
-                      <input type="number" min={1} max={31} value={charge.dayOfMonth} onChange={(e) => updateFixedCharge(charge.id, { dayOfMonth: Number(e.target.value) })} className="w-28 rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7]" />
+                      <input type="number" min={1} max={31} value={charge.dayOfMonth} onChange={(e) => updateFixedCharge(charge.id, { dayOfMonth: Number(e.target.value) })} disabled={expensesReadOnly} className="w-28 rounded-lg border border-zinc-200 px-2 py-1.5 outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500" />
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <select
                           value={charge.startMonth}
                           onChange={(e) => updateFixedCharge(charge.id, { startMonth: Number(e.target.value) })}
-                          className="max-w-[8.5rem] rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#4a86f7]"
+                          disabled={expensesReadOnly}
+                          className="max-w-[8.5rem] rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500"
                         >
                           {monthLabels.map((label, idx) => (
                             <option key={label} value={idx + 1}>
@@ -1108,7 +1147,8 @@ export function DashboardExpensesPage() {
                         <select
                           value={charge.startYear}
                           onChange={(e) => updateFixedCharge(charge.id, { startYear: Number(e.target.value) })}
-                          className="w-[4.5rem] rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#4a86f7]"
+                          disabled={expensesReadOnly}
+                          className="w-[4.5rem] rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#4a86f7] disabled:bg-zinc-100 disabled:text-zinc-500"
                         >
                           {yearOptions.map((y) => (
                             <option key={y} value={y}>
@@ -1122,6 +1162,7 @@ export function DashboardExpensesPage() {
                       <select
                         value={charge.status}
                         onChange={(e) => updateFixedCharge(charge.id, { status: e.target.value as ExpenseStatus })}
+                        disabled={expensesReadOnly}
                         className={`rounded-lg border px-2 py-1.5 outline-none focus:border-[#4a86f7] ${getStatusSelectClass(charge.status)}`}
                       >
                         <option value="A payer">{c.statusToPay}</option>
@@ -1130,11 +1171,12 @@ export function DashboardExpensesPage() {
                       </select>
                     </td>
                     <td className="px-3 py-2">
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                      <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 ${expensesReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
                         {c.attach}
                         <input
                           type="file"
                           className="hidden"
+                          disabled={expensesReadOnly}
                           onChange={(e) => {
                             void onFixedAttachmentChange(charge.id, e.target.files?.[0])
                           }}
@@ -1156,6 +1198,7 @@ export function DashboardExpensesPage() {
                           <button
                             type="button"
                             onClick={() => updateFixedCharge(charge.id, { attachmentName: '', attachmentDataUrl: '' })}
+                            disabled={expensesReadOnly}
                             className="rounded border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 hover:bg-zinc-50"
                           >
                             {c.removeAttachment}
@@ -1164,7 +1207,7 @@ export function DashboardExpensesPage() {
                       ) : null}
                     </td>
                     <td className="px-3 py-2">
-                      <button type="button" onClick={() => removeFixedCharge(charge.id)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">
+                      <button type="button" onClick={() => removeFixedCharge(charge.id)} disabled={expensesReadOnly} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40">
                         {c.remove}
                       </button>
                     </td>
@@ -1176,7 +1219,7 @@ export function DashboardExpensesPage() {
           <button
             type="button"
             onClick={addFixedCharge}
-            disabled={!canAddCharges}
+            disabled={!canAddCharges || expensesReadOnly}
             title={!canAddCharges ? c.selectApartmentToAdd : undefined}
             className="mt-3 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -1205,7 +1248,7 @@ export function DashboardExpensesPage() {
               </thead>
               <tbody className="divide-y divide-zinc-100 text-sm text-zinc-700">
                 {displayedRows.map((row) => {
-                  const readOnly = row.id.startsWith('fixed-') || row.id.startsWith('ch-') || row.id.startsWith('av-')
+                  const readOnly = expensesReadOnly || row.id.startsWith('fixed-') || row.id.startsWith('ch-') || row.id.startsWith('av-')
                   return (
                   <tr key={row.id}>
                     <td className="px-4 py-3">
