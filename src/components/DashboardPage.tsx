@@ -279,13 +279,13 @@ export function DashboardPage() {
       <div className="mx-auto flex w-full max-w-[1180px] flex-col">
         <div className="mb-2 flex justify-center">
           <p className="rounded-full border border-blue-200/80 bg-blue-50 px-3 py-1.5 text-center text-xs font-semibold text-blue-800 sm:text-sm">
-            {isCleanerSession ? (
+            {guestDemo ? (
+              <>{c.guestDemoPillLabel}</>
+            ) : isCleanerSession ? (
               <>
                 {t.dashboardCleanerInvitedPrefix}{' '}
                 {cleanerInviterDisplayName || t.dashboardCleanerInvitedUnknownHost}
               </>
-            ) : guestDemo ? (
-              <>{c.guestDemoPillLabel}</>
             ) : (
               <>
                 {t.dashboardActiveOffer} {activePlanLabel}
