@@ -601,10 +601,10 @@ export function DashboardIntelPage() {
       concreteTopDownDay: 'Jour de baisse max',
       concreteDataPoints: 'points de signal',
       concreteNoStrongDown: 'Aucune baisse forte detectee',
-      advancedTitle: 'Forecast pricing avance (style PriceLabs)',
-      advancedAdr: 'ADR forecast',
-      advancedOcc: 'Occupation forecast',
-      advancedRevpar: 'RevPAR forecast',
+      advancedTitle: 'Prevision tarifaire avancee (style PriceLabs)',
+      advancedAdr: 'ADR previsionnel',
+      advancedOcc: 'Occupation previsionnelle',
+      advancedRevpar: 'RevPAR previsionnel',
       advancedPickup7d: 'Pickup J+7',
       advancedPickup30d: 'Pickup J+30',
       advancedPriceBand: 'Bandes prix',
@@ -618,7 +618,7 @@ export function DashboardIntelPage() {
       advancedRiskHigh: 'Risque eleve',
       advancedNoAnomaly: 'Aucune anomalie critique detectee sur le mois.',
       emptyGapDetected: 'Date vide detectee (nuit non reservee)',
-      precisionTitle: 'Precision data (niveau minutieux)',
+      precisionTitle: 'Donnees de precision (niveau minutieux)',
       precisionLos: 'Duree moyenne de sejour (LOS)',
       precisionCancel: 'Taux annulation',
       precisionLeadMix: 'Mix horizon resa',
@@ -629,23 +629,23 @@ export function DashboardIntelPage() {
       precisionFar: 'Lointain',
       precisionMid: 'Intermediaire',
       precisionNear: 'Proche',
-      advancedBookingProbability: 'Probabilite booking',
+      advancedBookingProbability: 'Probabilite de reservation',
       advancedExpectedDelta: 'Gain revenu attendu',
       advancedLanding: 'Atterrissage tarifaire',
       advancedLandingHold: 'Maintien',
       advancedLandingSoft: 'Baisse douce',
       advancedLandingHard: 'Baisse forte',
-      advancedBacktestScore: 'Backtest score',
-      phase1Title: 'Market edge lab (Phase 1)',
-      phase1CompsetAdr: 'Compset ADR',
-      phase1CompsetOcc: 'Compset Occupation',
-      phase1PickupPressure: 'Pickup pressure',
+      advancedBacktestScore: 'Score backtest',
+      phase1Title: 'Laboratoire avantage marche (Phase 1)',
+      phase1CompsetAdr: 'ADR compset',
+      phase1CompsetOcc: 'Occupation compset',
+      phase1PickupPressure: 'Pression de pickup',
       phase1NetUplift: 'Uplift marge nette attendue',
       phase1Recommendation: 'Reco prioritaire',
       phase1RecoAggressive: 'Strategie agressive: augmenter les dates premium restantes.',
       phase1RecoBalanced: 'Strategie equilibree: hausse selective + protection conversion.',
       phase1RecoDefensive: 'Strategie defensive: proteger le remplissage court terme.',
-      autopilotTitle: 'Autopilot pricing (semi-auto)',
+      autopilotTitle: 'Pilotage tarifaire automatique (semi-auto)',
       autopilotEnabled: 'Autopilot active',
       autopilotDisabled: 'Autopilot inactif',
       autopilotReady: 'actions pretes a appliquer',
@@ -665,6 +665,7 @@ export function DashboardIntelPage() {
       legendBookingProbability: 'Probabilite booking: chance estimee de reserver au niveau de prix actuel.',
       legendExpectedGain: 'Gain revenu attendu: impact potentiel moyen si la reco est appliquee.',
       legendBacktest: 'Backtest score: qualite recente des recommandations vs dynamique observee.',
+      precisionSample: 'Echantillon',
     },
     en: {
       matchOf: 'Match',
@@ -787,8 +788,29 @@ export function DashboardIntelPage() {
       legendBookingProbability: 'Booking probability: estimated chance to convert at current pricing level.',
       legendExpectedGain: 'Expected revenue gain: average potential impact if recommendation is applied.',
       legendBacktest: 'Backtest score: recent recommendation quality vs observed market dynamics.',
+      precisionSample: 'Sample',
     },
   }[locale === 'fr' || locale === 'en' ? locale : 'en']
+
+  const [activeMetricHelp, setActiveMetricHelp] = useState<string | null>(null)
+
+  const renderMetricTitle = (id: string, label: string, tooltip: string) => (
+    <div className="relative">
+      <button
+        type="button"
+        className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 hover:underline"
+        title={tooltip}
+        onClick={() => setActiveMetricHelp((prev) => (prev === id ? null : id))}
+      >
+        {label}
+      </button>
+      {activeMetricHelp === id ? (
+        <div className="absolute left-0 top-full z-20 mt-1 w-64 max-w-[80vw] rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] normal-case tracking-normal text-zinc-700 shadow-sm">
+          {tooltip}
+        </div>
+      ) : null}
+    </div>
+  )
 
   const [query, setQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
@@ -2706,45 +2728,30 @@ export function DashboardIntelPage() {
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
-                    title={runtimeText.legendExpectedGain}
-                  >
-                    {runtimeText.concreteRecommended}
-                  </p>
+                  {renderMetricTitle('intel-concrete-recommended', runtimeText.concreteRecommended, runtimeText.legendExpectedGain)}
                   <p className={`mt-1 text-xl font-bold ${monthConcreteInsights.avgRecommendedPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {monthConcreteInsights.avgRecommendedPct >= 0 ? '+' : ''}
                     {monthConcreteInsights.avgRecommendedPct}%
                   </p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
-                    title={runtimeText.legendConfidence}
-                  >
-                    {runtimeText.concreteConfidence}
-                  </p>
+                  {renderMetricTitle('intel-concrete-confidence', runtimeText.concreteConfidence, runtimeText.legendConfidence)}
                   <p className="mt-1 text-xl font-bold text-zinc-900">{monthConcreteInsights.avgConfidence}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
-                    title={runtimeText.legendDemandScore}
-                  >
-                    {runtimeText.concreteDemandScore}
-                  </p>
+                  {renderMetricTitle('intel-concrete-demand-score', runtimeText.concreteDemandScore, runtimeText.legendDemandScore)}
                   <p className="mt-1 text-xl font-bold text-zinc-900">{monthConcreteInsights.avgDemandScore}/100</p>
                 </article>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteTopUpDay}</p>
+                  {renderMetricTitle('intel-concrete-top-up', runtimeText.concreteTopUpDay, runtimeText.legendExpectedGain)}
                   <p className="mt-1 text-sm font-semibold text-zinc-900">
                     {monthConcreteInsights.topUp ? `${monthConcreteInsights.topUp.isoDate} (+${monthConcreteInsights.topUp.recommendedPct}%)` : '-'}
                   </p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteTopDownDay}</p>
+                  {renderMetricTitle('intel-concrete-top-down', runtimeText.concreteTopDownDay, runtimeText.legendExpectedGain)}
                   <p className="mt-1 text-sm font-semibold text-zinc-900">
                     {monthConcreteInsights.topDown
                       ? `${monthConcreteInsights.topDown.isoDate} (${monthConcreteInsights.topDown.recommendedPct}%)`
@@ -2764,25 +2771,19 @@ export function DashboardIntelPage() {
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPriceBand}>
-                    {runtimeText.advancedAdr}
-                  </p>
+                  {renderMetricTitle('intel-advanced-adr', runtimeText.advancedAdr, runtimeText.legendPriceBand)}
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.adr} EUR</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendDemandScore}>
-                    {runtimeText.advancedOcc}
-                  </p>
+                  {renderMetricTitle('intel-advanced-occ', runtimeText.advancedOcc, runtimeText.legendDemandScore)}
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.occ}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendExpectedGain}>
-                    {runtimeText.advancedRevpar}
-                  </p>
+                  {renderMetricTitle('intel-advanced-revpar', runtimeText.advancedRevpar, runtimeText.legendExpectedGain)}
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.revpar} EUR</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedCompsetGap}</p>
+                  {renderMetricTitle('intel-advanced-compset-gap', runtimeText.advancedCompsetGap, runtimeText.legendPriceBand)}
                   <p className={`mt-1 text-lg font-bold ${advancedPricingInsights.compsetGapPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {advancedPricingInsights.compsetGapPct >= 0 ? '+' : ''}
                     {advancedPricingInsights.compsetGapPct}%
@@ -2791,21 +2792,15 @@ export function DashboardIntelPage() {
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPickup}>
-                    {runtimeText.advancedPickup7d}
-                  </p>
+                  {renderMetricTitle('intel-advanced-pickup-7d', runtimeText.advancedPickup7d, runtimeText.legendPickup)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.pickup7d}%/jour</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPickup}>
-                    {runtimeText.advancedPickup30d}
-                  </p>
+                  {renderMetricTitle('intel-advanced-pickup-30d', runtimeText.advancedPickup30d, runtimeText.legendPickup)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.pickup30d}%/jour</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPriceBand}>
-                    {runtimeText.advancedPriceBand}
-                  </p>
+                  {renderMetricTitle('intel-advanced-price-band', runtimeText.advancedPriceBand, runtimeText.legendPriceBand)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">
                     {advancedPricingInsights.priceFloor} - {advancedPricingInsights.priceCeiling} EUR
                   </p>
@@ -2813,22 +2808,22 @@ export function DashboardIntelPage() {
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendBookingProbability}>
-                    {runtimeText.advancedBookingProbability}
-                  </p>
+                  {renderMetricTitle(
+                    'intel-advanced-booking-probability',
+                    runtimeText.advancedBookingProbability,
+                    runtimeText.legendBookingProbability
+                  )}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.bookingProbability}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendExpectedGain}>
-                    {runtimeText.advancedExpectedDelta}
-                  </p>
+                  {renderMetricTitle('intel-advanced-expected-delta', runtimeText.advancedExpectedDelta, runtimeText.legendExpectedGain)}
                   <p className={`mt-1 text-sm font-bold ${advancedPricingInsights.expectedRevenueDeltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {advancedPricingInsights.expectedRevenueDeltaPct >= 0 ? '+' : ''}
                     {advancedPricingInsights.expectedRevenueDeltaPct}%
                   </p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedLanding}</p>
+                  {renderMetricTitle('intel-advanced-landing', runtimeText.advancedLanding, runtimeText.legendPickup)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">
                     {advancedPricingInsights.dominantLanding === 'hard_drop'
                       ? runtimeText.advancedLandingHard
@@ -2855,7 +2850,7 @@ export function DashboardIntelPage() {
                 </span>
               </div>
               <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedAnomalies}</p>
+                {renderMetricTitle('intel-advanced-anomalies', runtimeText.advancedAnomalies, runtimeText.legendConfidence)}
                 {advancedPricingInsights.anomalies.length > 0 ? (
                   <p className="mt-1 text-sm font-semibold text-zinc-900">{advancedPricingInsights.anomalies.join(' | ')}</p>
                 ) : (
@@ -2879,39 +2874,39 @@ export function DashboardIntelPage() {
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.precisionTitle}</h4>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionLos}</p>
+                  {renderMetricTitle('intel-precision-los', runtimeText.precisionLos, runtimeText.legendPickup)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{selectedListingPrecisionFacts.avgLos} nuits</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionCancel}</p>
+                  {renderMetricTitle('intel-precision-cancel', runtimeText.precisionCancel, runtimeText.legendConfidence)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{selectedListingPrecisionFacts.cancellationRate}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionEventQuality}</p>
+                  {renderMetricTitle('intel-precision-event-quality', runtimeText.precisionEventQuality, runtimeText.legendConfidence)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.eventQualityScore}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Sample</p>
+                  {renderMetricTitle('intel-precision-sample', runtimeText.precisionSample, runtimeText.legendBacktest)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{selectedListingPrecisionFacts.sampleSize} resas</p>
                 </article>
               </div>
               <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionLeadMix}</p>
+                {renderMetricTitle('intel-precision-lead-mix', runtimeText.precisionLeadMix, runtimeText.legendPickup)}
                 <p className="mt-1 text-sm font-semibold text-zinc-900">
                   {runtimeText.precisionFar}: {selectedListingPrecisionFacts.farPct}% · {runtimeText.precisionMid}: {selectedListingPrecisionFacts.midPct}% · {runtimeText.precisionNear}: {selectedListingPrecisionFacts.nearPct}%
                 </p>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionConfidenceAdr}</p>
+                  {renderMetricTitle('intel-precision-confidence-adr', runtimeText.precisionConfidenceAdr, runtimeText.legendConfidence)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.confidenceAdr}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionConfidenceOcc}</p>
+                  {renderMetricTitle('intel-precision-confidence-occ', runtimeText.precisionConfidenceOcc, runtimeText.legendConfidence)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.confidenceOcc}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.precisionConfidenceEvents}</p>
+                  {renderMetricTitle('intel-precision-confidence-events', runtimeText.precisionConfidenceEvents, runtimeText.legendConfidence)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.confidenceEvents}/100</p>
                 </article>
               </div>
@@ -2921,19 +2916,19 @@ export function DashboardIntelPage() {
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.phase1Title}</h4>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1CompsetAdr}</p>
+                  {renderMetricTitle('intel-phase1-compset-adr', runtimeText.phase1CompsetAdr, runtimeText.legendPriceBand)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{phase1MarketEdge.compsetAdr} EUR</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1CompsetOcc}</p>
+                  {renderMetricTitle('intel-phase1-compset-occ', runtimeText.phase1CompsetOcc, runtimeText.legendDemandScore)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{phase1MarketEdge.compsetOcc}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1PickupPressure}</p>
+                  {renderMetricTitle('intel-phase1-pickup-pressure', runtimeText.phase1PickupPressure, runtimeText.legendPickup)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{phase1MarketEdge.pickupPressureScore}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1NetUplift}</p>
+                  {renderMetricTitle('intel-phase1-net-uplift', runtimeText.phase1NetUplift, runtimeText.legendExpectedGain)}
                   <p className={`mt-1 text-sm font-bold ${phase1MarketEdge.expectedNetMarginUpliftPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {phase1MarketEdge.expectedNetMarginUpliftPct >= 0 ? '+' : ''}
                     {phase1MarketEdge.expectedNetMarginUpliftPct}%
@@ -2941,7 +2936,7 @@ export function DashboardIntelPage() {
                 </article>
               </div>
               <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.phase1Recommendation}</p>
+                {renderMetricTitle('intel-phase1-recommendation', runtimeText.phase1Recommendation, runtimeText.legendConfidence)}
                 <p className="mt-1 text-sm font-semibold text-zinc-900">{phase1MarketEdge.recommendation}</p>
               </div>
             </div>
@@ -2950,18 +2945,18 @@ export function DashboardIntelPage() {
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.backtestDailyTitle}</h4>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestWinRate}</p>
+                  {renderMetricTitle('intel-backtest-win-rate', runtimeText.backtestWinRate, runtimeText.legendBacktest)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{dailyBacktest.winRate}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestAvgLift}</p>
+                  {renderMetricTitle('intel-backtest-avg-lift', runtimeText.backtestAvgLift, runtimeText.legendBacktest)}
                   <p className={`mt-1 text-sm font-bold ${dailyBacktest.avgLift >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {dailyBacktest.avgLift >= 0 ? '+' : ''}
                     {dailyBacktest.avgLift}%
                   </p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.backtestSample}</p>
+                  {renderMetricTitle('intel-backtest-sample', runtimeText.backtestSample, runtimeText.legendBacktest)}
                   <p className="mt-1 text-sm font-bold text-zinc-900">{dailyBacktest.sample}</p>
                 </article>
               </div>
