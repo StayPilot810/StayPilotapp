@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
+import { buildGuestDemoMonthBookings, DEMO_BASE_YEAR } from '../utils/demoCalendarData'
 import {
   buildChannelExpenseRowsForMonth,
   buildChannelRevenueRowsFromSync,
 } from '../utils/channelExpensesFromSync'
+import { isGuestDemoSession } from '../utils/guestDemo'
 import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { isTestModeEnabled } from '../utils/testMode'
@@ -400,10 +402,11 @@ export function DashboardExpensesPage() {
   }[ll]
   const monthLabels = MONTHS[ll]
   const now = new Date()
+  const guestDemoActive = isGuestDemoSession()
   const [connectedApartments] = useState<string[]>(() => getConnectedApartmentOptions())
   const hasConnectedApartments = connectedApartments.length > 0
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1)
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
+  const [selectedYear, setSelectedYear] = useState<number>(guestDemoActive ? DEMO_BASE_YEAR : now.getFullYear())
   const [scopeMode, setScopeMode] = useState<ScopeMode>('global')
   const [selectedApartment, setSelectedApartment] = useState<string>(() => connectedApartments[0] ?? '')
 
@@ -523,12 +526,100 @@ export function DashboardExpensesPage() {
   }, [fixedCharges, scopeMode, selectedApartment, c.allApartments])
 
   const channelRevenueRows = useMemo(() => {
+    if (guestDemoActive) {
+      const apartmentNames =
+        connectedApartments.length > 0
+          ? connectedApartments
+          : Array.from({ length: 5 }, (_, idx) => `Appartement ${idx + 1}`)
+      const demoRows: Array<{
+        apartment: string
+        year: number
+        month: number
+        reservationAmount: number
+        cleaningFees: number
+        extraFees: number
+        platformCommission: number
+      }> = []
+      for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+        const month = monthIndex + 1
+        const daysInMonth = new Date(DEMO_BASE_YEAR, month, 0).getDate()
+        const byApartment = new Map<string, { reservationAmount: number; cleaningFees: number; extraFees: number; platformCommission: number }>()
+        buildGuestDemoMonthBookings(daysInMonth, monthIndex)
+          .filter((b) => b.status === 'reserved')
+          .forEach((b) => {
+            const apartment = apartmentNames[b.apt] ?? `Appartement ${b.apt + 1}`
+            const current =
+              byApartment.get(apartment) || { reservationAmount: 0, cleaningFees: 0, extraFees: 0, platformCommission: 0 }
+            current.reservationAmount += b.totalGuestEur
+            current.cleaningFees += b.cleaningEur
+            current.extraFees += 0
+            current.platformCommission += b.platformFeeEur
+            byApartment.set(apartment, current)
+          })
+        byApartment.forEach((totals, apartment) => {
+          demoRows.push({
+            apartment,
+            year: DEMO_BASE_YEAR,
+            month,
+            reservationAmount: Math.round(totals.reservationAmount * 100) / 100,
+            cleaningFees: Math.round(totals.cleaningFees * 100) / 100,
+            extraFees: Math.round(totals.extraFees * 100) / 100,
+            platformCommission: Math.round(totals.platformCommission * 100) / 100,
+          })
+        })
+      }
+      return demoRows
+    }
     const data = readOfficialChannelSyncData()
     if (!data?.bookings?.length) return []
     return buildChannelRevenueRowsFromSync(data)
-  }, [channelDataTick])
+  }, [channelDataTick, guestDemoActive, connectedApartments])
 
   const channelExpenseRows = useMemo((): ExpenseRow[] => {
+    if (guestDemoActive) {
+      const apartmentNames =
+        connectedApartments.length > 0
+          ? connectedApartments
+          : Array.from({ length: 5 }, (_, idx) => `Appartement ${idx + 1}`)
+      const dueDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`
+      const byApartment = new Map<string, { menage: number; plateforme: number }>()
+      const daysInMonth = new Date(DEMO_BASE_YEAR, selectedMonth, 0).getDate()
+      buildGuestDemoMonthBookings(daysInMonth, selectedMonth - 1)
+        .filter((b) => b.status === 'reserved')
+        .forEach((b) => {
+          const apartment = apartmentNames[b.apt] ?? `Appartement ${b.apt + 1}`
+          const current = byApartment.get(apartment) || { menage: 0, plateforme: 0 }
+          current.menage += b.cleaningEur
+          current.plateforme += b.platformFeeEur
+          byApartment.set(apartment, current)
+        })
+      const out: ExpenseRow[] = []
+      byApartment.forEach((agg, apartment) => {
+        if (agg.menage > 0) {
+          out.push({
+            id: `ch-demo-${apartment}-${selectedYear}-${selectedMonth}-menage`,
+            apartment,
+            label: c.channelLabelMenage,
+            category: c.channelCategory,
+            amount: Math.round(agg.menage * 100) / 100,
+            dueDate,
+            status: 'Paye',
+          })
+        }
+        if (agg.plateforme > 0) {
+          out.push({
+            id: `ch-demo-${apartment}-${selectedYear}-${selectedMonth}-plateforme`,
+            apartment,
+            label: c.channelLabelPlatform,
+            category: c.channelCategory,
+            amount: Math.round(agg.plateforme * 100) / 100,
+            dueDate,
+            status: 'Paye',
+          })
+        }
+      })
+      return out
+    }
     const data = readOfficialChannelSyncData()
     if (!data?.bookings?.length) return []
     const built = buildChannelExpenseRowsForMonth(data, selectedYear, selectedMonth, {
@@ -539,7 +630,7 @@ export function DashboardExpensesPage() {
       categoryChannel: c.channelCategory,
     })
     return built.map((r) => ({ ...r, status: r.status as ExpenseStatus }))
-  }, [channelDataTick, selectedYear, selectedMonth, c.channelCategory, c.channelLabelAutres, c.channelLabelMenage, c.channelLabelPlatform, c.channelLabelTaxes])
+  }, [channelDataTick, selectedYear, selectedMonth, c.channelCategory, c.channelLabelAutres, c.channelLabelMenage, c.channelLabelPlatform, c.channelLabelTaxes, guestDemoActive, connectedApartments])
 
   const displayedRows = useMemo(
     () => [...channelExpenseRows, ...filteredRows, ...fixedRowsForSelectedMonth],
