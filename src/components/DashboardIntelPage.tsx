@@ -619,6 +619,7 @@ export function DashboardIntelPage() {
       advancedRiskHigh: 'Risque eleve',
       advancedNoAnomaly: 'Aucune anomalie critique detectee sur le mois.',
       emptyGapDetected: 'Date vide detectee (nuit non reservee)',
+      bookedNightDetected: 'Nuit deja reservee',
       precisionTitle: 'Donnees de precision (niveau minutieux)',
       precisionLos: 'Duree moyenne de sejour (LOS)',
       precisionCancel: 'Taux annulation',
@@ -743,6 +744,7 @@ export function DashboardIntelPage() {
       advancedRiskHigh: 'High risk',
       advancedNoAnomaly: 'No critical anomaly detected this month.',
       emptyGapDetected: 'Empty date detected (unbooked night)',
+      bookedNightDetected: 'Night already booked',
       precisionTitle: 'Precision data (deep level)',
       precisionLos: 'Average stay length (LOS)',
       precisionCancel: 'Cancellation rate',
@@ -1099,7 +1101,10 @@ export function DashboardIntelPage() {
       setSelectedListingId(null)
       return
     }
-    if (!selectedListingId) return
+    if (!selectedListingId) {
+      setSelectedListingId(myListings[0].id)
+      return
+    }
     if (!myListings.some((listing) => listing.id === selectedListingId)) {
       setSelectedListingId(myListings[0].id)
     }
@@ -1834,8 +1839,8 @@ export function DashboardIntelPage() {
         const sourceLabel = liveSignals.sources.length > 0 ? ` [sources: ${liveSignals.sources.join(', ')}]` : ''
         const actionLabel = cappedBump >= 0 ? runtimeText.increasePricesBy : runtimeText.lowerPricesBy
         const event = `${reasonsLabel} - ${activeLocationAddress} - ${actionLabel} ${Math.abs(cappedBump)}%${
-          isEmptyGap ? ` | ${runtimeText.emptyGapDetected}` : ''
-        }${sourceLabel}`
+          isBooked ? ` | ${runtimeText.bookedNightDetected}` : ''
+        }${isEmptyGap ? ` | ${runtimeText.emptyGapDetected}` : ''}${sourceLabel}`
         const confidenceScore = Math.max(
           35,
           Math.min(97, 42 + sourceCount * 9 + Math.min(18, liveSignals.concerts + liveSignals.sports + liveSignals.business)),
@@ -2649,7 +2654,9 @@ export function DashboardIntelPage() {
             </div>
             <p className="mt-1 text-[11px] text-zinc-600">{copy.hoverHint}</p>
             {selectedListing ? (
-              <p className="mt-1 text-[11px] font-semibold text-zinc-700">× = {runtimeText.emptyGapDetected}</p>
+              <p className="mt-1 text-[11px] font-semibold text-zinc-700">
+                <span className="line-through decoration-2">15</span> = {runtimeText.bookedNightDetected} | × = {runtimeText.emptyGapDetected}
+              </p>
             ) : null}
             <div className="mt-2 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] text-zinc-700">
               {hoveredDayEvent ? (
@@ -2680,7 +2687,7 @@ export function DashboardIntelPage() {
                             cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
                           }`}
                         >
-                          {cell.day}
+                          <span className={cell.isBooked ? 'line-through decoration-2' : ''}>{cell.day}</span>
                           {cell.isEmptyGap ? (
                             <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
                           ) : null}
@@ -2709,7 +2716,7 @@ export function DashboardIntelPage() {
                                 cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                             >
-                              {cell.day}
+                              <span className={cell.isBooked ? 'line-through decoration-2' : ''}>{cell.day}</span>
                               {cell.isEmptyGap ? (
                                 <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
                               ) : null}
