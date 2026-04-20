@@ -24,27 +24,36 @@ export type DemoCalendarBooking = {
 export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: number): DemoCalendarBooking[] {
   if (monthIndex < DEMO_MIN_MONTH_INDEX || monthIndex > DEMO_MAX_MONTH_INDEX) return []
   const occupancyBaseByApt = [0.65, 0.69, 0.72, 0.76, 0.8]
+  const summerPeakReservedOccupancyByApt = [0.75, 0.8, 0.85, 0.9, 0.95]
   const occupancySeasonalityByMonth = [-0.03, -0.02, -0.01, 0, 0.02, 0.04, 0.05, 0.04, 0.01, 0, -0.02, -0.03]
   const nightlySeasonMultiplier = [0.9, 0.92, 0.97, 1.02, 1.08, 1.2, 1.28, 1.25, 1.12, 1.0, 0.95, 0.9]
+  const isSummerPeakMonth = monthIndex >= 5 && monthIndex <= 7 // Juin / Juillet / Aout
   const bookings: DemoCalendarBooking[] = []
   for (let apt = 0; apt < 5; apt += 1) {
-    const occupancyTarget = Math.max(
+    const baseOccupancyTarget = Math.max(
       0.65,
       Math.min(0.8, occupancyBaseByApt[apt] + occupancySeasonalityByMonth[monthIndex]),
     )
-    const targetNights = Math.max(1, Math.round(daysInMonth * occupancyTarget))
-    let bookedNights = 0
+    const reservedOccupancyTarget = isSummerPeakMonth
+      ? summerPeakReservedOccupancyByApt[apt]
+      : baseOccupancyTarget
+    const targetReservedNights = Math.max(1, Math.round(daysInMonth * reservedOccupancyTarget))
+    let reservedNights = 0
     let bookingIdx = 0
     let cursor = 1 + ((monthIndex + apt) % 2)
     let previousChannel: 'airbnb' | 'booking' | null = null
     const aptBookingIndexes: number[] = []
+    let safetyLoops = 0
 
-    while (bookedNights < targetNights && cursor <= daysInMonth) {
-      const remaining = targetNights - bookedNights
-      const maxLen = Math.min(7, remaining, daysInMonth - cursor + 1)
+    while (reservedNights < targetReservedNights && cursor <= daysInMonth && safetyLoops < 220) {
+      safetyLoops += 1
+      const remaining = targetReservedNights - reservedNights
+      const maxLen = Math.min(7, Math.max(1, remaining), daysInMonth - cursor + 1)
       if (maxLen <= 0) break
-      const minLen = Math.min(3, maxLen)
-      const tentativeLen = 3 + ((monthIndex + apt + bookingIdx) % 5)
+      const minLen = isSummerPeakMonth ? 1 : Math.min(3, maxLen)
+      const shouldForceOneNight =
+        isSummerPeakMonth && maxLen >= 1 && (bookingIdx + apt + monthIndex) % 4 === 0
+      const tentativeLen = shouldForceOneNight ? 1 : 3 + ((monthIndex + apt + bookingIdx) % 5)
       const nights = Math.min(maxLen, Math.max(minLen, tentativeLen))
       const start = cursor
       const end = start + nights - 1
@@ -89,9 +98,13 @@ export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: num
       })
       aptBookingIndexes.push(bookings.length - 1)
 
-      bookedNights += nights
+      if (status === 'reserved') reservedNights += nights
       previousChannel = channel
-      const gap = (monthIndex + apt + bookingIdx) % 5 === 0 ? 0 : 1 + ((monthIndex + apt + bookingIdx) % 2)
+      const gap = isSummerPeakMonth
+        ? ((monthIndex + apt + bookingIdx) % 4 === 0 ? 0 : 1)
+        : (monthIndex + apt + bookingIdx) % 5 === 0
+          ? 0
+          : 1 + ((monthIndex + apt + bookingIdx) % 2)
       cursor = end + gap + 1
       bookingIdx += 1
     }

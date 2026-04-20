@@ -140,6 +140,7 @@ type IntelCalendarCell = {
   bookingProbabilityPct: number
   expectedRevenueDeltaPct: number
   landingStep: 'hold' | 'soft_drop' | 'hard_drop'
+  forwardCompression: boolean
 }
 const LS_WATCH_INTEL_SUMMARY = 'staypilot_watch_intel_summary_v1'
 const LS_WATCH_AUTOPILOT_LOG = 'staypilot_watch_autopilot_log_v1'
@@ -572,6 +573,11 @@ export function DashboardIntelPage() {
       weekendImpactedBy: 'Week-end impacte par',
       weekendEffect: 'Effet week-end (hausse naturelle de la demande)',
       weekendEmptyMarkdown: 'Week-end proche encore vide: baisse tactique ({pct}%)',
+      nearTermEmptyMarkdown:
+        'Date proche encore vide (J a J+5): baisse progressive recommandee, sans passer sous 85% du prix de base.',
+      lowPriceTravellerWarning: 'Attention: prix trop faible, risque de voyageurs moins qualifies.',
+      forwardOccupancySignal:
+        'Remplissage anticipe anormal: {month} deja a {occ}% a J+{lead}. Reco: augmenter entre +50% et +100% (cible +{raise}%).',
       localContextDynamic: 'Contexte local global tres dynamique',
       recentArticles: 'articles recents',
       worldSignalLive: 'Signal monde en direct',
@@ -612,6 +618,7 @@ export function DashboardIntelPage() {
       advancedCompsetGap: 'Ecart vs compset',
       advancedAnomalies: 'Anomalies detectees',
       advancedActionRaise: 'Action: hausse ciblee',
+      advancedActionForwardRaise: 'Action: hausse anticipee forte',
       advancedActionHold: 'Action: maintien tactique',
       advancedActionLower: 'Action: baisse defensive',
       advancedRiskLow: 'Risque faible',
@@ -647,6 +654,8 @@ export function DashboardIntelPage() {
       phase1RecoAggressive: 'Strategie agressive: augmenter les dates premium restantes.',
       phase1RecoBalanced: 'Strategie equilibree: hausse selective + protection conversion.',
       phase1RecoDefensive: 'Strategie defensive: proteger le remplissage court terme.',
+      phase1RecoForwardCompression:
+        'Alerte remplissage anticipe: {month} est deja reserve a {occ}% a J+{lead}. Augmentez les prix de +{raise}% (minimum +50%, maximum +100%).',
       autopilotTitle: 'Pilotage tarifaire automatique (semi-auto)',
       autopilotEnabled: 'Autopilot active',
       autopilotDisabled: 'Autopilot inactif',
@@ -701,6 +710,11 @@ export function DashboardIntelPage() {
       weekendImpactedBy: 'Weekend impacted by',
       weekendEffect: 'Weekend effect (natural demand increase)',
       weekendEmptyMarkdown: 'Upcoming weekend still empty: tactical markdown ({pct}%)',
+      nearTermEmptyMarkdown:
+        'Near date still empty (D to D+5): progressive markdown recommended, without going below 85% of base price.',
+      lowPriceTravellerWarning: 'Warning: price too low may attract less qualified travelers.',
+      forwardOccupancySignal:
+        'Abnormal early occupancy: {month} is already {occ}% booked at D+{lead}. Recommendation: raise between +50% and +100% (target +{raise}%).',
       localContextDynamic: 'Overall local context is very dynamic',
       recentArticles: 'recent articles',
       worldSignalLive: 'Live global signal',
@@ -737,6 +751,7 @@ export function DashboardIntelPage() {
       advancedCompsetGap: 'Gap vs compset',
       advancedAnomalies: 'Detected anomalies',
       advancedActionRaise: 'Action: targeted increase',
+      advancedActionForwardRaise: 'Action: strong early increase',
       advancedActionHold: 'Action: tactical hold',
       advancedActionLower: 'Action: defensive decrease',
       advancedRiskLow: 'Low risk',
@@ -772,6 +787,8 @@ export function DashboardIntelPage() {
       phase1RecoAggressive: 'Aggressive strategy: push remaining premium dates.',
       phase1RecoBalanced: 'Balanced strategy: selective increases with conversion guardrails.',
       phase1RecoDefensive: 'Defensive strategy: protect near-term occupancy.',
+      phase1RecoForwardCompression:
+        'Early occupancy alert: {month} is already {occ}% booked at D+{lead}. Increase prices by +{raise}% (minimum +50%, maximum +100%).',
       autopilotTitle: 'Pricing autopilot (semi-auto)',
       autopilotEnabled: 'Autopilot enabled',
       autopilotDisabled: 'Autopilot disabled',
@@ -831,8 +848,8 @@ export function DashboardIntelPage() {
   const [pricingScenario, setPricingScenario] = useState<'normal' | 'aggressive'>('normal')
   const [autopilotEnabled, setAutopilotEnabled] = useState(false)
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
-  const [rangeStart, setRangeStart] = useState(formatIsoDate(today))
-  const [rangeEnd, setRangeEnd] = useState(formatIsoDate(plus30Days))
+  const rangeStart = formatIsoDate(today)
+  const rangeEnd = formatIsoDate(plus30Days)
   const [searchedLabel, setSearchedLabel] = useState('')
   const [locationContext, setLocationContext] = useState<LocationContext>({
     city: 'Paris',
@@ -1608,6 +1625,17 @@ export function DashboardIntelPage() {
       const monthIndex = monthDate.getMonth()
       const firstDay = new Date(year, monthIndex, 1)
       const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const monthLeadDays = Math.round((firstDay.getTime() - startOfToday.getTime()) / 86400000)
+      const monthIsoPrefix = `${year}-${String(monthIndex + 1).padStart(2, '0')}-`
+      const bookedNightsInMonth = selectedListing
+        ? Array.from(bookedDateSetBySelectedListing).filter((iso) => iso.startsWith(monthIsoPrefix)).length
+        : 0
+      const monthBookedOccupancyPct = selectedListing ? (bookedNightsInMonth / Math.max(1, daysInMonth)) * 100 : 0
+      const hasForwardCompression = selectedListing ? monthLeadDays >= 30 && monthBookedOccupancyPct >= 60 : false
+      const forwardCompressionRaisePct = hasForwardCompression
+        ? Math.max(50, Math.min(100, Math.round(50 + (monthBookedOccupancyPct - 60) * 2 + (monthLeadDays - 30) * 0.25)))
+        : 0
       const jsStartDay = firstDay.getDay() // 0 Sunday
       const startOffset = jsStartDay === 0 ? 6 : jsStartDay - 1 // Monday first
       const monthName = `${monthFormatter.format(firstDay).charAt(0).toUpperCase() + monthFormatter.format(firstDay).slice(1)} ${year}`
@@ -1788,6 +1816,17 @@ export function DashboardIntelPage() {
             reasons.push(`${runtimeText.weekendImpactedBy}: ${liveSignals.sportsLabels[0]}`)
           }
         }
+        if (hasForwardCompression) {
+          reasons.push(
+            runtimeText.forwardOccupancySignal
+              .replace('{month}', monthName)
+              .replace('{occ}', monthBookedOccupancyPct.toFixed(0))
+              .replace('{lead}', String(monthLeadDays))
+              .replace('{raise}', String(forwardCompressionRaisePct)),
+          )
+          bump = Math.max(bump, forwardCompressionRaisePct)
+          eventDrivenBump += Math.max(10, Math.round(forwardCompressionRaisePct * 0.35))
+        }
         if (newsHotspotScore >= 60 && (seed + day + monthIndex) % 5 === 0) {
           reasons.push(`${runtimeText.localContextDynamic} (${newsHotspotScore} ${runtimeText.recentArticles})`)
           bump += 2
@@ -1808,9 +1847,11 @@ export function DashboardIntelPage() {
         const isEmptyGap = selectedListing ? !isBooked : false
         const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
         const daysUntilStay = Math.round((date.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24))
-        if (isWeekend && isEmptyGap && daysUntilStay >= 0 && daysUntilStay <= 5) {
-          const markdownPct = daysUntilStay <= 1 ? 18 : daysUntilStay <= 2 ? 12 : daysUntilStay <= 3 ? 8 : daysUntilStay <= 4 ? 6 : 4
-          reasons.push(runtimeText.weekendEmptyMarkdown.replace('{pct}', String(markdownPct)))
+        if (isEmptyGap && daysUntilStay >= 0 && daysUntilStay <= 5) {
+          const markdownPct = daysUntilStay <= 0 ? 15 : daysUntilStay <= 1 ? 14 : daysUntilStay <= 2 ? 12 : daysUntilStay <= 3 ? 10 : daysUntilStay <= 4 ? 8 : 6
+          reasons.push(runtimeText.nearTermEmptyMarkdown)
+          if (isWeekend) reasons.push(runtimeText.weekendEmptyMarkdown.replace('{pct}', String(markdownPct)))
+          reasons.push(runtimeText.lowPriceTravellerWarning)
           bump -= markdownPct
         }
         const dynamicMultiplier = pricingMode === 'ultra' ? 1.35 + Math.min(0.55, sourceCount * 0.08) : 1
@@ -1818,6 +1859,10 @@ export function DashboardIntelPage() {
           pricingMode === 'ultra'
             ? Math.max(-45, Math.min(95, Math.round(bump * dynamicMultiplier)))
             : Math.max(-30, Math.min(55, bump))
+        if (isEmptyGap && daysUntilStay >= 0 && daysUntilStay <= 5) {
+          // Never recommend below 85% of base price on near-term markdown.
+          cappedBump = Math.max(-15, Math.min(cappedBump, -6))
+        }
         // Guardrails: structural seasonality alone should not become ultra-red.
         if (pricingMode === 'ultra' && eventDrivenBump < 8) cappedBump = Math.min(cappedBump, 28)
         if (pricingMode === 'ultra' && eventDrivenBump < 5 && structuralBump >= 10) cappedBump = Math.min(cappedBump, 24)
@@ -1896,6 +1941,7 @@ export function DashboardIntelPage() {
           bookingProbabilityPct,
           expectedRevenueDeltaPct,
           landingStep,
+          forwardCompression: hasForwardCompression,
         })
       }
 
@@ -1924,9 +1970,19 @@ export function DashboardIntelPage() {
     bookedDateSetBySelectedListing,
     pricingScenario,
   ])
-  const displayedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
-  const intelPeriodLabel =
-    calendarViewMode === 'month' ? displayedMonth.monthName : `${rangeStart} -> ${rangeEnd}`
+  const selectedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
+  const displayedMonth = useMemo(
+    () => ({
+      ...selectedMonth,
+      cells: selectedMonth.cells.map((cell) => {
+        if (!cell) return null
+        if (cell.isoDate < rangeStart || cell.isoDate > rangeEnd) return null
+        return cell
+      }),
+    }),
+    [selectedMonth, rangeStart, rangeEnd],
+  )
+  const intelPeriodLabel = `J+30 (${rangeStart} -> ${rangeEnd})`
   const rangeFilteredMonths = monthlyCalendar
     .map((month) => ({
       ...month,
@@ -2020,6 +2076,8 @@ export function DashboardIntelPage() {
         anomalies: [] as string[],
         topAction: 'hold' as 'raise' | 'hold' | 'lower',
         riskLevel: 'medium' as 'low' | 'medium' | 'high',
+        hasForwardCompression: false,
+        forwardCompressionRaisePct: null as number | null,
       }
     }
     const avg = <T extends number>(arr: T[]) => arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length)
@@ -2040,9 +2098,23 @@ export function DashboardIntelPage() {
     if (occ < 58) anomalies.push('occupation_previsionnelle_faible')
     if (compsetGapPct < -6) anomalies.push('adr_sous_compset')
     if (cells.filter((c) => c.riskLevel === 'high').length >= 6) anomalies.push('volatilite_signaux_elevee')
+    const forwardCompressionCells = cells.filter((c) => c.forwardCompression)
+    const hasForwardCompression = forwardCompressionCells.length > 0
+    const forwardCompressionRaisePct = hasForwardCompression
+      ? Math.max(50, Math.min(100, Math.round(avg(forwardCompressionCells.map((c) => c.recommendedPct)))))
+      : null
+    if (hasForwardCompression && forwardCompressionRaisePct !== null) {
+      anomalies.push(
+        runtimeText.forwardOccupancySignal
+          .replace('{month}', displayedMonth.monthName)
+          .replace('{occ}', String(Math.round((cells.filter((c) => c.isBooked).length / Math.max(1, cells.length)) * 100)))
+          .replace('{lead}', '30+')
+          .replace('{raise}', String(forwardCompressionRaisePct)),
+      )
+    }
 
     const avgReco = avg(cells.map((c) => c.recommendedPct))
-    const topAction: 'raise' | 'hold' | 'lower' = avgReco >= 6 ? 'raise' : avgReco <= -4 ? 'lower' : 'hold'
+    const topAction: 'raise' | 'hold' | 'lower' = hasForwardCompression ? 'raise' : avgReco >= 6 ? 'raise' : avgReco <= -4 ? 'lower' : 'hold'
     const avgConfidence = avg(cells.map((c) => c.confidenceScore))
     const riskLevel: 'low' | 'medium' | 'high' = avgConfidence >= 78 ? 'low' : avgConfidence >= 62 ? 'medium' : 'high'
     const eventQualityScore = Math.min(
@@ -2092,6 +2164,8 @@ export function DashboardIntelPage() {
       anomalies,
       topAction,
       riskLevel,
+      hasForwardCompression,
+      forwardCompressionRaisePct,
       bookingProbability,
       expectedRevenueDeltaPct,
       dominantLanding,
@@ -2101,7 +2175,7 @@ export function DashboardIntelPage() {
       confidenceEvents,
       backtestScore,
     }
-  }, [displayedMonth, activeLocationAddress])
+  }, [displayedMonth, activeLocationAddress, runtimeText.forwardOccupancySignal])
 
   const phase1MarketEdge = useMemo(() => {
     const cells = displayedMonth.cells.filter((cell): cell is IntelCalendarCell => Boolean(cell))
@@ -2134,8 +2208,20 @@ export function DashboardIntelPage() {
     const conversionProxy = avg(cells.map((c) => c.bookingProbabilityPct)) / 100
     const expectedNetMarginUpliftPct = Number((pricingEdgePct * 0.6 + conversionProxy * 18 + (pickupPressureScore - 50) * 0.15).toFixed(1))
 
+    const forwardCompressionCells = cells.filter((c) => c.forwardCompression)
     let recommendation = runtimeText.phase1RecoBalanced
-    if (pickupPressureScore >= 68 && expectedNetMarginUpliftPct >= 8) recommendation = runtimeText.phase1RecoAggressive
+    if (forwardCompressionCells.length > 0) {
+      const firstDate = new Date(`${forwardCompressionCells[0].isoDate}T00:00:00`)
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const leadDays = Math.max(0, Math.round((firstDate.getTime() - todayStart.getTime()) / 86400000))
+      const occupancyPct = Math.round((cells.filter((c) => c.isBooked).length / Math.max(1, cells.length)) * 100)
+      const recommendedRaise = Math.max(50, Math.min(100, Math.round(avg(forwardCompressionCells.map((c) => c.recommendedPct)))))
+      recommendation = runtimeText.phase1RecoForwardCompression
+        .replace('{month}', displayedMonth.monthName)
+        .replace('{occ}', String(occupancyPct))
+        .replace('{lead}', String(leadDays))
+        .replace('{raise}', String(recommendedRaise))
+    } else if (pickupPressureScore >= 68 && expectedNetMarginUpliftPct >= 8) recommendation = runtimeText.phase1RecoAggressive
     else if (pickupPressureScore <= 45 || expectedNetMarginUpliftPct <= 2) recommendation = runtimeText.phase1RecoDefensive
 
     return {
@@ -2151,6 +2237,7 @@ export function DashboardIntelPage() {
     runtimeText.phase1RecoAggressive,
     runtimeText.phase1RecoBalanced,
     runtimeText.phase1RecoDefensive,
+    runtimeText.phase1RecoForwardCompression,
   ])
 
   const autopilotActions = useMemo(() => {
@@ -2162,7 +2249,9 @@ export function DashboardIntelPage() {
       .map((cell) => ({
         date: cell.isoDate,
         action:
-          cell.landingStep === 'hard_drop'
+          cell.forwardCompression
+            ? Math.max(50, Math.min(100, Math.round(cell.recommendedPct)))
+            : cell.landingStep === 'hard_drop'
             ? -12
             : cell.landingStep === 'soft_drop'
               ? -6
@@ -2631,18 +2720,9 @@ export function DashboardIntelPage() {
                 </select>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
-                    value={rangeStart}
-                    onChange={(e) => setRangeStart(e.target.value)}
-                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
-                  />
-                  <input
-                    type="date"
-                    value={rangeEnd}
-                    onChange={(e) => setRangeEnd(e.target.value)}
-                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
-                  />
+                  <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-800">
+                    Fenetre fixe: J+30 ({rangeStart} -> {rangeEnd})
+                  </span>
                 </div>
               )}
             </div>
@@ -2885,7 +2965,9 @@ export function DashboardIntelPage() {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
-                  {advancedPricingInsights.topAction === 'raise'
+                  {advancedPricingInsights.hasForwardCompression && advancedPricingInsights.forwardCompressionRaisePct !== null
+                    ? `${runtimeText.advancedActionForwardRaise} (+${advancedPricingInsights.forwardCompressionRaisePct}%)`
+                    : advancedPricingInsights.topAction === 'raise'
                     ? runtimeText.advancedActionRaise
                     : advancedPricingInsights.topAction === 'lower'
                       ? runtimeText.advancedActionLower
