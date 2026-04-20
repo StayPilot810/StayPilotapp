@@ -799,14 +799,19 @@ export function DashboardExpensesPage() {
     () => statsRows.filter((r) => r.status === 'A payer').reduce((sum, row) => sum + (Number.isFinite(row.amount) ? row.amount : 0), 0),
     [statsRows],
   )
+  const pieRows = useMemo(
+    () => [...displayedRows, ...fixedRowsForSelectedMonth],
+    [displayedRows, fixedRowsForSelectedMonth],
+  )
+
   const pieData = useMemo(() => {
-    const byCategory = displayedRows.reduce<Record<string, number>>((acc, row) => {
+    const byCategory = pieRows.reduce<Record<string, number>>((acc, row) => {
       const key = row.category?.trim() || 'Autres'
       acc[key] = (acc[key] ?? 0) + (Number.isFinite(row.amount) ? row.amount : 0)
       return acc
     }, {})
     return Object.entries(byCategory).map(([name, value]) => ({ name, value }))
-  }, [displayedRows])
+  }, [pieRows])
 
   const pieTotal = useMemo(
     () => pieData.reduce((sum, slice) => sum + (Number.isFinite(slice.value) ? slice.value : 0), 0),
