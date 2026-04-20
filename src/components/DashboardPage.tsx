@@ -15,6 +15,7 @@ import { isGuestDemoRoutingActive, isGuestDemoSession } from '../utils/guestDemo
 export function DashboardPage() {
   const { t, locale } = useLanguage()
   const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const getStoredRole = () => (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
   const c = {
     fr: {
       profileSettings: 'Profil & paramètres',
@@ -25,6 +26,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         "Démonstration de l'application — exploration sans compte. Aucun logement n'est connecté dans cette session.",
       guestDemoTabUnavailable: 'Non disponible pour la démo',
+      viewModeLabel: 'Choisir une vue',
+      viewHost: 'Vue hote',
+      viewCleaner: 'Vue menage',
     },
     en: {
       profileSettings: 'Profile & settings',
@@ -35,6 +39,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Application demo — browse without an account. No listings are connected in this session.',
       guestDemoTabUnavailable: 'Not available in this demo',
+      viewModeLabel: 'Choose a view',
+      viewHost: 'Host view',
+      viewCleaner: 'Cleaner view',
     },
     es: {
       profileSettings: 'Perfil y ajustes',
@@ -45,6 +52,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Demostración de la aplicación — exploración sin cuenta. No hay alojamientos conectados en esta sesión.',
       guestDemoTabUnavailable: 'No disponible en la demo',
+      viewModeLabel: 'Elegir una vista',
+      viewHost: 'Vista anfitrion',
+      viewCleaner: 'Vista limpieza',
     },
     de: {
       profileSettings: 'Profil & Einstellungen',
@@ -55,6 +65,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Demonstration der App — Erkundung ohne Konto. In dieser Sitzung sind keine Unterkünfte verbunden.',
       guestDemoTabUnavailable: 'In der Demo nicht verfügbar',
+      viewModeLabel: 'Ansicht auswahlen',
+      viewHost: 'Host-Ansicht',
+      viewCleaner: 'Reinigungsansicht',
     },
     it: {
       profileSettings: 'Profilo e impostazioni',
@@ -65,10 +78,13 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Dimostrazione dell’app — esplorazione senza account. Nessun alloggio è collegato in questa sessione.',
       guestDemoTabUnavailable: 'Non disponibile nella demo',
+      viewModeLabel: 'Scegli una vista',
+      viewHost: 'Vista host',
+      viewCleaner: 'Vista pulizie',
     },
   }[ll]
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
-  const currentRole = (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
+  const [currentRole, setCurrentRole] = useState(getStoredRole)
   const isCleanerSession = currentRole === 'cleaner'
   const cleanerHasAssignedListing = useCleanerAssignedListingReactive(isCleanerSession)
   const [currentPlanRaw, setCurrentPlanRaw] = useState('Pro')
@@ -112,6 +128,13 @@ export function DashboardPage() {
         /* ignore */
       }
     })()
+  }, [])
+
+  useEffect(() => {
+    const syncRoleFromSession = () => setCurrentRole(getStoredRole())
+    syncRoleFromSession()
+    window.addEventListener('staypilot-session-changed', syncRoleFromSession)
+    return () => window.removeEventListener('staypilot-session-changed', syncRoleFromSession)
   }, [])
 
   useEffect(() => {
@@ -236,6 +259,12 @@ export function DashboardPage() {
     }
     window.alert(c.upgradeAlert)
   }
+  const switchDemoView = (nextRole: 'host' | 'cleaner') => {
+    if (!guestDemo || currentRole === nextRole) return
+    localStorage.setItem('staypilot_current_role', nextRole)
+    window.dispatchEvent(new Event('staypilot-session-changed'))
+    setCurrentRole(nextRole)
+  }
 
   return (
     <section className="relative flex min-h-screen flex-1 items-center justify-center border-t border-zinc-200/60 bg-[radial-gradient(ellipse_70%_60%_at_20%_0%,rgba(79,134,247,0.14),transparent_60%),linear-gradient(180deg,#f8fbff_0%,#f4f7fc_100%)] px-4 py-6 sm:px-6 lg:px-8">
@@ -264,6 +293,33 @@ export function DashboardPage() {
             )}
           </p>
         </div>
+        {guestDemo ? (
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs font-semibold text-zinc-600">{c.viewModeLabel}</span>
+            <button
+              type="button"
+              onClick={() => switchDemoView('host')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                !isCleanerSession
+                  ? 'border-sky-300 bg-sky-50 text-sky-800'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-sky-200 hover:text-sky-700'
+              }`}
+            >
+              {c.viewHost}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchDemoView('cleaner')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                isCleanerSession
+                  ? 'border-sky-300 bg-sky-50 text-sky-800'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-sky-200 hover:text-sky-700'
+              }`}
+            >
+              {c.viewCleaner}
+            </button>
+          </div>
+        ) : null}
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">
