@@ -850,12 +850,17 @@ export function DashboardIntelPage() {
   const [pricingMode] = useState<'standard' | 'ultra'>('ultra')
   const [pricingScenario, setPricingScenario] = useState<'normal' | 'aggressive'>('normal')
   const [autopilotEnabled, setAutopilotEnabled] = useState(false)
+  const [calendarRangeMode, setCalendarRangeMode] = useState<'auto' | 'custom'>('auto')
   const [todayAnchor, setTodayAnchor] = useState(() => getEffectiveToday())
   const today = todayAnchor
   const plus30Days = new Date(todayAnchor)
   plus30Days.setDate(plus30Days.getDate() + 30)
-  const rangeStart = formatIsoDate(today)
-  const rangeEnd = formatIsoDate(plus30Days)
+  const autoRangeStart = formatIsoDate(today)
+  const autoRangeEnd = formatIsoDate(plus30Days)
+  const [customRangeStart, setCustomRangeStart] = useState(autoRangeStart)
+  const [customRangeEnd, setCustomRangeEnd] = useState(autoRangeEnd)
+  const rangeStart = calendarRangeMode === 'custom' ? customRangeStart : autoRangeStart
+  const rangeEnd = calendarRangeMode === 'custom' ? customRangeEnd : autoRangeEnd
   const [searchedLabel, setSearchedLabel] = useState('')
   const [locationContext, setLocationContext] = useState<LocationContext>({
     city: 'Paris',
@@ -881,6 +886,22 @@ export function DashboardIntelPage() {
     }, 60000)
     return () => clearInterval(timer)
   }, [todayAnchor])
+
+  useEffect(() => {
+    if (calendarRangeMode === 'auto') return
+    const startDate = new Date(`${customRangeStart}T00:00:00`)
+    const endDate = new Date(`${customRangeEnd}T00:00:00`)
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return
+    if (endDate < startDate) {
+      setCustomRangeEnd(customRangeStart)
+      return
+    }
+    const maxEnd = new Date(startDate)
+    maxEnd.setDate(maxEnd.getDate() + 30)
+    if (endDate > maxEnd) {
+      setCustomRangeEnd(formatIsoDate(maxEnd))
+    }
+  }, [calendarRangeMode, customRangeStart, customRangeEnd])
 
   const [, setProviderStatus] = useState<Record<string, 'connected' | 'missing_key' | 'error'>>({})
   const currentYear = new Date().getFullYear()
@@ -2706,10 +2727,54 @@ export function DashboardIntelPage() {
               </button>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="rounded-lg bg-[#4a86f7] px-3 py-1.5 text-xs font-semibold text-white">J+30 auto</span>
-              <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-800">
-                Fenetre glissante: {rangeStart} {'->'} {rangeEnd}
-              </span>
+              <button
+                type="button"
+                onClick={() => setCalendarRangeMode('auto')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  calendarRangeMode === 'auto' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                J+30 auto
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalendarRangeMode('custom')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  calendarRangeMode === 'custom' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'
+                }`}
+              >
+                {copy.calendarCustomRange}
+              </button>
+              {calendarRangeMode === 'custom' ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={customRangeStart}
+                    onChange={(e) => setCustomRangeStart(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
+                  />
+                  <input
+                    type="date"
+                    value={customRangeEnd}
+                    min={customRangeStart}
+                    max={(() => {
+                      const startDate = new Date(`${customRangeStart}T00:00:00`)
+                      if (Number.isNaN(startDate.getTime())) return customRangeEnd
+                      startDate.setDate(startDate.getDate() + 30)
+                      return formatIsoDate(startDate)
+                    })()}
+                    onChange={(e) => setCustomRangeEnd(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
+                  />
+                  <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-zinc-700">
+                    max 30 jours
+                  </span>
+                </div>
+              ) : (
+                <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-800">
+                  Fenetre glissante: {rangeStart} {'->'} {rangeEnd}
+                </span>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-medium">
