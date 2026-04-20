@@ -205,14 +205,13 @@ export function DashboardPage() {
   useEffect(() => {
     if (!guestDemo) return
     const preferredDemoRole = (sessionStorage.getItem(DEMO_VIEW_ROLE_KEY) || '').trim().toLowerCase()
-    const cleanerAllowedInDemo = preferredDemoRole === 'cleaner' && cleanerHasAssignedListing
-    const targetRole = cleanerAllowedInDemo ? 'cleaner' : 'host'
+    const targetRole = preferredDemoRole === 'cleaner' ? 'cleaner' : 'host'
     if (currentRole === targetRole) return
     localStorage.setItem('staypilot_current_role', targetRole)
     sessionStorage.setItem(DEMO_VIEW_ROLE_KEY, targetRole)
     setCurrentRole(targetRole)
     window.dispatchEvent(new Event('staypilot-session-changed'))
-  }, [cleanerHasAssignedListing, currentRole, guestDemo])
+  }, [currentRole, guestDemo])
 
   const hostTabsWithConnect = [
     t.dashboardTabConnect,
@@ -226,23 +225,19 @@ export function DashboardPage() {
     t.dashboardTabEarlyAccess,
   ]
 
-  const tabs = guestDemo
-    ? hostTabsWithConnect
-    : isCleanerSession
-      ? cleanerHasAssignedListing
-        ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
-        : [t.dashboardTabCleaning]
-      : hostTabsWithConnect
-  const primaryTab = guestDemo ? tabs[0] : isCleanerSession ? t.dashboardTabCleaning : tabs[0]
+  const tabs = isCleanerSession
+    ? cleanerHasAssignedListing
+      ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
+      : [t.dashboardTabCleaning]
+    : hostTabsWithConnect
+  const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
-  const rowOneTabs = guestDemo
-    ? [tabs[0], tabs[1], tabs[2], tabs[3]]
-    : isCleanerSession
+  const rowOneTabs = isCleanerSession
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
       : [primaryTab]
     : [tabs[0], tabs[1], tabs[2], tabs[3]]
-  const rowTwoTabs = guestDemo ? [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]] : isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
+  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
