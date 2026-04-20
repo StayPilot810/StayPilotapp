@@ -15,6 +15,7 @@ import { isGuestDemoRoutingActive, isGuestDemoSession } from '../utils/guestDemo
 export function DashboardPage() {
   const { t, locale } = useLanguage()
   const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const DEMO_MODE_KEY = 'staypilot_demo_mode_v1'
   const getStoredRole = () => (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
   const c = {
     fr: {
@@ -26,6 +27,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         "Démonstration de l'application — exploration sans compte. Aucun logement n'est connecté dans cette session.",
       guestDemoTabUnavailable: 'Non disponible pour la démo',
+      demoModeLabel: 'Mode de démonstration',
+      demoHost: 'Démo hôte',
+      demoCleaner: 'Démo prestataire ménage',
     },
     en: {
       profileSettings: 'Profile & settings',
@@ -36,6 +40,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Application demo — browse without an account. No listings are connected in this session.',
       guestDemoTabUnavailable: 'Not available in this demo',
+      demoModeLabel: 'Demo mode',
+      demoHost: 'Host demo',
+      demoCleaner: 'Cleaner demo',
     },
     es: {
       profileSettings: 'Perfil y ajustes',
@@ -46,6 +53,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Demostración de la aplicación — exploración sin cuenta. No hay alojamientos conectados en esta sesión.',
       guestDemoTabUnavailable: 'No disponible en la demo',
+      demoModeLabel: 'Modo demo',
+      demoHost: 'Demo anfitrión',
+      demoCleaner: 'Demo limpieza',
     },
     de: {
       profileSettings: 'Profil & Einstellungen',
@@ -56,6 +66,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Demonstration der App — Erkundung ohne Konto. In dieser Sitzung sind keine Unterkünfte verbunden.',
       guestDemoTabUnavailable: 'In der Demo nicht verfügbar',
+      demoModeLabel: 'Demo-Modus',
+      demoHost: 'Host-Demo',
+      demoCleaner: 'Reinigungs-Demo',
     },
     it: {
       profileSettings: 'Profilo e impostazioni',
@@ -66,6 +79,9 @@ export function DashboardPage() {
       guestDemoPillLabel:
         'Dimostrazione dell’app — esplorazione senza account. Nessun alloggio è collegato in questa sessione.',
       guestDemoTabUnavailable: 'Non disponibile nella demo',
+      demoModeLabel: 'Modalità demo',
+      demoHost: 'Demo host',
+      demoCleaner: 'Demo pulizie',
     },
   }[ll]
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
@@ -185,15 +201,33 @@ export function DashboardPage() {
   const guestDemo = isGuestDemoSession() || isGuestDemoRoutingActive()
   const tabIsGuestDemoLocked = (tab: string) =>
     tab === t.dashboardTabConnect || tab === t.dashboardTabWhatsApp || tab === t.dashboardTabEarlyAccess
+  const [demoMode, setDemoMode] = useState<'host' | 'cleaner'>('host')
+  const isCleanerDemoView = guestDemo && demoMode === 'cleaner'
 
   useEffect(() => {
     if (!guestDemo) return
-    const targetRole = 'host'
+    const storedDemoMode = (sessionStorage.getItem(DEMO_MODE_KEY) || '').trim().toLowerCase()
+    const targetRole = storedDemoMode === 'cleaner' ? 'cleaner' : 'host'
+    setDemoMode(targetRole)
     if (currentRole === targetRole) return
     localStorage.setItem('staypilot_current_role', targetRole)
     setCurrentRole(targetRole)
     window.dispatchEvent(new Event('staypilot-session-changed'))
   }, [currentRole, guestDemo])
+  const setGuestDemoMode = (mode: 'host' | 'cleaner') => {
+    if (!guestDemo) return
+    try {
+      sessionStorage.setItem(DEMO_MODE_KEY, mode)
+    } catch {
+      /* ignore */
+    }
+    setDemoMode(mode)
+    if (currentRole !== mode) {
+      localStorage.setItem('staypilot_current_role', mode)
+      setCurrentRole(mode)
+      window.dispatchEvent(new Event('staypilot-session-changed'))
+    }
+  }
 
   const hostTabsWithConnect = [
     t.dashboardTabConnect,
@@ -207,19 +241,19 @@ export function DashboardPage() {
     t.dashboardTabEarlyAccess,
   ]
 
-  const tabs = isCleanerSession
+  const tabs = isCleanerDemoView || isCleanerSession
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
       : [t.dashboardTabCleaning]
     : hostTabsWithConnect
-  const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
+  const primaryTab = isCleanerDemoView || isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
-  const rowOneTabs = isCleanerSession
+  const rowOneTabs = isCleanerDemoView || isCleanerSession
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
       : [primaryTab]
     : [tabs[0], tabs[1], tabs[2], tabs[3]]
-  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
+  const rowTwoTabs = isCleanerDemoView || isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
@@ -280,6 +314,33 @@ export function DashboardPage() {
             )}
           </p>
         </div>
+        {guestDemo ? (
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs font-semibold text-zinc-600">{c.demoModeLabel}</span>
+            <button
+              type="button"
+              onClick={() => setGuestDemoMode('host')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                !isCleanerDemoView
+                  ? 'border-sky-300 bg-sky-50 text-sky-800'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-sky-200 hover:text-sky-700'
+              }`}
+            >
+              {c.demoHost}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGuestDemoMode('cleaner')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                isCleanerDemoView
+                  ? 'border-sky-300 bg-sky-50 text-sky-800'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-sky-200 hover:text-sky-700'
+              }`}
+            >
+              {c.demoCleaner}
+            </button>
+          </div>
+        ) : null}
         <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">{t.dashboardTitle}</h1>
         <p className="mt-1 text-center text-sm text-zinc-600">{t.dashboardTabsTitle}</p>
         <div className="mx-auto mt-6 hidden w-full max-w-[1220px] flex-col gap-4 lg:flex">

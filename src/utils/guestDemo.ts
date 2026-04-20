@@ -34,6 +34,7 @@ export function clearHostListingConnectionsForGuestDemo() {
 
 const GUEST_KEY = 'staypilot_guest_demo_v1'
 const GUEST_FORCED_TEST_KEY = 'staypilot_guest_demo_forced_test_v1'
+const DEMO_MODE_KEY = 'staypilot_demo_mode_v1'
 /** Posé au clic sur « Voir la démo » (accueil) uniquement — pas d’URL publique. */
 const CTA_INTENT_KEY = 'staypilot_guest_demo_cta_v1'
 
@@ -92,6 +93,11 @@ export function activateGuestDemoSession() {
   } catch {
     /* ignore */
   }
+  try {
+    sessionStorage.setItem(DEMO_MODE_KEY, 'host')
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Quitte la démo : retire le flag et le mode test si on l’avait activé pour la démo uniquement. */
@@ -99,6 +105,7 @@ export function deactivateGuestDemoSession() {
   try {
     sessionStorage.removeItem(GUEST_KEY)
     sessionStorage.removeItem(CTA_INTENT_KEY)
+    sessionStorage.removeItem(DEMO_MODE_KEY)
   } catch {
     /* ignore */
   }
