@@ -2706,18 +2706,33 @@ export function DashboardIntelPage() {
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteRecommended}</p>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
+                    title={runtimeText.legendExpectedGain}
+                  >
+                    {runtimeText.concreteRecommended}
+                  </p>
                   <p className={`mt-1 text-xl font-bold ${monthConcreteInsights.avgRecommendedPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {monthConcreteInsights.avgRecommendedPct >= 0 ? '+' : ''}
                     {monthConcreteInsights.avgRecommendedPct}%
                   </p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteConfidence}</p>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
+                    title={runtimeText.legendConfidence}
+                  >
+                    {runtimeText.concreteConfidence}
+                  </p>
                   <p className="mt-1 text-xl font-bold text-zinc-900">{monthConcreteInsights.avgConfidence}/100</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteDemandScore}</p>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
+                    title={runtimeText.legendDemandScore}
+                  >
+                    {runtimeText.concreteDemandScore}
+                  </p>
                   <p className="mt-1 text-xl font-bold text-zinc-900">{monthConcreteInsights.avgDemandScore}/100</p>
                 </article>
               </div>
@@ -2740,11 +2755,6 @@ export function DashboardIntelPage() {
               <p className="mt-3 text-xs font-medium text-zinc-600">
                 {monthConcreteInsights.signalPoints} {runtimeText.concreteDataPoints}
               </p>
-              <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.legendTitle}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendDemandScore}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendConfidence}</p>
-              </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
@@ -2754,15 +2764,21 @@ export function DashboardIntelPage() {
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedAdr}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPriceBand}>
+                    {runtimeText.advancedAdr}
+                  </p>
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.adr} EUR</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedOcc}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendDemandScore}>
+                    {runtimeText.advancedOcc}
+                  </p>
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.occ}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedRevpar}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendExpectedGain}>
+                    {runtimeText.advancedRevpar}
+                  </p>
                   <p className="mt-1 text-lg font-bold text-zinc-900">{advancedPricingInsights.revpar} EUR</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
@@ -2775,15 +2791,21 @@ export function DashboardIntelPage() {
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedPickup7d}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPickup}>
+                    {runtimeText.advancedPickup7d}
+                  </p>
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.pickup7d}%/jour</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedPickup30d}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPickup}>
+                    {runtimeText.advancedPickup30d}
+                  </p>
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.pickup30d}%/jour</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedPriceBand}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendPriceBand}>
+                    {runtimeText.advancedPriceBand}
+                  </p>
                   <p className="mt-1 text-sm font-bold text-zinc-900">
                     {advancedPricingInsights.priceFloor} - {advancedPricingInsights.priceCeiling} EUR
                   </p>
@@ -2791,11 +2813,15 @@ export function DashboardIntelPage() {
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedBookingProbability}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendBookingProbability}>
+                    {runtimeText.advancedBookingProbability}
+                  </p>
                   <p className="mt-1 text-sm font-bold text-zinc-900">{advancedPricingInsights.bookingProbability}%</p>
                 </article>
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedExpectedDelta}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500" title={runtimeText.legendExpectedGain}>
+                    {runtimeText.advancedExpectedDelta}
+                  </p>
                   <p className={`mt-1 text-sm font-bold ${advancedPricingInsights.expectedRevenueDeltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {advancedPricingInsights.expectedRevenueDeltaPct >= 0 ? '+' : ''}
                     {advancedPricingInsights.expectedRevenueDeltaPct}%
@@ -2839,14 +2865,6 @@ export function DashboardIntelPage() {
               <p className="mt-3 text-xs font-semibold text-zinc-700">
                 {runtimeText.advancedBacktestScore}: {advancedPricingInsights.backtestScore}/100
               </p>
-              <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.legendTitle}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendPickup}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendPriceBand}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendBookingProbability}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendExpectedGain}</p>
-                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendBacktest}</p>
-              </div>
             </div>
 
             <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
