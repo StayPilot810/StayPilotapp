@@ -37,6 +37,7 @@ export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: num
     let bookingIdx = 0
     let cursor = 1 + ((monthIndex + apt) % 2)
     let previousChannel: 'airbnb' | 'booking' | null = null
+    const aptBookingIndexes: number[] = []
 
     while (bookedNights < targetNights && cursor <= daysInMonth) {
       const remaining = targetNights - bookedNights
@@ -54,9 +55,9 @@ export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: num
       } else {
         channel = (apt + bookingIdx + monthIndex) % 2 === 0 ? 'airbnb' : 'booking'
       }
-      const cancellationRate = channel === 'booking' ? 0.24 : 0.14
+      const cancellationRate = channel === 'booking' ? 0.18 : 0.09
       const cancellationSeed = (monthIndex * 11 + apt * 7 + bookingIdx * 5) % 100
-      const forcedCancellation = bookingIdx === 0 && (monthIndex + apt) % 3 === 0
+      const forcedCancellation = bookingIdx === 1 && (monthIndex + apt) % 4 === 0
       const status: DemoBookingStatus =
         forcedCancellation || cancellationSeed < Math.round(cancellationRate * 100) ? 'cancelled' : 'reserved'
       const commissionRate =
@@ -86,12 +87,25 @@ export function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: num
         bookingGenius: channel === 'booking' && (monthIndex + bookingIdx) % 2 === 0,
         status,
       })
+      aptBookingIndexes.push(bookings.length - 1)
 
       bookedNights += nights
       previousChannel = channel
       const gap = (monthIndex + apt + bookingIdx) % 5 === 0 ? 0 : 1 + ((monthIndex + apt + bookingIdx) % 2)
       cursor = end + gap + 1
       bookingIdx += 1
+    }
+
+    // Garde-fou: éviter un mois totalement annulé pour un logement.
+    const hasReserved = aptBookingIndexes.some((idx) => bookings[idx]?.status === 'reserved')
+    if (!hasReserved) {
+      const firstCancelledIdx = aptBookingIndexes.find((idx) => bookings[idx]?.status === 'cancelled')
+      if (firstCancelledIdx != null) {
+        bookings[firstCancelledIdx] = {
+          ...bookings[firstCancelledIdx],
+          status: 'reserved',
+        }
+      }
     }
   }
   return bookings
