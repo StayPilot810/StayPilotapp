@@ -5,6 +5,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import type { Locale } from '../i18n/navbar'
+import { isGuestDemoSession } from '../utils/guestDemo'
 
 function hasRealConnectedListings() {
   try {
@@ -90,6 +91,80 @@ function nightsBetween(start: Date, end: Date) {
   return Math.max(0, Math.round(diff / 86400000))
 }
 
+function buildGuestDemoStatsData(apartmentNames: string[]) {
+  const occupancyBaseByApt = [0.65, 0.69, 0.72, 0.76, 0.8]
+  const occupancySeasonalityByMonth = [-0.03, -0.02, -0.01, 0, 0.02, 0.04, 0.05, 0.04, 0.01, 0, -0.02, -0.03]
+  const nightlySeasonMultiplier = [0.9, 0.92, 0.97, 1.02, 1.08, 1.2, 1.28, 1.25, 1.12, 1.0, 0.95, 0.9]
+  const reservationEvents: ReservationEvent[] = []
+  const revenueEntries: RevenueEntry[] = []
+
+  for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+    const month = monthIndex + 1
+    const daysInMonth = new Date(2026, month, 0).getDate()
+    for (let apt = 0; apt < apartmentNames.length; apt += 1) {
+      const apartment = apartmentNames[apt]
+      const occupancyTarget = Math.max(0.65, Math.min(0.8, occupancyBaseByApt[apt] + occupancySeasonalityByMonth[monthIndex]))
+      const targetNights = Math.max(1, Math.round(daysInMonth * occupancyTarget))
+      let bookedNights = 0
+      let bookingIdx = 0
+      let cursor = 1 + ((monthIndex + apt) % 2)
+      let previousSource: RevenueSource | null = null
+
+      while (bookedNights < targetNights && cursor <= daysInMonth) {
+        const remaining = targetNights - bookedNights
+        const maxLen = Math.min(7, remaining, daysInMonth - cursor + 1)
+        if (maxLen <= 0) break
+        const minLen = Math.min(3, maxLen)
+        const tentativeLen = 3 + ((monthIndex + apt + bookingIdx) % 5)
+        const nights = Math.min(maxLen, Math.max(minLen, tentativeLen))
+        const startDay = cursor
+        const endDay = startDay + nights
+        const source: RevenueSource =
+          previousSource && (monthIndex + apt + bookingIdx) % 3 !== 0
+            ? previousSource
+            : (apt + bookingIdx + monthIndex) % 2 === 0
+              ? 'airbnb'
+              : 'booking'
+        const commissionRate =
+          source === 'booking'
+            ? 0.17 + ((monthIndex + bookingIdx) % 4) * 0.005
+            : 0.142 + ((monthIndex + apt + bookingIdx) % 3) * 0.004
+        const baseNightly = 94 + apt * 9
+        const seasonalNightly = Math.round(baseNightly * nightlySeasonMultiplier[monthIndex])
+        const totalGuestEur = Math.round(nights * seasonalNightly + 48 + monthIndex * 4)
+        const cleaningEur = 44 + (apt % 3) * 6 + (nights >= 6 ? 8 : 0)
+        const platformFeeEur = Math.round((totalGuestEur + cleaningEur) * commissionRate)
+        const netRevenue = totalGuestEur + cleaningEur - platformFeeEur
+        const checkIn = `2026-${String(month).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`
+
+        reservationEvents.push({
+          apartment,
+          date: checkIn,
+          status: 'reserved',
+          nights,
+        })
+        revenueEntries.push({
+          apartment,
+          source,
+          checkIn,
+          month,
+          year: 2026,
+          netRevenue,
+          occupiedNights: nights,
+        })
+
+        bookedNights += nights
+        previousSource = source
+        const gap = (monthIndex + apt + bookingIdx) % 5 === 0 ? 0 : 1 + ((monthIndex + apt + bookingIdx) % 2)
+        cursor = startDay + nights + gap
+        bookingIdx += 1
+      }
+    }
+  }
+
+  return { reservationEvents, revenueEntries }
+}
+
 export function DashboardStatsPage() {
   const { t, locale } = useLanguage()
   const resolvedLocale: Locale =
@@ -173,6 +248,7 @@ export function DashboardStatsPage() {
   const [detectedListingFilter, setDetectedListingFilter] = useState<string>('all')
   const [connectionsRefreshKey, setConnectionsRefreshKey] = useState(0)
   const [statsLoadError, setStatsLoadError] = useState('')
+  const guestDemoActive = useMemo(() => isGuestDemoSession(), [connectionsRefreshKey])
   useEffect(() => {
     const refresh = () => setConnectionsRefreshKey((v) => v + 1)
     window.addEventListener('storage', refresh)
@@ -185,7 +261,7 @@ export function DashboardStatsPage() {
     }
   }, [])
   const hasRealConnected = useMemo(() => hasRealConnectedListings(), [connectionsRefreshKey])
-  const connected = useMemo(() => hasRealConnected, [hasRealConnected])
+  const connected = useMemo(() => guestDemoActive || hasRealConnected, [guestDemoActive, hasRealConnected])
   const apartmentNames = useMemo(() => {
     return getConnectedApartmentsFromStorage().map((apt) => apt.name)
   }, [connectionsRefreshKey])
@@ -209,6 +285,13 @@ export function DashboardStatsPage() {
   )
 
   useEffect(() => {
+    if (guestDemoActive) {
+      const demo = buildGuestDemoStatsData(apartmentNames)
+      setReservationEvents(demo.reservationEvents)
+      setRevenueEntries(demo.revenueEntries)
+      setStatsLoadError('')
+      return
+    }
     const connectedApartments = getConnectedApartmentsFromStorage()
     const official = readOfficialChannelSyncData()
     if (official && official.bookings.length > 0) {
@@ -302,7 +385,7 @@ export function DashboardStatsPage() {
     return () => {
       cancelled = true
     }
-  }, [connectionsRefreshKey])
+  }, [connectionsRefreshKey, guestDemoActive, apartmentNames, statsUi.loadError])
 
   const customRangeError = useMemo(() => {
     if (!customStartDate || !customEndDate) return ''
@@ -566,12 +649,6 @@ export function DashboardStatsPage() {
               <p className="text-sm text-zinc-700">
                 {statsUi.connectPrompt}
               </p>
-              <a
-                href="/dashboard/connecter-logements"
-                className="mt-4 inline-flex rounded-lg bg-[#4a86f7] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95"
-              >
-                {statsUi.connectMyListings}
-              </a>
             </div>
           </div>
         ) : (
