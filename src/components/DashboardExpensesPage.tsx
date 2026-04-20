@@ -7,7 +7,7 @@ import {
   buildChannelExpenseRowsForMonth,
   buildChannelRevenueRowsFromSync,
 } from '../utils/channelExpensesFromSync'
-import { isGuestDemoSession } from '../utils/guestDemo'
+import { isGuestDemoRoutingActive, isGuestDemoSession } from '../utils/guestDemo'
 import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import { readScopedStorage, writeScopedStorage } from '../utils/sessionStorageScope'
 import { isTestModeEnabled } from '../utils/testMode'
@@ -45,6 +45,14 @@ type FixedCharge = {
   attachmentDataUrl?: string
 }
 
+type FixedChargeTemplate = {
+  label: string
+  category: string
+  amountBase: number
+  dayOfMonth: number
+  status: ExpenseStatus
+}
+
 function getConnectedApartmentOptions() {
   const fromConnected = getConnectedApartmentsFromStorage().map((apt) => apt.name)
   if (fromConnected.length > 0) return fromConnected
@@ -63,6 +71,12 @@ const MONTHS = {
 } as const
 const PIE_COLORS = ['#4a86f7', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6']
 const DEFICIT_PIE_FILL = '#e11d48'
+
+const DEFAULT_FIXED_CHARGE_TEMPLATES: FixedChargeTemplate[] = [
+  { label: 'Loyer', category: 'Financement', amountBase: 680, dayOfMonth: 3, status: 'Prelevement automatique' },
+  { label: 'Assurance habitation', category: 'Assurance', amountBase: 42, dayOfMonth: 7, status: 'Prelevement automatique' },
+  { label: 'Internet', category: 'Services', amountBase: 29, dayOfMonth: 10, status: 'A payer' },
+]
 function isRemovedSampleLabel(label: string) {
   return label.trim().toLowerCase().startsWith('remplacement kit serviettes')
 }
@@ -78,6 +92,23 @@ function getStatusSelectClass(status: ExpenseStatus) {
   if (status === 'Paye') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   if (status === 'A payer') return 'border-amber-200 bg-amber-50 text-amber-700'
   return 'border-sky-200 bg-sky-50 text-sky-700'
+}
+
+function buildDefaultFixedCharges(apartmentNames: string[], baseYear: number): FixedCharge[] {
+  if (apartmentNames.length === 0) return []
+  return apartmentNames.flatMap((apartment, aptIdx) =>
+    DEFAULT_FIXED_CHARGE_TEMPLATES.map((tpl, tplIdx) => ({
+      id: `default-fixed-${aptIdx}-${tplIdx}`,
+      apartment,
+      label: tpl.label,
+      category: tpl.category,
+      amount: tpl.amountBase + aptIdx * 12 + tplIdx * 3,
+      dayOfMonth: tpl.dayOfMonth,
+      status: tpl.status,
+      startYear: baseYear,
+      startMonth: 1,
+    })),
+  )
 }
 
 export function DashboardExpensesPage() {
@@ -402,7 +433,8 @@ export function DashboardExpensesPage() {
   }[ll]
   const monthLabels = MONTHS[ll]
   const now = new Date()
-  const guestDemoActive = isGuestDemoSession()
+  const guestDemoActive = isGuestDemoSession() || isGuestDemoRoutingActive()
+  const effectiveToday = guestDemoActive ? new Date(DEMO_BASE_YEAR, now.getMonth(), now.getDate()) : now
   const [connectedApartments] = useState<string[]>(() => getConnectedApartmentOptions())
   const hasConnectedApartments = connectedApartments.length > 0
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1)
@@ -455,9 +487,9 @@ export function DashboardExpensesPage() {
           attachmentDataUrl: charge.attachmentDataUrl ?? '',
         }))
       }
-      return []
+      return buildDefaultFixedCharges(connectedApartments, guestDemoActive ? DEMO_BASE_YEAR : now.getFullYear())
     } catch {
-      return []
+      return buildDefaultFixedCharges(connectedApartments, guestDemoActive ? DEMO_BASE_YEAR : now.getFullYear())
     }
   })
 
@@ -489,6 +521,53 @@ export function DashboardExpensesPage() {
       }),
     [rows, selectedMonth, selectedYear, scopeMode, selectedApartment],
   )
+
+  const autoVariableRows = useMemo<ExpenseRow[]>(() => {
+    // In future months, variable expenses are unknown and therefore hidden.
+    const currentYear = effectiveToday.getFullYear()
+    const currentMonth = effectiveToday.getMonth() + 1
+    const selectedYm = selectedYear * 100 + selectedMonth
+    const currentYm = currentYear * 100 + currentMonth
+    if (selectedYm > currentYm) return []
+
+    const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth
+    const isLastDayOfCurrentMonth =
+      isCurrentMonth && effectiveToday.getDate() === new Date(currentYear, currentMonth, 0).getDate()
+
+    const apartments =
+      scopeMode === 'by_apartment'
+        ? selectedApartment
+          ? [selectedApartment]
+          : []
+        : connectedApartments
+
+    if (apartments.length === 0) return []
+
+    const templates: Array<{ label: string; category: string; amountBase: number; dueDay: number }> = [
+      { label: 'Electricite / Eau', category: 'Utilities', amountBase: 78, dueDay: 5 },
+      { label: 'Internet / Telecom', category: 'Services', amountBase: 36, dueDay: 11 },
+      { label: 'Produits entretien', category: 'Entretien', amountBase: 24, dueDay: 20 },
+    ]
+
+    return apartments.flatMap((apartment, aptIdx) =>
+      templates.map((tpl, tplIdx) => {
+        const amount = tpl.amountBase + aptIdx * 3 + (selectedMonth % 3)
+        const dueDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(Math.min(tpl.dueDay, new Date(selectedYear, selectedMonth, 0).getDate())).padStart(2, '0')}`
+        const shouldRemainUnpaid =
+          isCurrentMonth && !isLastDayOfCurrentMonth && (tplIdx + aptIdx) % 2 === 0 && tpl.dueDay >= effectiveToday.getDate()
+        const status: ExpenseStatus = shouldRemainUnpaid ? 'A payer' : 'Paye'
+        return {
+          id: `av-${selectedYear}-${selectedMonth}-${aptIdx}-${tplIdx}`,
+          apartment,
+          label: tpl.label,
+          category: tpl.category,
+          amount,
+          dueDate,
+          status,
+        }
+      }),
+    )
+  }, [effectiveToday, selectedYear, selectedMonth, scopeMode, selectedApartment, connectedApartments])
 
   const fixedRowsForSelectedMonth = useMemo<ExpenseRow[]>(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate()
@@ -633,21 +712,22 @@ export function DashboardExpensesPage() {
   }, [channelDataTick, selectedYear, selectedMonth, c.channelCategory, c.channelLabelAutres, c.channelLabelMenage, c.channelLabelPlatform, c.channelLabelTaxes, guestDemoActive, connectedApartments])
 
   const displayedRows = useMemo(
-    () => [...channelExpenseRows, ...filteredRows, ...fixedRowsForSelectedMonth],
-    [channelExpenseRows, filteredRows, fixedRowsForSelectedMonth],
+    () => [...channelExpenseRows, ...autoVariableRows, ...filteredRows, ...fixedRowsForSelectedMonth],
+    [channelExpenseRows, autoVariableRows, filteredRows, fixedRowsForSelectedMonth],
   )
 
   // KPI : même périmètre que le mois affiché (variables + fixes du mois + channel), aligné sur le tableau et le camembert.
   const statsRows = useMemo(
     () => [
       ...channelExpenseRows,
+      ...autoVariableRows,
       ...filteredRows,
       ...fixedRowsForSelectedMonth.map((row) => ({
         amount: Number.isFinite(row.amount) ? row.amount : 0,
         status: row.status,
       })),
     ],
-    [channelExpenseRows, filteredRows, fixedRowsForSelectedMonth],
+    [channelExpenseRows, autoVariableRows, filteredRows, fixedRowsForSelectedMonth],
   )
 
   const canAddCharges = scopeMode === 'by_apartment' && Boolean(selectedApartment)
@@ -785,11 +865,11 @@ export function DashboardExpensesPage() {
     monthlyResultTotal.charges > 0
 
   const updateRow = (id: string, patch: Partial<ExpenseRow>) => {
-    if (id.startsWith('ch-')) return
+    if (id.startsWith('ch-') || id.startsWith('av-')) return
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
   }
   const removeRow = (id: string) => {
-    if (id.startsWith('ch-')) return
+    if (id.startsWith('ch-') || id.startsWith('av-')) return
     setRows((prev) => prev.filter((row) => row.id !== id))
   }
   const toDataUrl = (file: File) =>
@@ -801,7 +881,7 @@ export function DashboardExpensesPage() {
     })
 
   const onExpenseAttachmentChange = async (id: string, file?: File) => {
-    if (id.startsWith('ch-')) return
+    if (id.startsWith('ch-') || id.startsWith('av-')) return
     if (!file) {
       updateRow(id, { attachmentName: '', attachmentDataUrl: '' })
       return
@@ -1125,7 +1205,7 @@ export function DashboardExpensesPage() {
               </thead>
               <tbody className="divide-y divide-zinc-100 text-sm text-zinc-700">
                 {displayedRows.map((row) => {
-                  const readOnly = row.id.startsWith('fixed-') || row.id.startsWith('ch-')
+                  const readOnly = row.id.startsWith('fixed-') || row.id.startsWith('ch-') || row.id.startsWith('av-')
                   return (
                   <tr key={row.id}>
                     <td className="px-4 py-3">
