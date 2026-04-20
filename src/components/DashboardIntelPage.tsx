@@ -571,6 +571,7 @@ export function DashboardIntelPage() {
       skiCold: 'Conditions froides favorables au ski',
       weekendImpactedBy: 'Week-end impacte par',
       weekendEffect: 'Effet week-end (hausse naturelle de la demande)',
+      weekendEmptyMarkdown: 'Week-end proche encore vide: baisse tactique ({pct}%)',
       localContextDynamic: 'Contexte local global tres dynamique',
       recentArticles: 'articles recents',
       worldSignalLive: 'Signal monde en direct',
@@ -698,6 +699,7 @@ export function DashboardIntelPage() {
       skiCold: 'Cold conditions favorable for ski demand',
       weekendImpactedBy: 'Weekend impacted by',
       weekendEffect: 'Weekend effect (natural demand increase)',
+      weekendEmptyMarkdown: 'Upcoming weekend still empty: tactical markdown ({pct}%)',
       localContextDynamic: 'Overall local context is very dynamic',
       recentArticles: 'recent articles',
       worldSignalLive: 'Live global signal',
@@ -1630,8 +1632,6 @@ export function DashboardIntelPage() {
         const globalLive = globalLiveByDate[isoDate] ?? { worldAlerts: 0, labels: [] }
         const severeWeather = weather ? [95, 96, 99, 65, 66, 67].includes(weather.weatherCode) : false
         const heatWave = weather ? weather.tempMax >= 32 : false
-        const isPeakWeekend = isWeekend && ((seed + day + monthIndex) % 3 === 0)
-        const isWeekendLift = isWeekend && ((seed + day + monthIndex) % 2 === 0)
         const isFriday = dow === 5
         const isMonday = dow === 1
         const isSummer = [5, 6, 7, 8].includes(monthIndex)
@@ -1667,28 +1667,28 @@ export function DashboardIntelPage() {
 
         if (holiday) {
           reasons.push(`${runtimeText.officialHoliday}: ${holiday.localName || holiday.name}`)
-          bump += 8
-          eventDrivenBump += 8
+          bump += 14
+          eventDrivenBump += 14
         }
         if (hasPriceLabsSignal) {
           reasons.push(runtimeText.priceLabsSignal)
-          bump += 4
-          eventDrivenBump += 4
+          bump += 8
+          eventDrivenBump += 8
         }
         if (namedEvent) {
           reasons.push(`${runtimeText.confirmedEvent}: ${namedEvent.label}`)
-          bump += 7
-          eventDrivenBump += 7
+          bump += 18
+          eventDrivenBump += 18
         }
         if (hasSchoolHoliday) {
           reasons.push(`${runtimeText.schoolHolidaysActive}: ${schoolHolidayRange?.label ?? runtimeText.schoolHolidayPeriodActive}`)
-          bump += 5
-          structuralBump += 5
+          bump += 8
+          structuralBump += 8
         }
         if (isLongWeekend) {
           reasons.push(runtimeText.threeDayWeekend)
-          bump += 8
-          eventDrivenBump += 8
+          bump += 12
+          eventDrivenBump += 12
         }
         if (isCoastalMarket && isSummer) {
           reasons.push(runtimeText.coastalSummer)
@@ -1705,32 +1705,35 @@ export function DashboardIntelPage() {
           bump += citySeasonalityBoost
           structuralBump += citySeasonalityBoost
         }
-        if (liveSignals.concerts >= 3) {
+        if (liveSignals.concerts >= 1) {
+          const concertImpact = Math.min(26, 8 + liveSignals.concerts * 2)
           reasons.push(
             liveSignals.concertLabels[0]
               ? `${runtimeText.concertConfirmed}: ${liveSignals.concertLabels[0]} (${liveSignals.concerts} ${runtimeText.signals})`
               : `${runtimeText.concertLiveDetected} (${liveSignals.concerts} ${runtimeText.signals})`,
           )
-          bump += 7
-          eventDrivenBump += 7
+          bump += concertImpact
+          eventDrivenBump += concertImpact
         }
-        if (liveSignals.sports >= 3) {
+        if (liveSignals.sports >= 1) {
+          const sportsImpact = Math.min(24, 7 + liveSignals.sports * 2)
           reasons.push(
             liveSignals.sportsLabels[0]
               ? `${liveSignals.sportsLabels[0]} (${liveSignals.sports} ${runtimeText.matchSignals})`
               : `${runtimeText.sportsMajorDetected} - ${liveSignals.sports} ${runtimeText.signals}`,
           )
-          bump += 6
-          eventDrivenBump += 6
+          bump += sportsImpact
+          eventDrivenBump += sportsImpact
         }
-        if (liveSignals.business >= 3) {
+        if (liveSignals.business >= 1) {
+          const businessImpact = Math.min(18, 5 + Math.round(liveSignals.business * 1.5))
           reasons.push(
             liveSignals.businessLabels[0]
               ? `${runtimeText.businessConference}: ${liveSignals.businessLabels[0]} (${liveSignals.business} ${runtimeText.signals})`
               : `${runtimeText.businessInCity} (${liveSignals.business} ${runtimeText.signals})`,
           )
-          bump += 4
-          eventDrivenBump += 4
+          bump += businessImpact
+          eventDrivenBump += businessImpact
         }
         if (liveNewsCount >= 8) {
           reasons.push(`${runtimeText.localActivityHigh}: ${liveNewsCount} ${runtimeText.articlesDetectedToday}`)
@@ -1767,23 +1770,17 @@ export function DashboardIntelPage() {
           bump += 4
           structuralBump += 4
         }
-        if (isPeakWeekend || isWeekendLift) {
+        if (isWeekend) {
+          // Base rule: weekends are always priced above weekdays.
+          reasons.push(runtimeText.weekendEffect)
+          bump += 10
+          structuralBump += 10
           if (namedEvent) {
             reasons.push(`${runtimeText.weekendImpactedBy}: ${namedEvent.label}`)
-            bump += 4
-            eventDrivenBump += 4
           } else if (liveSignals.concertLabels[0]) {
             reasons.push(`${runtimeText.weekendImpactedBy}: ${liveSignals.concertLabels[0]}`)
-            bump += 4
-            eventDrivenBump += 4
           } else if (liveSignals.sportsLabels[0]) {
             reasons.push(`${runtimeText.weekendImpactedBy}: ${liveSignals.sportsLabels[0]}`)
-            bump += 4
-            eventDrivenBump += 4
-          } else {
-            reasons.push(runtimeText.weekendEffect)
-            bump += 3
-            structuralBump += 3
           }
         }
         if (newsHotspotScore >= 60 && (seed + day + monthIndex) % 5 === 0) {
@@ -1802,21 +1799,30 @@ export function DashboardIntelPage() {
         }
 
         const sourceCount = new Set(liveSignals.sources).size
+        const isBooked = selectedListing ? bookedDateSetBySelectedListing.has(isoDate) : true
+        const isEmptyGap = selectedListing ? !isBooked : false
+        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        const daysUntilStay = Math.round((date.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24))
+        if (isWeekend && isEmptyGap && daysUntilStay >= 0 && daysUntilStay <= 5) {
+          const markdownPct = daysUntilStay <= 1 ? 18 : daysUntilStay <= 2 ? 12 : daysUntilStay <= 3 ? 8 : daysUntilStay <= 4 ? 6 : 4
+          reasons.push(runtimeText.weekendEmptyMarkdown.replace('{pct}', String(markdownPct)))
+          bump -= markdownPct
+        }
         const dynamicMultiplier = pricingMode === 'ultra' ? 1.35 + Math.min(0.55, sourceCount * 0.08) : 1
         let cappedBump =
           pricingMode === 'ultra'
-            ? Math.max(-35, Math.min(55, Math.round(bump * dynamicMultiplier)))
-            : Math.max(-20, Math.min(25, bump))
+            ? Math.max(-45, Math.min(95, Math.round(bump * dynamicMultiplier)))
+            : Math.max(-30, Math.min(55, bump))
         // Guardrails: structural seasonality alone should not become ultra-red.
         if (pricingMode === 'ultra' && eventDrivenBump < 8) cappedBump = Math.min(cappedBump, 28)
         if (pricingMode === 'ultra' && eventDrivenBump < 5 && structuralBump >= 10) cappedBump = Math.min(cappedBump, 24)
         if (pricingScenario === 'aggressive' && pricingMode === 'ultra') {
-          const strongEvent = eventDrivenBump >= 12
+          const strongEvent = eventDrivenBump >= 18
           if (strongEvent) {
-            // Allow event-driven spikes up to +100%.
-            cappedBump = Math.min(100, Math.max(cappedBump, Math.round(cappedBump * 1.7 + 20)))
+            // Allow event-driven spikes for true high-demand nights.
+            cappedBump = Math.min(140, Math.max(cappedBump, Math.round(cappedBump * 1.8 + 24)))
           }
-          if (!strongEvent && cappedBump > 60) cappedBump = 60
+          if (!strongEvent && cappedBump > 85) cappedBump = 85
         }
         const level: 'low' | 'medium' | 'high' =
           cappedBump >= (pricingMode === 'ultra' ? 18 : 12)
@@ -1827,8 +1833,6 @@ export function DashboardIntelPage() {
         const reasonsLabel = reasons.length > 0 ? reasons.join(' | ') : runtimeText.standardDemand
         const sourceLabel = liveSignals.sources.length > 0 ? ` [sources: ${liveSignals.sources.join(', ')}]` : ''
         const actionLabel = cappedBump >= 0 ? runtimeText.increasePricesBy : runtimeText.lowerPricesBy
-        const isBooked = selectedListing ? bookedDateSetBySelectedListing.has(isoDate) : true
-        const isEmptyGap = selectedListing ? !isBooked : false
         const event = `${reasonsLabel} - ${activeLocationAddress} - ${actionLabel} ${Math.abs(cappedBump)}%${
           isEmptyGap ? ` | ${runtimeText.emptyGapDetected}` : ''
         }${sourceLabel}`
