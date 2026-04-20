@@ -128,7 +128,8 @@ function buildGuestDemoStatsData(apartmentNames: string[]) {
         // Taux d'annulation démo réaliste: Booking > Airbnb.
         const cancellationRate = source === 'booking' ? 0.16 : 0.1
         const cancellationSeed = (monthIndex * 11 + apt * 7 + bookingIdx * 5) % 100
-        const isCancelled = cancellationSeed < Math.round(cancellationRate * 100)
+        const forcedCancellation = bookingIdx === 0 && (monthIndex + apt) % 4 === 0
+        const isCancelled = forcedCancellation || cancellationSeed < Math.round(cancellationRate * 100)
         const commissionRate =
           source === 'booking'
             ? 0.17 + ((monthIndex + bookingIdx) % 4) * 0.005
@@ -845,7 +846,11 @@ export function DashboardStatsPage() {
                 <div className="mt-2">
                   <select
                     value={detectedListingFilter}
-                    onChange={(e) => setDetectedListingFilter(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setDetectedListingFilter(next)
+                      setSelectedApartmentFilter(next === 'all' ? 'all' : next)
+                    }}
                     className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 outline-none focus:border-[#4a86f7] sm:text-sm"
                   >
                     <option value="all">{statsUi.allListings}</option>
@@ -989,6 +994,14 @@ export function DashboardStatsPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{statsUi.reservationCount}</p>
                   <p className="mt-1 text-2xl font-bold text-zinc-900">
                     {reservationAndCancellation.totalCount}
+                  </p>
+                </article>
+              </div>
+              <div className="mt-2 grid gap-4 sm:grid-cols-3">
+                <article className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{statsUi.cancellations}</p>
+                  <p className="mt-1 text-2xl font-bold text-rose-600">
+                    {reservationAndCancellation.cancelledCount}
                   </p>
                 </article>
               </div>
