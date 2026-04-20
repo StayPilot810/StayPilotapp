@@ -15,6 +15,7 @@ import { isGuestDemoRoutingActive, isGuestDemoSession } from '../utils/guestDemo
 export function DashboardPage() {
   const { t, locale } = useLanguage()
   const ll = locale === 'fr' || locale === 'en' || locale === 'es' || locale === 'de' || locale === 'it' ? locale : 'en'
+  const DEMO_VIEW_ROLE_KEY = 'staypilot_demo_view_role_v1'
   const getStoredRole = () => (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase()
   const c = {
     fr: {
@@ -201,6 +202,16 @@ export function DashboardPage() {
   const tabIsGuestDemoLocked = (tab: string) =>
     tab === t.dashboardTabConnect || tab === t.dashboardTabWhatsApp || tab === t.dashboardTabEarlyAccess
 
+  useEffect(() => {
+    if (!guestDemo) return
+    const preferredDemoRole = (sessionStorage.getItem(DEMO_VIEW_ROLE_KEY) || '').trim().toLowerCase()
+    const targetRole = preferredDemoRole === 'cleaner' ? 'cleaner' : 'host'
+    if (currentRole === targetRole) return
+    localStorage.setItem('staypilot_current_role', targetRole)
+    setCurrentRole(targetRole)
+    window.dispatchEvent(new Event('staypilot-session-changed'))
+  }, [currentRole, guestDemo])
+
   const hostTabsWithConnect = [
     t.dashboardTabConnect,
     t.dashboardTabCalendar,
@@ -261,6 +272,7 @@ export function DashboardPage() {
   }
   const switchDemoView = (nextRole: 'host' | 'cleaner') => {
     if (!guestDemo || currentRole === nextRole) return
+    sessionStorage.setItem(DEMO_VIEW_ROLE_KEY, nextRole)
     localStorage.setItem('staypilot_current_role', nextRole)
     window.dispatchEvent(new Event('staypilot-session-changed'))
     setCurrentRole(nextRole)
