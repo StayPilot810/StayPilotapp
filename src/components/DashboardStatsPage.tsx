@@ -903,40 +903,6 @@ export function DashboardStatsPage() {
                 <p className="mt-1 text-sm text-zinc-600">{statsUi.globalOccupancyHint}</p>
               </article>
             </div>
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
-              <p className="text-sm font-semibold text-zinc-900">{statsUi.listingsAndBookings}</p>
-              {bookingsByApartment.length > 2 ? (
-                <div className="mt-2">
-                  <select
-                    value={detectedListingFilter}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      setDetectedListingFilter(next)
-                      setSelectedApartmentFilter(next === 'all' ? 'all' : next)
-                    }}
-                    className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 outline-none focus:border-[#4a86f7] sm:text-sm"
-                  >
-                    <option value="all">{statsUi.allListings}</option>
-                    {bookingsByApartment.map((row) => (
-                      <option key={row.apartment} value={row.apartment}>
-                        {row.apartment}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {displayedBookingsByApartment.map((row) => (
-                  <div key={row.apartment} className="rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2">
-                    <p className="text-sm font-semibold text-zinc-900">{row.apartment}</p>
-                    <p className="text-xs text-zinc-600">
-                      {statsUi.reservations}: {row.reservations} | {statsUi.cancellations}: {row.cancellations}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {chartOrderMode === 'revenue-first' ? (
               <>
                 <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
