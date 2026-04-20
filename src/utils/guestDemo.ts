@@ -87,6 +87,11 @@ export function activateGuestDemoSession() {
   } catch {
     /* ignore */
   }
+  try {
+    localStorage.setItem('staypilot_current_role', 'host')
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Quitte la démo : retire le flag et le mode test si on l’avait activé pour la démo uniquement. */
