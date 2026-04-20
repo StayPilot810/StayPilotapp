@@ -2655,7 +2655,12 @@ export function DashboardIntelPage() {
             <p className="mt-1 text-[11px] text-zinc-600">{copy.hoverHint}</p>
             {selectedListing ? (
               <p className="mt-1 text-[11px] font-semibold text-zinc-700">
-                <span className="line-through decoration-2">15</span> = {runtimeText.bookedNightDetected} | × = {runtimeText.emptyGapDetected}
+                <span className="inline-flex items-center rounded border border-white/60 bg-white/85 px-1.5 py-0.5 text-zinc-900 line-through decoration-[2.5px]">
+                  15
+                </span>{' '}
+                = {runtimeText.bookedNightDetected} |{' '}
+                <span className="inline-flex items-center rounded border border-white/60 bg-white/85 px-1.5 py-0.5 text-zinc-900">×</span> ={' '}
+                {runtimeText.emptyGapDetected}
               </p>
             ) : null}
             <div className="mt-2 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] text-zinc-700">
@@ -2687,7 +2692,15 @@ export function DashboardIntelPage() {
                             cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
                           }`}
                         >
-                          <span className={cell.isBooked ? 'line-through decoration-2' : ''}>{cell.day}</span>
+                          <span
+                            className={
+                              cell.isBooked
+                                ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-black/25 px-1 text-white line-through decoration-[2.5px]'
+                                : ''
+                            }
+                          >
+                            {cell.day}
+                          </span>
                           {cell.isEmptyGap ? (
                             <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
                           ) : null}
@@ -2716,7 +2729,15 @@ export function DashboardIntelPage() {
                                 cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                             >
-                              <span className={cell.isBooked ? 'line-through decoration-2' : ''}>{cell.day}</span>
+                              <span
+                                className={
+                                  cell.isBooked
+                                    ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-black/25 px-1 text-white line-through decoration-[2.5px]'
+                                    : ''
+                                }
+                              >
+                                {cell.day}
+                              </span>
                               {cell.isEmptyGap ? (
                                 <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
                               ) : null}
