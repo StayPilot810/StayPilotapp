@@ -656,6 +656,15 @@ export function DashboardIntelPage() {
       backtestWinRate: 'Taux de succes',
       backtestAvgLift: 'Lift moyen',
       backtestSample: 'echantillon',
+      intelPeriodLabel: 'Periode analysee',
+      legendTitle: 'Legende',
+      legendDemandScore: 'Score de demande: 0 = faible pression, 100 = pression maximale.',
+      legendConfidence: 'Confiance: fiabilite du signal (sources, coherence, qualite donnees).',
+      legendPickup: 'Pickup: vitesse de remplissage quotidienne estimee.',
+      legendPriceBand: 'Bandes prix: plage recommandee pour rester competitif.',
+      legendBookingProbability: 'Probabilite booking: chance estimee de reserver au niveau de prix actuel.',
+      legendExpectedGain: 'Gain revenu attendu: impact potentiel moyen si la reco est appliquee.',
+      legendBacktest: 'Backtest score: qualite recente des recommandations vs dynamique observee.',
     },
     en: {
       matchOf: 'Match',
@@ -769,6 +778,15 @@ export function DashboardIntelPage() {
       backtestWinRate: 'Win rate',
       backtestAvgLift: 'Average lift',
       backtestSample: 'sample',
+      intelPeriodLabel: 'Analyzed period',
+      legendTitle: 'Legend',
+      legendDemandScore: 'Demand score: 0 = weak pressure, 100 = maximum pressure.',
+      legendConfidence: 'Confidence: signal reliability (sources, consistency, data quality).',
+      legendPickup: 'Pickup: estimated daily booking pace.',
+      legendPriceBand: 'Price bands: recommended range to stay competitive.',
+      legendBookingProbability: 'Booking probability: estimated chance to convert at current pricing level.',
+      legendExpectedGain: 'Expected revenue gain: average potential impact if recommendation is applied.',
+      legendBacktest: 'Backtest score: recent recommendation quality vs observed market dynamics.',
     },
   }[locale === 'fr' || locale === 'en' ? locale : 'en']
 
@@ -1876,6 +1894,8 @@ export function DashboardIntelPage() {
     pricingScenario,
   ])
   const displayedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
+  const intelPeriodLabel =
+    calendarViewMode === 'month' ? displayedMonth.monthName : `${rangeStart} -> ${rangeEnd}`
   const rangeFilteredMonths = monthlyCalendar
     .map((month) => ({
       ...month,
@@ -2681,6 +2701,9 @@ export function DashboardIntelPage() {
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.concretePulseTitle}</h4>
+              <p className="mt-1 text-xs font-medium text-zinc-600">
+                {runtimeText.intelPeriodLabel}: {intelPeriodLabel}
+              </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.concreteRecommended}</p>
@@ -2717,10 +2740,18 @@ export function DashboardIntelPage() {
               <p className="mt-3 text-xs font-medium text-zinc-600">
                 {monthConcreteInsights.signalPoints} {runtimeText.concreteDataPoints}
               </p>
+              <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.legendTitle}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendDemandScore}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendConfidence}</p>
+              </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.advancedTitle}</h4>
+              <p className="mt-1 text-xs font-medium text-zinc-600">
+                {runtimeText.intelPeriodLabel}: {intelPeriodLabel}
+              </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <article className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.advancedAdr}</p>
@@ -2808,6 +2839,14 @@ export function DashboardIntelPage() {
               <p className="mt-3 text-xs font-semibold text-zinc-700">
                 {runtimeText.advancedBacktestScore}: {advancedPricingInsights.backtestScore}/100
               </p>
+              <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{runtimeText.legendTitle}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendPickup}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendPriceBand}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendBookingProbability}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendExpectedGain}</p>
+                <p className="mt-1 text-xs text-zinc-700">{runtimeText.legendBacktest}</p>
+              </div>
             </div>
 
             <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
