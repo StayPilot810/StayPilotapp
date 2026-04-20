@@ -202,6 +202,9 @@ export function DashboardStatsPage() {
               }
   const [selectedPeriod, setSelectedPeriod] = useState(() => {
     const now = new Date()
+    if (isGuestDemoSession()) {
+      return { year: DEMO_BASE_YEAR, month: Math.min(12, Math.max(1, now.getMonth() + 1)) }
+    }
     return { year: now.getFullYear(), month: now.getMonth() + 1 }
   })
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month')
@@ -228,6 +231,14 @@ export function DashboardStatsPage() {
   }, [])
   const hasRealConnected = useMemo(() => hasRealConnectedListings(), [connectionsRefreshKey])
   const connected = useMemo(() => guestDemoActive || hasRealConnected, [guestDemoActive, hasRealConnected])
+  useEffect(() => {
+    if (!guestDemoActive) return
+    setSelectedPeriod((prev) => ({
+      year: DEMO_BASE_YEAR,
+      month: Math.min(12, Math.max(1, prev.month)),
+    }))
+  }, [guestDemoActive])
+
   const apartmentNames = useMemo(() => {
     return getConnectedApartmentsFromStorage().map((apt) => apt.name)
   }, [connectionsRefreshKey])
@@ -609,12 +620,17 @@ export function DashboardStatsPage() {
   const globalOccupancyDisplay = globalOccupancy
 
   const yearOptions = useMemo(() => {
+    if (guestDemoActive) return [DEMO_BASE_YEAR]
     const nowYear = new Date().getFullYear()
     return Array.from({ length: 7 }, (_, i) => nowYear - 2 + i)
-  }, [])
+  }, [guestDemoActive])
 
   const goToPreviousMonth = () => {
     setSelectedPeriod((prev) => {
+      if (guestDemoActive) {
+        if (prev.year <= DEMO_BASE_YEAR && prev.month <= 1) return { year: DEMO_BASE_YEAR, month: 1 }
+        return { year: DEMO_BASE_YEAR, month: prev.month - 1 }
+      }
       if (prev.month === 1) return { year: prev.year - 1, month: 12 }
       return { year: prev.year, month: prev.month - 1 }
     })
@@ -622,6 +638,10 @@ export function DashboardStatsPage() {
 
   const goToNextMonth = () => {
     setSelectedPeriod((prev) => {
+      if (guestDemoActive) {
+        if (prev.year >= DEMO_BASE_YEAR && prev.month >= 12) return { year: DEMO_BASE_YEAR, month: 12 }
+        return { year: DEMO_BASE_YEAR, month: prev.month + 1 }
+      }
       if (prev.month === 12) return { year: prev.year + 1, month: 1 }
       return { year: prev.year, month: prev.month + 1 }
     })
@@ -701,7 +721,10 @@ export function DashboardStatsPage() {
                     type="button"
                     onClick={goToPreviousMonth}
                     className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 sm:text-sm"
-                    disabled={dateFilterMode === 'custom'}
+                    disabled={
+                      dateFilterMode === 'custom' ||
+                      (guestDemoActive && selectedPeriod.year === DEMO_BASE_YEAR && selectedPeriod.month === 1)
+                    }
                   >
                     {statsUi.previousMonth}
                   </button>
@@ -720,7 +743,7 @@ export function DashboardStatsPage() {
                   <select
                     value={selectedPeriod.year}
                     onChange={(e) => setSelectedPeriod((prev) => ({ ...prev, year: Number(e.target.value) }))}
-                    disabled={dateFilterMode === 'custom'}
+                    disabled={dateFilterMode === 'custom' || guestDemoActive}
                     className="rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 outline-none focus:border-violet-400 disabled:bg-zinc-100 disabled:text-zinc-400 sm:text-sm"
                   >
                     {yearOptions.map((year) => (
@@ -733,7 +756,10 @@ export function DashboardStatsPage() {
                     type="button"
                     onClick={goToNextMonth}
                     className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 sm:text-sm"
-                    disabled={dateFilterMode === 'custom'}
+                    disabled={
+                      dateFilterMode === 'custom' ||
+                      (guestDemoActive && selectedPeriod.year === DEMO_BASE_YEAR && selectedPeriod.month === 12)
+                    }
                   >
                     {statsUi.nextMonth}
                   </button>
