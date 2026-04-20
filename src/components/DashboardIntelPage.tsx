@@ -2651,11 +2651,17 @@ export function DashboardIntelPage() {
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.legendLow}</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />{copy.legendMedium}</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />{copy.legendHigh}</span>
+              {selectedListing ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />
+                  {runtimeText.bookedNightDetected}
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 text-[11px] text-zinc-600">{copy.hoverHint}</p>
             {selectedListing ? (
               <p className="mt-1 text-[11px] font-semibold text-zinc-700">
-                <span className="inline-flex items-center rounded border border-white/60 bg-white/85 px-1.5 py-0.5 text-zinc-900 line-through decoration-[2.5px]">
+                <span className="inline-flex items-center rounded border border-indigo-300 bg-indigo-100 px-1.5 py-0.5 text-indigo-900 line-through decoration-[2.5px]">
                   15
                 </span>{' '}
                 = {runtimeText.bookedNightDetected} |{' '}
@@ -2689,13 +2695,19 @@ export function DashboardIntelPage() {
                           onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
                           onMouseLeave={onCalendarDayLeave}
                           className={`relative h-full w-full rounded-md text-[9px] font-bold text-white ${
-                            cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                            cell.isBooked
+                              ? 'bg-indigo-600'
+                              : cell.level === 'high'
+                                ? 'bg-rose-500'
+                                : cell.level === 'medium'
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500'
                           }`}
                         >
                           <span
                             className={
                               cell.isBooked
-                                ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-black/25 px-1 text-white line-through decoration-[2.5px]'
+                                ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-indigo-950/35 px-1 text-white line-through decoration-[2.5px]'
                                 : ''
                             }
                           >
@@ -2726,13 +2738,19 @@ export function DashboardIntelPage() {
                               onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
                               onMouseLeave={onCalendarDayLeave}
                               className={`relative h-full w-full rounded-md text-[9px] font-bold text-white ${
-                                cell.level === 'high' ? 'bg-rose-500' : cell.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                                cell.isBooked
+                                  ? 'bg-indigo-600'
+                                  : cell.level === 'high'
+                                    ? 'bg-rose-500'
+                                    : cell.level === 'medium'
+                                      ? 'bg-amber-500'
+                                      : 'bg-emerald-500'
                               }`}
                             >
                               <span
                                 className={
                                   cell.isBooked
-                                    ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-black/25 px-1 text-white line-through decoration-[2.5px]'
+                                    ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-indigo-950/35 px-1 text-white line-through decoration-[2.5px]'
                                     : ''
                                 }
                               >
