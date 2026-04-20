@@ -6,6 +6,12 @@ import { getConnectedApartmentsFromStorage } from '../utils/connectedApartments'
 import { readOfficialChannelSyncData } from '../utils/officialChannelData'
 import type { Locale } from '../i18n/navbar'
 import { isGuestDemoSession } from '../utils/guestDemo'
+import {
+  buildGuestDemoMonthBookings,
+  DEMO_BASE_YEAR,
+  DEMO_MAX_MONTH_INDEX,
+  DEMO_MIN_MONTH_INDEX,
+} from '../utils/demoCalendarData'
 
 function hasRealConnectedListings() {
   try {
@@ -92,81 +98,34 @@ function nightsBetween(start: Date, end: Date) {
 }
 
 function buildGuestDemoStatsData(apartmentNames: string[]) {
-  const occupancyBaseByApt = [0.65, 0.69, 0.72, 0.76, 0.8]
-  const occupancySeasonalityByMonth = [-0.03, -0.02, -0.01, 0, 0.02, 0.04, 0.05, 0.04, 0.01, 0, -0.02, -0.03]
-  const nightlySeasonMultiplier = [0.9, 0.92, 0.97, 1.02, 1.08, 1.2, 1.28, 1.25, 1.12, 1.0, 0.95, 0.9]
   const reservationEvents: ReservationEvent[] = []
   const revenueEntries: RevenueEntry[] = []
 
-  for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+  for (let monthIndex = DEMO_MIN_MONTH_INDEX; monthIndex <= DEMO_MAX_MONTH_INDEX; monthIndex += 1) {
     const month = monthIndex + 1
-    const daysInMonth = new Date(2026, month, 0).getDate()
-    for (let apt = 0; apt < apartmentNames.length; apt += 1) {
-      const apartment = apartmentNames[apt]
-      const occupancyTarget = Math.max(0.65, Math.min(0.8, occupancyBaseByApt[apt] + occupancySeasonalityByMonth[monthIndex]))
-      const targetNights = Math.max(1, Math.round(daysInMonth * occupancyTarget))
-      let bookedNights = 0
-      let bookingIdx = 0
-      let cursor = 1 + ((monthIndex + apt) % 2)
-      let previousSource: RevenueSource | null = null
-
-      while (bookedNights < targetNights && cursor <= daysInMonth) {
-        const remaining = targetNights - bookedNights
-        const maxLen = Math.min(7, remaining, daysInMonth - cursor + 1)
-        if (maxLen <= 0) break
-        const minLen = Math.min(3, maxLen)
-        const tentativeLen = 3 + ((monthIndex + apt + bookingIdx) % 5)
-        const nights = Math.min(maxLen, Math.max(minLen, tentativeLen))
-        const startDay = cursor
-        const endDay = startDay + nights
-        const source: RevenueSource =
-          previousSource && (monthIndex + apt + bookingIdx) % 3 !== 0
-            ? previousSource
-            : (apt + bookingIdx + monthIndex) % 2 === 0
-              ? 'airbnb'
-              : 'booking'
-        // Taux d'annulation démo réaliste: Booking > Airbnb.
-        const cancellationRate = source === 'booking' ? 0.16 : 0.1
-        const cancellationSeed = (monthIndex * 11 + apt * 7 + bookingIdx * 5) % 100
-        const forcedCancellation = bookingIdx === 0 && (monthIndex + apt) % 4 === 0
-        const isCancelled = forcedCancellation || cancellationSeed < Math.round(cancellationRate * 100)
-        const commissionRate =
-          source === 'booking'
-            ? 0.17 + ((monthIndex + bookingIdx) % 4) * 0.005
-            : 0.142 + ((monthIndex + apt + bookingIdx) % 3) * 0.004
-        const baseNightly = 94 + apt * 9
-        const seasonalNightly = Math.round(baseNightly * nightlySeasonMultiplier[monthIndex])
-        const totalGuestEur = Math.round(nights * seasonalNightly + 48 + monthIndex * 4)
-        const cleaningEur = 44 + (apt % 3) * 6 + (nights >= 6 ? 8 : 0)
-        const platformFeeEur = Math.round((totalGuestEur + cleaningEur) * commissionRate)
-        const netRevenue = totalGuestEur + cleaningEur - platformFeeEur
-        const checkIn = `2026-${String(month).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`
-
-        reservationEvents.push({
+    const daysInMonth = new Date(DEMO_BASE_YEAR, month, 0).getDate()
+    const monthBookings = buildGuestDemoMonthBookings(daysInMonth, monthIndex)
+    monthBookings.forEach((b) => {
+      const apartment = apartmentNames[b.apt] ?? `Appartement ${b.apt + 1}`
+      const checkIn = `${DEMO_BASE_YEAR}-${String(month).padStart(2, '0')}-${String(b.start).padStart(2, '0')}`
+      reservationEvents.push({
+        apartment,
+        date: checkIn,
+        status: b.status,
+        nights: b.nights,
+      })
+      if (b.status !== 'cancelled') {
+        revenueEntries.push({
           apartment,
-          date: checkIn,
-          status: isCancelled ? 'cancelled' : 'reserved',
-          nights,
+          source: b.channel,
+          checkIn,
+          month,
+          year: DEMO_BASE_YEAR,
+          netRevenue: b.netPayoutEur,
+          occupiedNights: b.nights,
         })
-        if (!isCancelled) {
-          revenueEntries.push({
-            apartment,
-            source,
-            checkIn,
-            month,
-            year: 2026,
-            netRevenue,
-            occupiedNights: nights,
-          })
-        }
-
-        bookedNights += nights
-        previousSource = source
-        const gap = (monthIndex + apt + bookingIdx) % 5 === 0 ? 0 : 1 + ((monthIndex + apt + bookingIdx) % 2)
-        cursor = startDay + nights + gap
-        bookingIdx += 1
       }
-    }
+    })
   }
 
   return { reservationEvents, revenueEntries }
