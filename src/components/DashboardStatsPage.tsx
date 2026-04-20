@@ -559,7 +559,7 @@ export function DashboardStatsPage() {
     const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
     const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
     const isMonthIncluded = (month: number) => {
-      if (dateFilterMode === 'month') return month === selectedPeriod.month
+      if (dateFilterMode === 'month') return true
       if (dateFilterMode === 'custom' && customStart && customEnd && !customRangeError) {
         return isYearMonthInRange(selectedPeriod.year, month, customStart, customEnd)
       }
@@ -592,7 +592,7 @@ export function DashboardStatsPage() {
     const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
     const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
     const isMonthIncluded = (month: number) => {
-      if (dateFilterMode === 'month') return month === selectedPeriod.month
+      if (dateFilterMode === 'month') return true
       if (dateFilterMode === 'custom' && customStart && customEnd && !customRangeError) {
         return isYearMonthInRange(selectedPeriod.year, month, customStart, customEnd)
       }
