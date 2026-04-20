@@ -497,10 +497,10 @@ export function DashboardStatsPage() {
   const bookingsByApartment = useMemo(() => {
     return apartmentsForFilters.map((apartment) => ({
       apartment,
-      reservations: effectiveReservationEvents.filter((event) => event.apartment === apartment && event.status === 'reserved').length,
-      cancellations: effectiveReservationEvents.filter((event) => event.apartment === apartment && event.status === 'cancelled').length,
+      reservations: filteredReservationEvents.filter((event) => event.apartment === apartment && event.status === 'reserved').length,
+      cancellations: filteredReservationEvents.filter((event) => event.apartment === apartment && event.status === 'cancelled').length,
     }))
-  }, [apartmentsForFilters, effectiveReservationEvents])
+  }, [apartmentsForFilters, filteredReservationEvents])
   useEffect(() => {
     if (bookingsByApartment.length <= 2) {
       setDetectedListingFilter('all')
