@@ -125,6 +125,10 @@ function buildGuestDemoStatsData(apartmentNames: string[]) {
             : (apt + bookingIdx + monthIndex) % 2 === 0
               ? 'airbnb'
               : 'booking'
+        // Taux d'annulation démo réaliste: Booking > Airbnb.
+        const cancellationRate = source === 'booking' ? 0.16 : 0.1
+        const cancellationSeed = (monthIndex * 11 + apt * 7 + bookingIdx * 5) % 100
+        const isCancelled = cancellationSeed < Math.round(cancellationRate * 100)
         const commissionRate =
           source === 'booking'
             ? 0.17 + ((monthIndex + bookingIdx) % 4) * 0.005
@@ -140,18 +144,20 @@ function buildGuestDemoStatsData(apartmentNames: string[]) {
         reservationEvents.push({
           apartment,
           date: checkIn,
-          status: 'reserved',
+          status: isCancelled ? 'cancelled' : 'reserved',
           nights,
         })
-        revenueEntries.push({
-          apartment,
-          source,
-          checkIn,
-          month,
-          year: 2026,
-          netRevenue,
-          occupiedNights: nights,
-        })
+        if (!isCancelled) {
+          revenueEntries.push({
+            apartment,
+            source,
+            checkIn,
+            month,
+            year: 2026,
+            netRevenue,
+            occupiedNights: nights,
+          })
+        }
 
         bookedNights += nights
         previousSource = source
@@ -438,6 +444,7 @@ export function DashboardStatsPage() {
     return {
       reservedCount,
       cancelledCount,
+      totalCount: total,
       reservationRate,
       cancellationRate,
       pieData: [
@@ -549,9 +556,18 @@ export function DashboardStatsPage() {
   const hasConnectedMetrics = reservationEvents.length > 0 || revenueEntries.length > 0
 
   const chartData = useMemo(() => {
+    const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
+    const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
+    const isMonthIncluded = (month: number) => {
+      if (dateFilterMode === 'month') return month === selectedPeriod.month
+      if (dateFilterMode === 'custom' && customStart && customEnd && !customRangeError) {
+        return isYearMonthInRange(selectedPeriod.year, month, customStart, customEnd)
+      }
+      return true
+    }
     return MONTH_LABELS[resolvedLocale].map((label, index) => {
       const month = index + 1
-      const monthRows = filteredRevenueEntries.filter((row) => row.month === month)
+      const monthRows = isMonthIncluded(month) ? filteredRevenueEntries.filter((row) => row.month === month) : []
       const airbnb = monthRows.filter((r) => r.source === 'airbnb').reduce((sum, r) => sum + r.netRevenue, 0)
       const booking = monthRows.filter((r) => r.source === 'booking').reduce((sum, r) => sum + r.netRevenue, 0)
       return {
@@ -561,12 +577,30 @@ export function DashboardStatsPage() {
         total: airbnb + booking,
       }
     })
-  }, [filteredRevenueEntries, resolvedLocale])
+  }, [
+    customEndDate,
+    customRangeError,
+    customStartDate,
+    dateFilterMode,
+    filteredRevenueEntries,
+    resolvedLocale,
+    selectedPeriod.month,
+    selectedPeriod.year,
+  ])
 
   const occupancyChartData = useMemo(() => {
+    const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
+    const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
+    const isMonthIncluded = (month: number) => {
+      if (dateFilterMode === 'month') return month === selectedPeriod.month
+      if (dateFilterMode === 'custom' && customStart && customEnd && !customRangeError) {
+        return isYearMonthInRange(selectedPeriod.year, month, customStart, customEnd)
+      }
+      return true
+    }
     return MONTH_LABELS[resolvedLocale].map((label, index) => {
       const month = index + 1
-      const monthRows = filteredRevenueEntries.filter((row) => row.month === month)
+      const monthRows = isMonthIncluded(month) ? filteredRevenueEntries.filter((row) => row.month === month) : []
       const sourceRate = (source: RevenueSource) => {
         const rows = monthRows.filter((r) => r.source === source)
         const occupied = rows.reduce((sum, r) => sum + r.occupiedNights, 0)
@@ -587,7 +621,18 @@ export function DashboardStatsPage() {
         booking,
       }
     })
-  }, [apartmentsForFilters.length, filteredRevenueEntries, resolvedLocale, selectedApartment, selectedPeriod.year])
+  }, [
+    apartmentsForFilters.length,
+    customEndDate,
+    customRangeError,
+    customStartDate,
+    dateFilterMode,
+    filteredRevenueEntries,
+    resolvedLocale,
+    selectedApartment,
+    selectedPeriod.month,
+    selectedPeriod.year,
+  ])
   const netRevenueDisplay = useMemo(() => {
     if (dateFilterMode === 'month') {
       const current = chartData[selectedPeriod.month - 1]
@@ -943,10 +988,13 @@ export function DashboardStatsPage() {
                 <article className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{statsUi.reservationCount}</p>
                   <p className="mt-1 text-2xl font-bold text-zinc-900">
-                    {reservationAndCancellation.reservedCount}
+                    {reservationAndCancellation.totalCount}
                   </p>
                 </article>
               </div>
+              <p className="mt-3 text-xs font-medium text-zinc-600">
+                {`Validées: ${reservationAndCancellation.reservedCount} / Total: ${reservationAndCancellation.totalCount} · Annulations: ${reservationAndCancellation.cancelledCount} / ${reservationAndCancellation.totalCount}`}
+              </p>
               <div className="mt-4 h-[320px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
