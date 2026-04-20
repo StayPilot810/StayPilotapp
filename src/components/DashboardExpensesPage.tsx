@@ -81,6 +81,17 @@ function isRemovedSampleLabel(label: string) {
   return label.trim().toLowerCase().startsWith('remplacement kit serviettes')
 }
 
+function isFixedLikeLabelInVariableTable(label: string) {
+  const value = (label || '').toLowerCase()
+  return (
+    value.includes('(fixe mensuel)') ||
+    value.includes('(monthly fixed)') ||
+    value.includes('(fijo mensual)') ||
+    value.includes('(monatlich fix)') ||
+    value.includes('(fisso mensile)')
+  )
+}
+
 /** Mois calendaire suivant (ex. pour démarrer une charge fixe « à partir du mois prochain »). */
 function getNextCalendarMonth(from: Date): { year: number; month: number } {
   const cur = from.getMonth() + 1
@@ -461,6 +472,7 @@ export function DashboardExpensesPage() {
           attachmentDataUrl: row.attachmentDataUrl ?? '',
         }))
         .filter((row) => !isRemovedSampleLabel(row.label))
+        .filter((row) => !isFixedLikeLabelInVariableTable(row.label))
     } catch {
       return []
     }
@@ -512,6 +524,7 @@ export function DashboardExpensesPage() {
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
+        if (isFixedLikeLabelInVariableTable(row.label)) return false
         if (!row.dueDate) return false
         const date = new Date(`${row.dueDate}T00:00:00`)
         if (Number.isNaN(date.getTime())) return false
