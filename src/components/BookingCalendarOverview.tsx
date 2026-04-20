@@ -37,6 +37,8 @@ const BCP47: Record<Locale, string> = {
 /** Avril 2026 — base de la simulation (données de démo). */
 const BASE_YEAR = 2026
 const BASE_MONTH_INDEX = 3
+const DEMO_MIN_MONTH_INDEX = 0
+const DEMO_MAX_MONTH_INDEX = 11
 
 const MOCK_BOOKINGS: CalendarReservationDetail[] = [
   {
@@ -346,6 +348,94 @@ function addDays(base: Date, delta: number) {
   return d
 }
 
+function clampDemoMonthCursor(d: Date) {
+  const min = new Date(BASE_YEAR, DEMO_MIN_MONTH_INDEX, 1)
+  const max = new Date(BASE_YEAR, DEMO_MAX_MONTH_INDEX, 1)
+  const target = new Date(d.getFullYear(), d.getMonth(), 1)
+  if (target.getTime() < min.getTime()) return min
+  if (target.getTime() > max.getTime()) return max
+  return target
+}
+
+function buildGuestDemoMonthBookings(daysInMonth: number, monthIndex: number): CalendarReservationDetail[] {
+  if (monthIndex < DEMO_MIN_MONTH_INDEX || monthIndex > DEMO_MAX_MONTH_INDEX) return []
+  const safeEnd = (start: number, nights: number) => Math.min(daysInMonth, start + nights - 1)
+  const bookings: CalendarReservationDetail[] = []
+  for (let apt = 0; apt < 5; apt += 1) {
+    const s1 = 1 + ((monthIndex * 2 + apt * 3) % 9)
+    const n1 = 3 + ((monthIndex + apt) % 4)
+    const e1 = safeEnd(s1, n1)
+    if (e1 >= s1) {
+      const gross = 390 + monthIndex * 18 + apt * 35
+      const cleaning = 42 + (apt % 3) * 6
+      const fee = Math.round((gross + cleaning) * (apt % 2 === 0 ? 0.145 : 0.18))
+      bookings.push({
+        apt,
+        channel: (monthIndex + apt) % 2 === 0 ? 'airbnb' : 'booking',
+        start: s1,
+        end: e1,
+        guest: `Guest ${apt + 1}A`,
+        nights: e1 - s1 + 1,
+        reservationId: `D26${monthIndex + 1}${apt}A`,
+        totalGuestEur: gross,
+        cleaningEur: cleaning,
+        platformFeePercent: 0,
+        platformFeeEur: fee,
+        netPayoutEur: gross + cleaning - fee,
+        bookingGenius: (monthIndex + apt) % 3 === 0,
+      })
+    }
+
+    const s2 = 13 + ((monthIndex + apt * 4) % 8)
+    const n2 = 2 + ((monthIndex * 2 + apt) % 5)
+    const e2 = safeEnd(s2, n2)
+    if (e2 >= s2) {
+      const gross = 430 + monthIndex * 16 + apt * 32
+      const cleaning = 45 + (monthIndex % 3) * 4
+      const fee = Math.round((gross + cleaning) * ((monthIndex + apt) % 2 === 0 ? 0.15 : 0.19))
+      bookings.push({
+        apt,
+        channel: (monthIndex + apt) % 2 === 0 ? 'booking' : 'airbnb',
+        start: s2,
+        end: e2,
+        guest: `Guest ${apt + 1}B`,
+        nights: e2 - s2 + 1,
+        reservationId: `D26${monthIndex + 1}${apt}B`,
+        totalGuestEur: gross,
+        cleaningEur: cleaning,
+        platformFeePercent: 0,
+        platformFeeEur: fee,
+        netPayoutEur: gross + cleaning - fee,
+        bookingGenius: (monthIndex + apt) % 2 === 1,
+      })
+    }
+
+    const s3 = 22 + ((monthIndex * 3 + apt) % 6)
+    const n3 = 2 + ((monthIndex + apt) % 4)
+    const e3 = safeEnd(s3, n3)
+    if (e3 >= s3) {
+      const gross = 360 + monthIndex * 14 + apt * 28
+      const cleaning = 40 + (apt % 2) * 5
+      const fee = Math.round((gross + cleaning) * 0.146)
+      bookings.push({
+        apt,
+        channel: apt % 2 === 0 ? 'airbnb' : 'booking',
+        start: s3,
+        end: e3,
+        guest: `Guest ${apt + 1}C`,
+        nights: e3 - s3 + 1,
+        reservationId: `D26${monthIndex + 1}${apt}C`,
+        totalGuestEur: gross,
+        cleaningEur: cleaning,
+        platformFeePercent: 0,
+        platformFeeEur: fee,
+        netPayoutEur: gross + cleaning - fee,
+      })
+    }
+  }
+  return bookings
+}
+
 function cleanerBarDateRangeLabel(
   windowStart: Date,
   booking: CalendarReservationDetail,
@@ -476,6 +566,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   const isCleanerSession =
     typeof window !== 'undefined' &&
     (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase() === 'cleaner'
+  const guestDemoActive = typeof window !== 'undefined' && isGuestDemoSession()
   const canNavigateFreelyByMonth = mode === 'connected' && !isTestModeEnabled()
   const fmtShortDate = useMemo(
     () => new Intl.DateTimeFormat(bcp47, { day: '2-digit', month: '2-digit', year: 'numeric' }),
@@ -507,6 +598,8 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
   const miniYear = miniCalendarCursor.getFullYear()
   const miniMonthIndex = miniCalendarCursor.getMonth()
   const miniDaysInMonth = new Date(miniYear, miniMonthIndex + 1, 0).getDate()
+  const demoAtMinMonth = guestDemoActive && miniYear === BASE_YEAR && miniMonthIndex === DEMO_MIN_MONTH_INDEX
+  const demoAtMaxMonth = guestDemoActive && miniYear === BASE_YEAR && miniMonthIndex === DEMO_MAX_MONTH_INDEX
 
   const { connectedApartments, hostChannelCountBeforeCleanerFilter } = useMemo(() => {
     if (mode === 'generic') {
@@ -730,10 +823,18 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     [],
   )
   const availableBookings = useMemo(() => {
+    const demoGeneratedBookings =
+      mode === 'connected' && guestDemoActive
+        ? buildGuestDemoMonthBookings(displayWindow.days, viewMonthIndex)
+        : []
     const sourceBookings =
-      mode === 'connected' && !isTestModeEnabled() ? realBookings : normalizedMockBookings
+      mode === 'connected' && guestDemoActive
+        ? demoGeneratedBookings
+        : mode === 'connected' && !isTestModeEnabled()
+          ? realBookings
+          : normalizedMockBookings
     return sourceBookings.filter((b) => b.apt < apartmentCount)
-  }, [apartmentCount, mode, realBookings, normalizedMockBookings])
+  }, [apartmentCount, mode, realBookings, normalizedMockBookings, guestDemoActive, displayWindow.days, viewMonthIndex])
   const visibleBookings = useMemo(() => {
     const byApartment =
       apartmentFilter === 'all' ? availableBookings : availableBookings.filter((b) => b.apt === Number(apartmentFilter) - 1)
@@ -1050,12 +1151,21 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                   <button
                     type="button"
                     onClick={() => {
+                      if (guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MIN_MONTH_INDEX) return
                       setPeriodTab('this')
-                      setMiniCalendarCursor(addMonths(new Date(viewYear, viewMonthIndex, 1), -1))
+                      setMiniCalendarCursor((prev) => {
+                        const next = addMonths(new Date(viewYear, viewMonthIndex, 1), -1)
+                        return guestDemoActive ? clampDemoMonthCursor(next) : next
+                      })
                       setRangeStartDate(null)
                       setRangeEndDate(null)
                     }}
-                    className="rounded-md border border-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50"
+                    disabled={guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MIN_MONTH_INDEX}
+                    className={`rounded-md border border-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 ${
+                      guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MIN_MONTH_INDEX
+                        ? 'cursor-not-allowed opacity-45'
+                        : 'hover:bg-zinc-50'
+                    }`}
                     aria-label={c.prevMonthAria}
                   >
                     ←
@@ -1063,12 +1173,21 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                   <button
                     type="button"
                     onClick={() => {
+                      if (guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MAX_MONTH_INDEX) return
                       setPeriodTab('this')
-                      setMiniCalendarCursor(addMonths(new Date(viewYear, viewMonthIndex, 1), 1))
+                      setMiniCalendarCursor((prev) => {
+                        const next = addMonths(new Date(viewYear, viewMonthIndex, 1), 1)
+                        return guestDemoActive ? clampDemoMonthCursor(next) : next
+                      })
                       setRangeStartDate(null)
                       setRangeEndDate(null)
                     }}
-                    className="rounded-md border border-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50"
+                    disabled={guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MAX_MONTH_INDEX}
+                    className={`rounded-md border border-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 ${
+                      guestDemoActive && viewYear === BASE_YEAR && viewMonthIndex === DEMO_MAX_MONTH_INDEX
+                        ? 'cursor-not-allowed opacity-45'
+                        : 'hover:bg-zinc-50'
+                    }`}
                     aria-label={c.nextMonthAria}
                   >
                     →
@@ -1132,8 +1251,15 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                   <div className="mb-2 flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => setMiniCalendarCursor((d) => addMonths(d, -1))}
-                      className="rounded-md px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-100"
+                      onClick={() =>
+                        setMiniCalendarCursor((d) =>
+                          guestDemoActive ? clampDemoMonthCursor(addMonths(d, -1)) : addMonths(d, -1),
+                        )
+                      }
+                      disabled={demoAtMinMonth}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold text-zinc-600 ${
+                        demoAtMinMonth ? 'cursor-not-allowed opacity-45' : 'hover:bg-zinc-100'
+                      }`}
                       aria-label={c.prevMonthAria}
                     >
                       ←
@@ -1141,8 +1267,15 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
                     <p className="text-center text-xs font-semibold text-[#1a1a1a]">{miniMonthLabel}</p>
                     <button
                       type="button"
-                      onClick={() => setMiniCalendarCursor((d) => addMonths(d, 1))}
-                      className="rounded-md px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-100"
+                      onClick={() =>
+                        setMiniCalendarCursor((d) =>
+                          guestDemoActive ? clampDemoMonthCursor(addMonths(d, 1)) : addMonths(d, 1),
+                        )
+                      }
+                      disabled={demoAtMaxMonth}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold text-zinc-600 ${
+                        demoAtMaxMonth ? 'cursor-not-allowed opacity-45' : 'hover:bg-zinc-100'
+                      }`}
                       aria-label={c.nextMonthAria}
                     >
                       →
