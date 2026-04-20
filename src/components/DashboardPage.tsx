@@ -240,19 +240,24 @@ export function DashboardPage() {
     t.dashboardTabWhatsApp,
     t.dashboardTabEarlyAccess,
   ]
+  const cleanerDemoTabs = [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
 
-  const tabs = isCleanerDemoView || isCleanerSession
-    ? cleanerHasAssignedListing
-      ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
-      : [t.dashboardTabCleaning]
-    : hostTabsWithConnect
+  const tabs = isCleanerDemoView
+    ? cleanerDemoTabs
+    : isCleanerSession
+      ? cleanerHasAssignedListing
+        ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
+        : [t.dashboardTabCleaning]
+      : hostTabsWithConnect
   const primaryTab = isCleanerDemoView || isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
-  const rowOneTabs = isCleanerDemoView || isCleanerSession
-    ? cleanerHasAssignedListing
-      ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
-      : [primaryTab]
-    : [tabs[0], tabs[1], tabs[2], tabs[3]]
+  const rowOneTabs = isCleanerDemoView
+    ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
+    : isCleanerSession
+      ? cleanerHasAssignedListing
+        ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
+        : [primaryTab]
+      : [tabs[0], tabs[1], tabs[2], tabs[3]]
   const rowTwoTabs = isCleanerDemoView || isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
