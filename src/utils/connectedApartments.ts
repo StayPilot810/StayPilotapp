@@ -60,7 +60,40 @@ function guessNameFromIcal(ical: string, platform: ChannelKey) {
 
 export function getConnectedApartmentsFromStorage(): ConnectedApartment[] {
   try {
-    if (isGuestDemoSession()) return []
+    if (isGuestDemoSession()) {
+      return [
+        {
+          id: 'channelManager:demo-1',
+          platform: 'channelManager',
+          name: 'Appartement Lumiere - Centre',
+          address: '24 Rue de Rivoli, Paris',
+        },
+        {
+          id: 'channelManager:demo-2',
+          platform: 'channelManager',
+          name: 'Suite Opera - Haussmann',
+          address: '18 Boulevard Haussmann, Paris',
+        },
+        {
+          id: 'channelManager:demo-3',
+          platform: 'channelManager',
+          name: 'Studio Marais - Temple',
+          address: '7 Rue du Temple, Paris',
+        },
+        {
+          id: 'channelManager:demo-4',
+          platform: 'channelManager',
+          name: 'Loft Bastille - Voltaire',
+          address: '102 Boulevard Voltaire, Paris',
+        },
+        {
+          id: 'channelManager:demo-5',
+          platform: 'channelManager',
+          name: 'Penthouse Montmartre - Sacre Coeur',
+          address: '11 Rue des Abbesses, Paris',
+        },
+      ]
+    }
     const planTier = getCurrentPlanTier()
     const listingLimit = getListingLimitForPlan(planTier)
     const official = readOfficialChannelSyncData()

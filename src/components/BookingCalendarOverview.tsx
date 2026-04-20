@@ -17,6 +17,7 @@ import {
   BookingReservationPopover,
   type CalendarReservationDetail,
 } from './BookingReservationPopover'
+import { isGuestDemoSession } from '../utils/guestDemo'
 
 const brandBlue = '#4f86f7'
 const airbnbRed = '#ef4444'
@@ -265,6 +266,49 @@ const MOCK_BOOKINGS: CalendarReservationDetail[] = [
     platformFeeEur: 89,
     netPayoutEur: 466,
   },
+  {
+    apt: 4,
+    channel: 'booking',
+    start: 5,
+    end: 10,
+    guest: 'Elena Costa',
+    nights: 6,
+    reservationId: '6087319452',
+    totalGuestEur: 810,
+    cleaningEur: 64,
+    platformFeePercent: 17.0,
+    platformFeeEur: 149,
+    netPayoutEur: 725,
+  },
+  {
+    apt: 4,
+    channel: 'airbnb',
+    start: 16,
+    end: 19,
+    guest: 'Noah Bernard',
+    nights: 4,
+    reservationId: 'KLM4PQR7ST',
+    totalGuestEur: 460,
+    cleaningEur: 48,
+    platformFeePercent: 14.6,
+    platformFeeEur: 74,
+    netPayoutEur: 434,
+  },
+  {
+    apt: 4,
+    channel: 'booking',
+    start: 24,
+    end: 29,
+    guest: 'Giulia Romano',
+    nights: 6,
+    reservationId: '9127465308',
+    bookingGenius: true,
+    totalGuestEur: 990,
+    cleaningEur: 72,
+    platformFeePercent: 19.4,
+    platformFeeEur: 206,
+    netPayoutEur: 856,
+  },
 ]
 
 const DEMO_APARTMENT_ROW_COUNT = 1 + MOCK_BOOKINGS.reduce((max, b) => Math.max(max, b.apt), 0)
@@ -494,7 +538,7 @@ export function BookingCalendarOverview({ mode = 'connected' }: BookingCalendarO
     const role =
       typeof window !== 'undefined' ? (localStorage.getItem('staypilot_current_role') || '').trim().toLowerCase() : ''
     const isCleaner = role === 'cleaner'
-    if (isCleaner && list.length > 0) {
+    if (isCleaner && list.length > 0 && !isGuestDemoSession()) {
       const assignments = readProviderAssignmentsMap()
       const keys = getCleanerAssignmentMatchKeysForCurrentSession()
       if (keys.length) {
