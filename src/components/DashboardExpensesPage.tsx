@@ -584,12 +584,6 @@ export function DashboardExpensesPage() {
     return filteredRows
   }, [isFutureSelectedMonth, filteredRows])
 
-  const channelExpenseRowsForMonth = useMemo(() => {
-    // Same rule for synced variable expenses: unknown before month start.
-    if (isFutureSelectedMonth) return []
-    return channelExpenseRows
-  }, [isFutureSelectedMonth, channelExpenseRows])
-
   const fixedRowsForSelectedMonth = useMemo<ExpenseRow[]>(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate()
     const selectedYm = selectedYear * 100 + selectedMonth
@@ -749,6 +743,12 @@ export function DashboardExpensesPage() {
     scopeMode,
     selectedApartment,
   ])
+
+  const channelExpenseRowsForMonth = useMemo(() => {
+    // Same rule for synced variable expenses: unknown before month start.
+    if (isFutureSelectedMonth) return []
+    return channelExpenseRows
+  }, [isFutureSelectedMonth, channelExpenseRows])
 
   const displayedRows = useMemo(
     () => [...channelExpenseRowsForMonth, ...autoVariableRows, ...manualVariableRowsForMonth, ...fixedRowsForSelectedMonth],
