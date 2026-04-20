@@ -24,6 +24,7 @@ export function DashboardPage() {
       upgradeAlert: "Cette fonctionnalité n'est pas incluse dans votre forfait actuel. Augmentez votre forfait pour y accéder.",
       guestDemoPillLabel:
         "Démonstration de l'application — exploration sans compte. Aucun logement n'est connecté dans cette session.",
+      guestDemoTabUnavailable: 'Non disponible pour la démo',
     },
     en: {
       profileSettings: 'Profile & settings',
@@ -33,6 +34,7 @@ export function DashboardPage() {
       upgradeAlert: 'This feature is not included in your current plan. Upgrade your plan to access it.',
       guestDemoPillLabel:
         'Application demo — browse without an account. No listings are connected in this session.',
+      guestDemoTabUnavailable: 'Not available in this demo',
     },
     es: {
       profileSettings: 'Perfil y ajustes',
@@ -42,6 +44,7 @@ export function DashboardPage() {
       upgradeAlert: 'Esta función no está incluida en su plan actual. Mejore su plan para acceder.',
       guestDemoPillLabel:
         'Demostración de la aplicación — exploración sin cuenta. No hay alojamientos conectados en esta sesión.',
+      guestDemoTabUnavailable: 'No disponible en la demo',
     },
     de: {
       profileSettings: 'Profil & Einstellungen',
@@ -51,6 +54,7 @@ export function DashboardPage() {
       upgradeAlert: 'Diese Funktion ist in Ihrem aktuellen Tarif nicht enthalten. Bitte upgraden Sie Ihren Tarif.',
       guestDemoPillLabel:
         'Demonstration der App — Erkundung ohne Konto. In dieser Sitzung sind keine Unterkünfte verbunden.',
+      guestDemoTabUnavailable: 'In der Demo nicht verfügbar',
     },
     it: {
       profileSettings: 'Profilo e impostazioni',
@@ -60,6 +64,7 @@ export function DashboardPage() {
       upgradeAlert: 'Questa funzione non è inclusa nel tuo piano attuale. Esegui l upgrade del piano per accedere.',
       guestDemoPillLabel:
         'Dimostrazione dell’app — esplorazione senza account. Nessun alloggio è collegato in questa sessione.',
+      guestDemoTabUnavailable: 'Non disponibile nella demo',
     },
   }[ll]
   const [activePlanLabel, setActivePlanLabel] = useState(t.proName)
@@ -170,19 +175,11 @@ export function DashboardPage() {
   }, [isCleanerSession])
 
   const guestDemo = isGuestDemoSession() || isGuestDemoRoutingActive()
+  const tabIsGuestDemoLocked = (tab: string) =>
+    tab === t.dashboardTabConnect || tab === t.dashboardTabWhatsApp || tab === t.dashboardTabEarlyAccess
 
   const hostTabsWithConnect = [
     t.dashboardTabConnect,
-    t.dashboardTabCalendar,
-    t.dashboardTabStats,
-    t.dashboardTabIntel,
-    t.dashboardTabCleaning,
-    t.dashboardTabExpenses,
-    t.dashboardTabSupplies,
-    t.dashboardTabWhatsApp,
-    t.dashboardTabEarlyAccess,
-  ]
-  const hostTabsGuestDemo = [
     t.dashboardTabCalendar,
     t.dashboardTabStats,
     t.dashboardTabIntel,
@@ -197,9 +194,7 @@ export function DashboardPage() {
     ? cleanerHasAssignedListing
       ? [t.dashboardTabCalendar, t.dashboardTabCleaning, t.dashboardTabSupplies]
       : [t.dashboardTabCleaning]
-    : guestDemo
-      ? hostTabsGuestDemo
-      : hostTabsWithConnect
+    : hostTabsWithConnect
   const primaryTab = isCleanerSession ? t.dashboardTabCleaning : tabs[0]
   const scaleOnlyTabs = new Set([t.dashboardTabWhatsApp, t.dashboardTabEarlyAccess])
   const rowOneTabs = isCleanerSession
@@ -207,7 +202,7 @@ export function DashboardPage() {
       ? [t.dashboardTabCalendar, primaryTab, t.dashboardTabSupplies]
       : [primaryTab]
     : [tabs[0], tabs[1], tabs[2], tabs[3]]
-  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7]]
+  const rowTwoTabs = isCleanerSession ? [] : [tabs[4], tabs[5], tabs[6], tabs[7], tabs[8]]
   const tabIcons: Record<string, JSX.Element> = {
     [t.dashboardTabConnect]: <Gem className="h-5 w-5 text-[#4a86f7]" />,
     [t.dashboardTabCalendar]: <CalendarDays className="h-5 w-5 text-zinc-500" />,
@@ -233,7 +228,7 @@ export function DashboardPage() {
   }
 
   const onTabClick = (tab: string) => {
-    if (guestDemo && tab === t.dashboardTabConnect) return
+    if (guestDemo && tabIsGuestDemoLocked(tab)) return
     const href = getTabHref(tab)
     if (isCleanerSession || guestDemo || canAccessDashboardPath(planTier, href)) {
       window.location.href = href
@@ -276,26 +271,35 @@ export function DashboardPage() {
             {rowOneTabs.map((tab) => {
               const isPrimary = tab === primaryTab
               const isScaleOnly = scaleOnlyTabs.has(tab)
+              const demoLocked = guestDemo && tabIsGuestDemoLocked(tab)
+              const showScaleLook = isScaleOnly && !demoLocked
               const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
               return (
                 <button
                   key={tab}
                   type="button"
+                  disabled={demoLocked}
                   onClick={() => onTabClick(tab)}
-                  className={`group rounded-2xl border p-4 text-center shadow-pm-sm transition-all hover:-translate-y-0.5 hover:shadow-pm-md ${
+                  className={`group rounded-2xl border p-4 text-center shadow-pm-sm transition-all ${
+                    demoLocked ? 'cursor-not-allowed opacity-80' : 'hover:-translate-y-0.5 hover:shadow-pm-md'
+                  } ${
                     isPrimary
-                      ? 'w-[360px] border-[#4a86f7]/40 bg-[linear-gradient(180deg,#eef4ff_0%,#f6f9ff_100%)] ring-1 ring-[#4a86f7]/20 hover:border-[#4a86f7]/55'
-                      : isScaleOnly
-                        ? 'w-[210px] border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'
-                      : 'w-[210px] border-zinc-200/80 bg-white hover:border-[#4a86f7]/35'
+                      ? `w-[360px] border-[#4a86f7]/40 bg-[linear-gradient(180deg,#eef4ff_0%,#f6f9ff_100%)] ring-1 ring-[#4a86f7]/20 ${demoLocked ? '' : 'hover:border-[#4a86f7]/55'}`
+                      : showScaleLook
+                        ? `w-[210px] border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] ${demoLocked ? '' : 'hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'}`
+                        : `w-[210px] border-zinc-200/80 bg-white ${demoLocked ? '' : 'hover:border-[#4a86f7]/35'}`
                   } ${isLocked ? 'opacity-70' : ''}`}
                 >
                   <div className="mb-2 flex justify-center">
-                    <span className={`rounded-xl p-2 ${isScaleOnly ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
+                    <span className={`rounded-xl p-2 ${showScaleLook ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
                       {tabIcons[tab]}
                     </span>
                   </div>
-                  {isScaleOnly ? (
+                  {demoLocked ? (
+                    <p className="mx-auto mb-2 max-w-[11rem] text-center text-[10px] font-semibold leading-snug text-zinc-500">
+                      {c.guestDemoTabUnavailable}
+                    </p>
+                  ) : isScaleOnly ? (
                     <p className="mx-auto mb-2 inline-flex rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-[0_8px_22px_-10px_rgba(79,70,229,0.8)]">
                       {t.dashboardPremiumScale}
                     </p>
@@ -312,24 +316,33 @@ export function DashboardPage() {
           {rowTwoTabs.length > 0 ? <div className="flex items-stretch justify-center gap-4">
             {rowTwoTabs.map((tab) => {
               const isScaleOnly = scaleOnlyTabs.has(tab)
+              const demoLocked = guestDemo && tabIsGuestDemoLocked(tab)
+              const showScaleLook = isScaleOnly && !demoLocked
               const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
               return (
                 <button
                   key={tab}
                   type="button"
+                  disabled={demoLocked}
                   onClick={() => onTabClick(tab)}
-                  className={`group w-[210px] rounded-2xl border p-4 text-center shadow-pm-sm transition-all hover:-translate-y-0.5 hover:shadow-pm-md ${
-                    isScaleOnly
-                      ? 'border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'
-                      : 'border-zinc-200/80 bg-white hover:border-[#4a86f7]/35'
+                  className={`group w-[210px] rounded-2xl border p-4 text-center shadow-pm-sm transition-all ${
+                    demoLocked ? 'cursor-not-allowed opacity-80' : 'hover:-translate-y-0.5 hover:shadow-pm-md'
+                  } ${
+                    showScaleLook
+                      ? `border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] ${demoLocked ? '' : 'hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'}`
+                      : `border-zinc-200/80 bg-white ${demoLocked ? '' : 'hover:border-[#4a86f7]/35'}`
                   } ${isLocked ? 'opacity-70' : ''}`}
                 >
                   <div className="mb-2 flex justify-center">
-                    <span className={`rounded-xl p-2 ${isScaleOnly ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
+                    <span className={`rounded-xl p-2 ${showScaleLook ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
                       {tabIcons[tab]}
                     </span>
                   </div>
-                  {isScaleOnly ? (
+                  {demoLocked ? (
+                    <p className="mx-auto mb-2 max-w-[11rem] text-center text-[10px] font-semibold leading-snug text-zinc-500">
+                      {c.guestDemoTabUnavailable}
+                    </p>
+                  ) : isScaleOnly ? (
                     <p className="mx-auto mb-2 inline-flex rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-[0_8px_22px_-10px_rgba(79,70,229,0.8)]">
                       {t.dashboardPremiumScale}
                     </p>
@@ -347,26 +360,35 @@ export function DashboardPage() {
         <div className="mx-auto mt-6 grid w-full max-w-[980px] grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden">
           {tabs.map((tab) => {
             const isScaleOnly = scaleOnlyTabs.has(tab)
+            const demoLocked = guestDemo && tabIsGuestDemoLocked(tab)
+            const showScaleLook = isScaleOnly && !demoLocked
             const isLocked = !isCleanerSession && !guestDemo && !canAccessDashboardPath(planTier, getTabHref(tab))
             return (
               <button
                 key={tab}
                 type="button"
+                disabled={demoLocked}
                 onClick={() => onTabClick(tab)}
-                className={`group aspect-square max-h-[210px] rounded-2xl border p-4 text-center shadow-pm-sm transition-all hover:-translate-y-0.5 hover:shadow-pm-md ${
+                className={`group aspect-square max-h-[210px] rounded-2xl border p-4 text-center shadow-pm-sm transition-all ${
+                  demoLocked ? 'cursor-not-allowed opacity-80' : 'hover:-translate-y-0.5 hover:shadow-pm-md'
+                } ${
                   tab === primaryTab
-                    ? 'border-[#4a86f7]/40 bg-[linear-gradient(180deg,#eef4ff_0%,#f6f9ff_100%)] ring-1 ring-[#4a86f7]/20 hover:border-[#4a86f7]/55'
-                    : isScaleOnly
-                      ? 'border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'
-                    : 'border-zinc-200/80 bg-white hover:border-[#4a86f7]/35'
+                    ? `border-[#4a86f7]/40 bg-[linear-gradient(180deg,#eef4ff_0%,#f6f9ff_100%)] ring-1 ring-[#4a86f7]/20 ${demoLocked ? '' : 'hover:border-[#4a86f7]/55'}`
+                    : showScaleLook
+                      ? `border-violet-300/90 bg-[radial-gradient(ellipse_90%_80%_at_20%_0%,rgba(192,132,252,0.26),transparent_55%),linear-gradient(180deg,#f7f0ff_0%,#ffffff_70%)] ring-1 ring-violet-300/60 shadow-[0_16px_40px_-18px_rgba(139,92,246,0.55)] ${demoLocked ? '' : 'hover:border-violet-400 hover:shadow-[0_24px_48px_-16px_rgba(139,92,246,0.55)]'}`
+                      : `border-zinc-200/80 bg-white ${demoLocked ? '' : 'hover:border-[#4a86f7]/35'}`
                 } ${isLocked ? 'opacity-70' : ''}`}
               >
                 <div className="mb-2 flex justify-center">
-                  <span className={`rounded-xl p-2 ${isScaleOnly ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
+                  <span className={`rounded-xl p-2 ${showScaleLook ? 'bg-violet-100/80 ring-1 ring-violet-200/80' : 'bg-zinc-100/80'}`}>
                     {tabIcons[tab]}
                   </span>
                 </div>
-                {isScaleOnly ? (
+                {demoLocked ? (
+                  <p className="mx-auto mb-2 max-w-[11rem] text-center text-[10px] font-semibold leading-snug text-zinc-500">
+                    {c.guestDemoTabUnavailable}
+                  </p>
+                ) : isScaleOnly ? (
                   <p className="mx-auto mb-2 inline-flex rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-[0_8px_22px_-10px_rgba(79,70,229,0.8)]">
                     {t.dashboardPremiumScale}
                   </p>
