@@ -70,6 +70,7 @@ import {
 import { readScopedStorage } from './utils/sessionStorageScope'
 import {
   deactivateGuestDemoSession,
+  isGuestDemoRoutingActive,
   isGuestDemoSession,
   tryActivateGuestDemoFromHeroCtaIntent,
 } from './utils/guestDemo'
@@ -296,6 +297,9 @@ export default function App() {
   }, [isCleanerSession, pathname])
 
   const hostBillingBlocked = billingSuspended || stripeDashboardBlocked
+  /** En démo invité, ne jamais renvoyer vers le profil (Stripe / suspension) — rester sur le dashboard. */
+  const hostDashboardBillingWall =
+    !isCleanerSession && !isGuestDemoRoutingActive() && hostBillingBlocked
   const isLoginPage = pathname === '/connexion'
   const isSignupPage = pathname === '/inscription'
   const isAboutPage = pathname === '/a-propos'
@@ -327,7 +331,7 @@ export default function App() {
   const currentPlanRaw = typeof window !== 'undefined' ? window.localStorage.getItem('staypilot_current_plan') || 'Pro' : 'Pro'
   const planTier = getPlanTierFromValue(currentPlanRaw)
   const [guestDemoHost, setGuestDemoHost] = useState(
-    () => typeof window !== 'undefined' && isGuestDemoSession() && !isCleanerSession,
+    () => typeof window !== 'undefined' && !isCleanerSession && isGuestDemoRoutingActive(),
   )
 
   useLayoutEffect(() => {
@@ -345,11 +349,12 @@ export default function App() {
       window.dispatchEvent(new Event('staypilot-session-changed'))
       return
     }
-    setGuestDemoHost(isGuestDemoSession() && !isCleanerSession)
+    setGuestDemoHost(!isCleanerSession && isGuestDemoRoutingActive())
   }, [pathname, isCleanerSession])
 
+  const guestRoutingUnlock = !isCleanerSession && (guestDemoHost || isGuestDemoRoutingActive())
   const hostPlanAllowsPath =
-    guestDemoHost || (!isCleanerSession && canAccessDashboardPath(planTier, pathname))
+    guestRoutingUnlock || (!isCleanerSession && canAccessDashboardPath(planTier, pathname))
 
   return (
     <AppErrorBoundary>
@@ -430,73 +435,73 @@ export default function App() {
           ) : (isDashboardPage || isDashboardSubPage) && !isCleanerSession && !hostPlanAllowsPath ? (
             <DashboardBlankPage />
           ) : isDashboardPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardPage />
             )
           ) : isDashboardConnectPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardConnectPage />
             )
           ) : isDashboardIntelPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardIntelPage />
             )
           ) : isDashboardCalendarPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardCalendarPage />
             )
           ) : isDashboardSuppliesPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardSuppliesPage />
             )
           ) : isDashboardStatsPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardStatsPage />
             )
           ) : isDashboardCleaningPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardCleaningPage />
             )
           ) : isDashboardWhatsAppPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardWhatsAppPage />
             )
           ) : isDashboardEarlyAccessPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardEarlyAccessPage />
             )
           ) : isDashboardExpensesPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardExpensesPage />
             )
           ) : isDashboardCompanyPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardSocieteRedirect />
             )
           ) : isDashboardSubPage ? (
-            hostBillingBlocked ? (
+            hostDashboardBillingWall ? (
               <ProfilePage />
             ) : (
             <DashboardBlankPage />

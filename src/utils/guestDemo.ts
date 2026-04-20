@@ -37,6 +37,16 @@ export function isGuestDemoSession(): boolean {
   }
 }
 
+/** Session démo active ou clic CTA en cours (avant useLayoutEffect) — pour ne pas afficher le mur facturation / profil. */
+export function isGuestDemoRoutingActive(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return sessionStorage.getItem(GUEST_KEY) === '1' || sessionStorage.getItem(CTA_INTENT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 /** Active la visite guidée (onglets dashboard) + données de démo si besoin. */
 export function activateGuestDemoSession() {
   try {
@@ -58,6 +68,7 @@ export function activateGuestDemoSession() {
 export function deactivateGuestDemoSession() {
   try {
     sessionStorage.removeItem(GUEST_KEY)
+    sessionStorage.removeItem(CTA_INTENT_KEY)
   } catch {
     /* ignore */
   }
