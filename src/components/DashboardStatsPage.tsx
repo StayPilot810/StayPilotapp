@@ -572,16 +572,11 @@ export function DashboardStatsPage() {
     return MONTH_LABELS[resolvedLocale].map((label, index) => {
       const month = index + 1
       const monthRows = isMonthIncluded(month) ? filteredRevenueEntries.filter((row) => row.month === month) : []
+      const visibleListingCount = selectedApartment ? 1 : apartmentsForFilters.length
       const sourceRate = (source: RevenueSource) => {
         const rows = monthRows.filter((r) => r.source === source)
         const occupied = rows.reduce((sum, r) => sum + r.occupiedNights, 0)
-        const sourceApartmentCount =
-          rows.length > 0
-            ? new Set(rows.map((r) => r.apartment)).size
-            : selectedApartment
-              ? 1
-              : apartmentsForFilters.length
-        const available = sourceApartmentCount * new Date(selectedPeriod.year, month, 0).getDate()
+        const available = visibleListingCount * new Date(selectedPeriod.year, month, 0).getDate()
         return available > 0 ? Number(((occupied / available) * 100).toFixed(1)) : 0
       }
       const airbnb = sourceRate('airbnb')
