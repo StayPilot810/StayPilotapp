@@ -312,9 +312,6 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 export function DashboardIntelPage() {
   const formatIsoDate = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-  const today = new Date()
-  const plus30Days = new Date(today)
-  plus30Days.setDate(plus30Days.getDate() + 29)
 
   const { t, locale } = useLanguage()
   const tutorialVo = normalizeTutorialLocale(locale)
@@ -843,11 +840,13 @@ export function DashboardIntelPage() {
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null)
   const [isBroadCityAnalysis, setIsBroadCityAnalysis] = useState(false)
   const [targetPosition, setTargetPosition] = useState<[number, number] | null>(null)
-  const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'custom'>('month')
   const [pricingMode] = useState<'standard' | 'ultra'>('ultra')
   const [pricingScenario, setPricingScenario] = useState<'normal' | 'aggressive'>('normal')
   const [autopilotEnabled, setAutopilotEnabled] = useState(false)
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
+  const [todayAnchor, setTodayAnchor] = useState(() => new Date())
+  const today = todayAnchor
+  const plus30Days = new Date(todayAnchor)
+  plus30Days.setDate(plus30Days.getDate() + 30)
   const rangeStart = formatIsoDate(today)
   const rangeEnd = formatIsoDate(plus30Days)
   const [searchedLabel, setSearchedLabel] = useState('')
@@ -866,6 +865,16 @@ export function DashboardIntelPage() {
   const [hoveredDayEvent, setHoveredDayEvent] = useState<{ date: string; event: string } | null>(null)
   const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date()
+      if (formatIsoDate(now) !== formatIsoDate(todayAnchor)) {
+        setTodayAnchor(now)
+      }
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [todayAnchor])
+
   const [, setProviderStatus] = useState<Record<string, 'connected' | 'missing_key' | 'error'>>({})
   const currentYear = new Date().getFullYear()
   const frenchSchoolHolidayRanges: DateRange[] = [
@@ -1969,20 +1978,8 @@ export function DashboardIntelPage() {
     selectedListing,
     bookedDateSetBySelectedListing,
     pricingScenario,
+    todayAnchor,
   ])
-  const selectedMonth = monthlyCalendar[selectedMonthIndex] ?? monthlyCalendar[0]
-  const displayedMonth = useMemo(
-    () => ({
-      ...selectedMonth,
-      cells: selectedMonth.cells.map((cell) => {
-        if (!cell) return null
-        if (cell.isoDate < rangeStart || cell.isoDate > rangeEnd) return null
-        return cell
-      }),
-    }),
-    [selectedMonth, rangeStart, rangeEnd],
-  )
-  const intelPeriodLabel = `J+30 (${rangeStart} -> ${rangeEnd})`
   const rangeFilteredMonths = monthlyCalendar
     .map((month) => ({
       ...month,
@@ -1993,6 +1990,15 @@ export function DashboardIntelPage() {
       }),
     }))
     .filter((month) => month.cells.some(Boolean))
+  const displayedMonth = useMemo(
+    () => ({
+      key: `rolling-${rangeStart}-${rangeEnd}`,
+      monthName: `J+30 (${rangeStart} -> ${rangeEnd})`,
+      cells: rangeFilteredMonths.flatMap((month) => month.cells).filter((cell): cell is IntelCalendarCell => Boolean(cell)),
+    }),
+    [rangeFilteredMonths, rangeStart, rangeEnd],
+  )
+  const intelPeriodLabel = displayedMonth.monthName
   const monthlyWatchSummary = useMemo(() => {
     const cells = displayedMonth.cells.filter((cell): cell is IntelCalendarCell => Boolean(cell))
     const highDays = cells.filter((cell) => cell.level === 'high').length
@@ -2238,6 +2244,7 @@ export function DashboardIntelPage() {
     runtimeText.phase1RecoBalanced,
     runtimeText.phase1RecoDefensive,
     runtimeText.phase1RecoForwardCompression,
+    todayAnchor,
   ])
 
   const autopilotActions = useMemo(() => {
@@ -2692,39 +2699,10 @@ export function DashboardIntelPage() {
               </button>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCalendarViewMode('month')}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'month' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
-              >
-                {copy.calendarMonth}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCalendarViewMode('custom')}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${calendarViewMode === 'custom' ? 'bg-[#4a86f7] text-white' : 'border border-zinc-200 bg-white text-zinc-700'}`}
-              >
-                {copy.calendarCustomRange}
-              </button>
-              {calendarViewMode === 'month' ? (
-                <select
-                  value={selectedMonthIndex}
-                  onChange={(e) => setSelectedMonthIndex(Number(e.target.value))}
-                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800"
-                >
-                  {monthlyCalendar.map((month, idx) => (
-                    <option key={month.key} value={idx}>
-                      {month.monthName}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-800">
-                    Fenetre fixe: J+30 ({rangeStart} -> {rangeEnd})
-                  </span>
-                </div>
-              )}
+              <span className="rounded-lg bg-[#4a86f7] px-3 py-1.5 text-xs font-semibold text-white">J+30</span>
+              <span className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-800">
+                Fenetre glissante: {rangeStart} -> {rangeEnd}
+              </span>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-medium">
@@ -2759,97 +2737,50 @@ export function DashboardIntelPage() {
               )}
             </div>
 
-            {calendarViewMode === 'month' ? (
-              <div className="mt-3 w-full rounded-xl border border-zinc-200 bg-white p-3">
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-zinc-500">
-                  {copy.weekdayLabels.map((w) => (
-                    <div key={w} className="py-1">{w}</div>
-                  ))}
-                </div>
-                <div className="mt-1 grid grid-cols-7 gap-1">
-                  {displayedMonth.cells.map((cell, idx) => (
-                    <div key={`${displayedMonth.key}-${idx}`} className="h-8">
-                      {cell ? (
-                        <button
-                          type="button"
-                          onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
-                          onMouseLeave={onCalendarDayLeave}
-                          className={`relative h-full w-full rounded-md text-[9px] font-bold text-white ${
-                            cell.isBooked
-                              ? 'bg-indigo-600'
-                              : cell.level === 'high'
-                                ? 'bg-rose-500'
-                                : cell.level === 'medium'
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
-                          }`}
-                        >
-                          <span
-                            className={
+            <div className="mt-3 space-y-2">
+              {rangeFilteredMonths.map((month) => (
+                <div key={month.key} className="w-full rounded-xl border border-zinc-200 bg-white p-3">
+                  <p className="px-1 pb-2 text-xs font-semibold text-zinc-800">{month.monthName}</p>
+                  <div className="grid grid-cols-7 gap-1">
+                    {month.cells.map((cell, idx) => (
+                      <div key={`${month.key}-${idx}`} className="h-8">
+                        {cell ? (
+                          <button
+                            type="button"
+                            onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
+                            onMouseLeave={onCalendarDayLeave}
+                            className={`relative h-full w-full rounded-md text-[9px] font-bold text-white ${
                               cell.isBooked
-                                ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-indigo-950/35 px-1 text-white line-through decoration-[2.5px]'
-                                : ''
-                            }
+                                ? 'bg-indigo-600'
+                                : cell.level === 'high'
+                                  ? 'bg-rose-500'
+                                  : cell.level === 'medium'
+                                    ? 'bg-amber-500'
+                                    : 'bg-emerald-500'
+                            }`}
                           >
-                            {cell.day}
-                          </span>
-                          {cell.isEmptyGap ? (
-                            <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
-                          ) : null}
-                        </button>
-                      ) : (
-                        <div className="h-full w-full" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {rangeFilteredMonths.map((month) => (
-                  <div key={month.key} className="w-full rounded-xl border border-zinc-200 bg-white p-3">
-                    <p className="px-1 pb-2 text-xs font-semibold text-zinc-800">{month.monthName}</p>
-                    <div className="grid grid-cols-7 gap-1">
-                      {month.cells.map((cell, idx) => (
-                        <div key={`${month.key}-${idx}`} className="h-8">
-                          {cell ? (
-                            <button
-                              type="button"
-                              onMouseEnter={() => onCalendarDayEnter(cell.isoDate, cell.event)}
-                              onMouseLeave={onCalendarDayLeave}
-                              className={`relative h-full w-full rounded-md text-[9px] font-bold text-white ${
+                            <span
+                              className={
                                 cell.isBooked
-                                  ? 'bg-indigo-600'
-                                  : cell.level === 'high'
-                                    ? 'bg-rose-500'
-                                    : cell.level === 'medium'
-                                      ? 'bg-amber-500'
-                                      : 'bg-emerald-500'
-                              }`}
+                                  ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-indigo-950/35 px-1 text-white line-through decoration-[2.5px]'
+                                  : ''
+                              }
                             >
-                              <span
-                                className={
-                                  cell.isBooked
-                                    ? 'inline-flex min-w-[14px] items-center justify-center rounded bg-indigo-950/35 px-1 text-white line-through decoration-[2.5px]'
-                                    : ''
-                                }
-                              >
-                                {cell.day}
-                              </span>
-                              {cell.isEmptyGap ? (
-                                <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
-                              ) : null}
-                            </button>
-                          ) : (
-                            <div className="h-full w-full" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                              {cell.day}
+                            </span>
+                            {cell.isEmptyGap ? (
+                              <span className="absolute right-1 top-0.5 text-[10px] font-black leading-none text-white/95">×</span>
+                            ) : null}
+                          </button>
+                        ) : (
+                          <div className="h-full w-full" />
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
 
             <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
               <h4 className="text-sm font-bold text-zinc-900">{runtimeText.concretePulseTitle}</h4>
