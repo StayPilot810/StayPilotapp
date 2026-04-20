@@ -41,6 +41,16 @@ type RevenueEntry = {
   netRevenue: number
   occupiedNights: number
 }
+type DemoMonthlyAggregate = {
+  month: number
+  airbnbRevenue: number
+  bookingRevenue: number
+  airbnbNights: number
+  bookingNights: number
+  reservedCount: number
+  cancelledCount: number
+  availableNights: number
+}
 type ChannelKey = 'airbnb' | 'booking' | 'channelManager'
 type ParsedIcalEvent = {
   start: Date
@@ -515,6 +525,37 @@ export function DashboardStatsPage() {
     selectedPeriod.year,
   ])
 
+  const demoMonthlyAggregates = useMemo<DemoMonthlyAggregate[]>(() => {
+    if (!guestDemoActive) return []
+    const selectedAptIndexes =
+      selectedApartmentFilter === 'all'
+        ? apartmentNames.map((_, idx) => idx)
+        : apartmentNames
+            .map((name, idx) => ({ name, idx }))
+            .filter((item) => item.name === selectedApartmentFilter)
+            .map((item) => item.idx)
+    const visibleListingCount = Math.max(1, selectedAptIndexes.length)
+    return Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1
+      const daysInMonth = new Date(DEMO_BASE_YEAR, month, 0).getDate()
+      const monthBookings = buildGuestDemoMonthBookings(daysInMonth, i).filter((b) => selectedAptIndexes.includes(b.apt))
+      const reservedBookings = monthBookings.filter((b) => b.status === 'reserved')
+      const cancelledBookings = monthBookings.filter((b) => b.status === 'cancelled')
+      const airbnbReserved = reservedBookings.filter((b) => b.channel === 'airbnb')
+      const bookingReserved = reservedBookings.filter((b) => b.channel === 'booking')
+      return {
+        month,
+        airbnbRevenue: airbnbReserved.reduce((sum, b) => sum + b.netPayoutEur, 0),
+        bookingRevenue: bookingReserved.reduce((sum, b) => sum + b.netPayoutEur, 0),
+        airbnbNights: airbnbReserved.reduce((sum, b) => sum + b.nights, 0),
+        bookingNights: bookingReserved.reduce((sum, b) => sum + b.nights, 0),
+        reservedCount: reservedBookings.length,
+        cancelledCount: cancelledBookings.length,
+        availableNights: visibleListingCount * daysInMonth,
+      }
+    })
+  }, [apartmentNames, guestDemoActive, selectedApartmentFilter])
+
   const activeDateFilterLabel =
     dateFilterMode === 'month'
       ? `${statsUi.filterMonthPrefix}: ${MONTH_LABELS[resolvedLocale][selectedPeriod.month - 1]} ${selectedPeriod.year}`
@@ -527,6 +568,19 @@ export function DashboardStatsPage() {
   const hasConnectedMetrics = reservationEvents.length > 0 || revenueEntries.length > 0
 
   const chartData = useMemo(() => {
+    if (guestDemoActive && dateFilterMode === 'month') {
+      return MONTH_LABELS[resolvedLocale].map((label, index) => {
+        const aggregate = demoMonthlyAggregates[index]
+        const airbnb = aggregate?.airbnbRevenue ?? 0
+        const booking = aggregate?.bookingRevenue ?? 0
+        return {
+          month: label,
+          airbnb,
+          booking,
+          total: airbnb + booking,
+        }
+      })
+    }
     const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
     const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
     const isMonthIncluded = (month: number) => {
@@ -549,6 +603,9 @@ export function DashboardStatsPage() {
       }
     })
   }, [
+    dateFilterMode,
+    demoMonthlyAggregates,
+    guestDemoActive,
     customEndDate,
     customRangeError,
     customStartDate,
@@ -560,6 +617,15 @@ export function DashboardStatsPage() {
   ])
 
   const occupancyChartData = useMemo(() => {
+    if (guestDemoActive && dateFilterMode === 'month') {
+      return MONTH_LABELS[resolvedLocale].map((label, index) => {
+        const aggregate = demoMonthlyAggregates[index]
+        const available = aggregate?.availableNights ?? 0
+        const airbnb = available > 0 ? Number((((aggregate?.airbnbNights ?? 0) / available) * 100).toFixed(1)) : 0
+        const booking = available > 0 ? Number((((aggregate?.bookingNights ?? 0) / available) * 100).toFixed(1)) : 0
+        return { month: label, airbnb, booking }
+      })
+    }
     const customStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null
     const customEnd = customEndDate ? new Date(`${customEndDate}T23:59:59`) : null
     const isMonthIncluded = (month: number) => {
@@ -589,6 +655,9 @@ export function DashboardStatsPage() {
     })
   }, [
     apartmentsForFilters.length,
+    dateFilterMode,
+    demoMonthlyAggregates,
+    guestDemoActive,
     customEndDate,
     customRangeError,
     customStartDate,
@@ -601,6 +670,10 @@ export function DashboardStatsPage() {
   ])
   const netRevenueDisplay = useMemo(() => {
     if (dateFilterMode === 'month') {
+      if (guestDemoActive) {
+        const aggregate = demoMonthlyAggregates[selectedPeriod.month - 1]
+        return (aggregate?.airbnbRevenue ?? 0) + (aggregate?.bookingRevenue ?? 0)
+      }
       const current = chartData[selectedPeriod.month - 1]
       return current ? current.total : 0
     }
@@ -611,7 +684,17 @@ export function DashboardStatsPage() {
       const month = idx + 1
       return isYearMonthInRange(selectedPeriod.year, month, start, end) ? sum + row.total : sum
     }, 0)
-  }, [chartData, customEndDate, customRangeError, customStartDate, dateFilterMode, selectedPeriod.month, selectedPeriod.year])
+  }, [
+    chartData,
+    customEndDate,
+    customRangeError,
+    customStartDate,
+    dateFilterMode,
+    demoMonthlyAggregates,
+    guestDemoActive,
+    selectedPeriod.month,
+    selectedPeriod.year,
+  ])
   const globalOccupancyDisplay = globalOccupancy
 
   const yearOptions = useMemo(() => {
