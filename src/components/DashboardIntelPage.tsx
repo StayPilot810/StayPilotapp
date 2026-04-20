@@ -312,6 +312,13 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 export function DashboardIntelPage() {
   const formatIsoDate = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const getEffectiveToday = () => {
+    const now = new Date()
+    if (isGuestDemoSession()) {
+      return new Date(DEMO_BASE_YEAR, now.getMonth(), now.getDate())
+    }
+    return now
+  }
 
   const { t, locale } = useLanguage()
   const tutorialVo = normalizeTutorialLocale(locale)
@@ -843,7 +850,7 @@ export function DashboardIntelPage() {
   const [pricingMode] = useState<'standard' | 'ultra'>('ultra')
   const [pricingScenario, setPricingScenario] = useState<'normal' | 'aggressive'>('normal')
   const [autopilotEnabled, setAutopilotEnabled] = useState(false)
-  const [todayAnchor, setTodayAnchor] = useState(() => new Date())
+  const [todayAnchor, setTodayAnchor] = useState(() => getEffectiveToday())
   const today = todayAnchor
   const plus30Days = new Date(todayAnchor)
   plus30Days.setDate(plus30Days.getDate() + 30)
@@ -867,7 +874,7 @@ export function DashboardIntelPage() {
   const [refreshTick, setRefreshTick] = useState(0)
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date()
+      const now = getEffectiveToday()
       if (formatIsoDate(now) !== formatIsoDate(todayAnchor)) {
         setTodayAnchor(now)
       }
